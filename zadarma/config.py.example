@@ -1,0 +1,185 @@
+# config.py.example - Template for configuration file
+# Copy this to config.py and fill with your actual credentials
+
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+# Telegram
+TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+ADMIN_USER_ID = 123456789  # Your Telegram user_id
+
+# Zadarma API
+ZADARMA_API_KEY = "YOUR_ZADARMA_API_KEY"
+ZADARMA_API_SECRET = "YOUR_ZADARMA_API_SECRET"
+ZADARMA_SIP_ACCOUNT = "YOUR_SIP_ACCOUNT"
+ZADARMA_MAIN_PHONE = "0XXXXXXXXX"
+
+# Wlaunch API
+WLAUNCH_API_KEY = "YOUR_WLAUNCH_API_KEY"
+COMPANY_ID = "YOUR_COMPANY_ID"
+
+# Database path
+DB_PATH = "/home/gomoncli/zadarma/users.db"
+
+# Phone numbers for calls
+HVIRTKA_NUMBER = "0XXXXXXXXX"  # Gate phone number
+VOROTA_NUMBER = "0XXXXXXXXX"   # Door phone number
+
+# URLs for bot
+MAP_URL = "https://maps.app.goo.gl/YOUR_MAP_LINK"
+SCHEME_URL = "https://ibb.co/YOUR_SCHEME"
+SUPPORT_PHONE = "0XXXXXXXXX"
+
+# SMS Fly (optional)
+SMS_FLY_LOGIN = "YOUR_SMS_FLY_LOGIN"
+SMS_FLY_PASSWORD = "YOUR_SMS_FLY_PASSWORD"  
+SMS_FLY_SENDER = "YOUR_SENDER_NAME"
+
+def format_phone_for_zadarma(phone):
+    """
+    Convert phone number to Zadarma API format
+    
+    Args:
+        phone (str): Input phone in any format
+        
+    Returns:
+        str: Phone in 0XXXXXXXXX format for Zadarma API
+    """
+    logger.debug(f"📞 Formatting phone: input = '{phone}'")
+    
+    # Remove all non-digits
+    clean_phone = re.sub(r'\D', '', phone)
+    logger.debug(f"📞 After cleaning: '{clean_phone}'")
+    
+    # Conversion rules
+    if clean_phone.startswith('380'):
+        # +380XXXXXXXXX or 380XXXXXXXXX -> 0XXXXXXXXX
+        if len(clean_phone) == 12:  # 380 + 9 digits
+            result = '0' + clean_phone[3:]
+        else:
+            logger.warning(f"⚠️ Unusual length for 380 number: {len(clean_phone)}")
+            result = clean_phone
+            
+    elif len(clean_phone) == 9:
+        # XXXXXXXXX -> 0XXXXXXXXX (add 0 at the beginning)
+        result = '0' + clean_phone
+        
+    elif len(clean_phone) == 10 and clean_phone.startswith('0'):
+        # 0XXXXXXXXX -> keep as is (correct format)
+        result = clean_phone
+        
+    elif len(clean_phone) == 10 and not clean_phone.startswith('0'):
+        # 10 digits but doesn't start with 0 - possible error
+        logger.warning(f"⚠️ 10-digit number doesn't start with 0: {clean_phone}")
+        result = clean_phone
+        
+    else:
+        # Other cases - keep as is but log warning
+        logger.warning(f"⚠️ Unusual phone format: {phone} -> {clean_phone} (length: {len(clean_phone)})")
+        result = clean_phone
+    
+    # Validate result
+    if len(result) != 10:
+        logger.error(f"❌ ERROR: result has wrong length: '{result}' (length: {len(result)})")
+    elif not result.startswith('0'):
+        logger.warning(f"⚠️ WARNING: result doesn't start with 0: '{result}'")
+    
+    logger.info(f"📞 Final formatting: '{phone}' -> '{result}'")
+    return result
+
+def validate_phone_number(phone):
+    """
+    Validate phone number for Zadarma API
+    
+    Args:
+        phone (str): Phone number to check
+        
+    Returns:
+        bool: True if phone is valid
+    """
+    if not phone:
+        return False
+        
+    # Phone should be exactly 10 digits and start with 0
+    if len(phone) != 10:
+        return False
+        
+    if not phone.startswith('0'):
+        return False
+        
+    if not phone.isdigit():
+        return False
+        
+    return True
+
+def validate_config():
+    """
+    Validate configuration on app startup
+    Check that all critical settings are correct
+    """
+    errors = []
+    
+    # Check phone numbers
+    if not validate_phone_number(HVIRTKA_NUMBER):
+        errors.append(f"Invalid HVIRTKA_NUMBER format: '{HVIRTKA_NUMBER}' (should be 0XXXXXXXXX)")
+        
+    if not validate_phone_number(VOROTA_NUMBER):
+        errors.append(f"Invalid VOROTA_NUMBER format: '{VOROTA_NUMBER}' (should be 0XXXXXXXXX)")
+        
+    if not validate_phone_number(ZADARMA_MAIN_PHONE):
+        errors.append(f"Invalid ZADARMA_MAIN_PHONE format: '{ZADARMA_MAIN_PHONE}' (should be 0XXXXXXXXX)")
+    
+    # Check API keys
+    if not ZADARMA_API_KEY or len(ZADARMA_API_KEY) < 10:
+        errors.append("Missing or invalid ZADARMA_API_KEY")
+        
+    if not ZADARMA_API_SECRET or len(ZADARMA_API_SECRET) < 10:
+        errors.append("Missing or invalid ZADARMA_API_SECRET")
+        
+    if not TELEGRAM_TOKEN or len(TELEGRAM_TOKEN) < 20:
+        errors.append("Missing or invalid TELEGRAM_TOKEN")
+    
+    # Check paths
+    import os
+    db_dir = os.path.dirname(DB_PATH)
+    if not os.path.exists(db_dir):
+        errors.append(f"Database directory doesn't exist: {db_dir}")
+    
+    if errors:
+        error_msg = "❌ CONFIGURATION ERRORS:\n" + "\n".join(f"  • {error}" for error in errors)
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    else:
+        logger.info("✅ Configuration validation passed")
+        logger.info(f"📞 HVIRTKA_NUMBER: {HVIRTKA_NUMBER}")
+        logger.info(f"🚪 VOROTA_NUMBER: {VOROTA_NUMBER}")
+        logger.info(f"📱 ZADARMA_MAIN_PHONE: {ZADARMA_MAIN_PHONE}")
+
+def test_phone_formatting():
+    """Test phone formatting function"""
+    test_cases = [
+        ("+380991234567", "0991234567"),
+        ("380991234567", "0991234567"),
+        ("0991234567", "0991234567"),
+        ("991234567", "0991234567"),
+        ("+380 99 123 45 67", "0991234567"),
+        ("38(099)123-45-67", "0991234567"),
+    ]
+    
+    logger.info("🧪 Testing phone formatting...")
+    
+    for input_phone, expected in test_cases:
+        result = format_phone_for_zadarma(input_phone)
+        status = "✅" if result == expected else "❌"
+        logger.info(f"{status} '{input_phone}' -> '{result}' (expected: '{expected}')")
+        
+        if result != expected:
+            logger.error(f"❌ TEST FAILED: {input_phone} -> {result}, expected {expected}")
+
+if __name__ == "__main__":
+    # If file is run directly - run tests
+    logging.basicConfig(level=logging.INFO)
+    test_phone_formatting()
+    validate_config()

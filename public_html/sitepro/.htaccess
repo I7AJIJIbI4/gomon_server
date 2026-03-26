@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Блокувати доступ до службових файлів (з попереднього сайту)
+    RewriteCond %{REQUEST_URI} \/(?:store\.log|store\.dat|store\.json|store_orders\.log|invoice-series\.json|ga_code|data\.json|forms\.log|project\.db|[^\.]+\.dat)$ [NC]
+    RewriteRule ^ - [F,L]
+
+    # Не чіпати реальні файли (img, js, json, php, etc.)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    # Не чіпати реальні директорії
+    RewriteCond %{REQUEST_FILENAME} !-d
+    # Все інше → 301 на головну
+    RewriteRule ^.+$ / [R=301,L]
+</IfModule>

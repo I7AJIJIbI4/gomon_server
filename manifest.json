@@ -1,0 +1,56 @@
+{
+  "name": "Dr. Gómon Cosmetology",
+  "short_name": "Dr. Gómon",
+  "description": "Особистий кабінет клієнта — записи, прайс, контакти",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111010",
+  "theme_color": "#111010",
+  "lang": "uk",
+  "categories": ["health", "beauty"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Головна сторінка"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Мої записи",
+      "short_name": "Записи",
+      "description": "Переглянути заплановані записи",
+      "url": "/app/?screen=appointments",
+      "icons": [{"src": "icons/shortcut-calendar.png", "sizes": "96x96"}]
+    },
+    {
+      "name": "Прайс-лист",
+      "short_name": "Прайс",
+      "url": "/app/?screen=price",
+      "icons": [{"src": "icons/shortcut-price.png", "sizes": "96x96"}]
+    }
+  ]
+}

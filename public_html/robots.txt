@@ -1,0 +1,16 @@
+User-agent: *
+Disallow: /app/
+Disallow: /messenger/
+Disallow: /api/
+Disallow: /sitepro/a1
+Disallow: /sitepro/prices.json
+Disallow: /sitepro/promos.json
+Disallow: /sitepro/data.json
+Disallow: /sitepro/pd.json
+Disallow: /promos.json
+Disallow: /sitepro/functions.inc.php
+Disallow: /sitepro/class.json.php
+Disallow: /sitepro/ga.php
+Disallow: /sitepro/GatewayPaypal.php
+Disallow: /sitepro/main_BuyNow.php
+Disallow: /sitepro/polyfill.php

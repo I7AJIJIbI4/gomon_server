@@ -1,0 +1,26 @@
+# Secrets
+.env
+*.pem
+*.key
+config.py
+
+# Databases
+*.db
+*.sqlite
+
+# Logs & runtime
+*.log
+error_log
+__pycache__/
+*.pyc
+*.pid
+
+# Backups
+*.bak
+*.backup
+
+# OS
+.DS_Store
+
+# WordPress (separate repo)
+public_html/home/
