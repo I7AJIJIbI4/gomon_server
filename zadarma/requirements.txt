@@ -1,0 +1,28 @@
+# requirements.txt - Production dependencies
+# Встановлення: pip3 install -r requirements.txt
+
+# Telegram Bot API
+python-telegram-bot==13.12
+
+# HTTP requests
+requests==2.31.0
+
+# Task scheduling
+schedule==1.2.0
+
+# Environment variables (optional)
+python-dotenv==1.0.0
+
+# For production monitoring (optional)
+psutil==5.9.6
+
+# Logging enhancement (optional)  
+colorlog==6.7.0
+
+# Testing (development only)
+pytest==7.4.3
+pytest-mock==3.12.0
+
+# Code quality (development only)
+flake8==6.1.0
+black==23.11.0

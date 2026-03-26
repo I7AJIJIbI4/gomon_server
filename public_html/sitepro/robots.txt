@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /prices.json
+
+Sitemap: https://gomonclinic.com/sitemap.xml

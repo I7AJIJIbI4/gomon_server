@@ -1,0 +1,12 @@
+/* styles.css */
+
+/* Стили для скрытия и отображения хедера */
+#wb_header_a188dd94d37a0374c81c636d09cd1f05 {
+    transition: top 0.3s ease-in-out;
+}
+.hide-header {
+    top: -100px; /* Изменено на отрицательное значение для скрытия хедера */
+}
+.show-header {
+    top: 0;
+}

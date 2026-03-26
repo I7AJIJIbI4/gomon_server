@@ -1,0 +1,47 @@
+# Конфіденційні дані
+config.py
+*.key
+*.secret
+*_secret*
+*_token*
+
+# Логи та тимчасові файли
+*.log
+api_states.json
+*.tmp
+*.bak
+*_backup*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# База даних
+*.db
+users.db
+
+# OS файли
+.DS_Store
+Thumbs.db
+
+# Тимчасові та резервні файли
+*.backup*
+*.broken*
+*_backup.py
+*_fixed.py
+help_patch.py
+add_tracker_methods.py
+fix_bot_admin.py
+deploy_webhook_fix.sh
+final_webhook_fix.sh
+
+# Логи
+*.log
+bot.pid
+users.db
+config.py
+users.db
+call_tracking.db
+*.log
+.env

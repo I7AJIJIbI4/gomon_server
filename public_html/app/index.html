@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#111010">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dr. Gomon">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Dr. Gomon Cosmetology — ваш особистий кабінет">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+<title>Dr. Gómon</title>
+<script>if(!Object.hasOwn){Object.hasOwn=function(o,p){return Object.prototype.hasOwnProperty.call(o,p);}}</script>
+<script src="https://static.elfsight.com/platform/platform.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --gold:#c9a96e;
+  --gold-dim:#a07d48;
+  --gold-pale:#e8d5b0;
+  --bg:#111010;
+  --bg2:#1a1918;
+  --bg3:#222120;
+  --surface:#252422;
+  --surface2:#2e2c2a;
+  --border:#333130;
+  --border-gold:rgba(201,169,110,0.25);
+  --text:#f0ece4;
+  --text2:#a09890;
+  --text3:#6a6460;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --sans:'Jost',sans-serif;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-weight:300;font-size:15px;line-height:1.6;overflow:hidden}
+
+/* ── INSTALL BANNER ── */
+#install-banner{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:var(--bg2);border-bottom:1px solid var(--border-gold);
+  padding:calc(var(--safe-top) + 10px) 16px 12px;
+  display:none;animation:slideDown .3s ease;
+}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.install-content{display:flex;align-items:center;gap:12px}
+.install-logo{width:40px;height:40px;border-radius:10px;background:var(--bg3);border:1px solid var(--border-gold);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.install-logo svg{width:22px;height:22px}
+.install-text h4{font-family:var(--serif);font-size:15px;font-weight:400;color:var(--text)}
+.install-text p{font-size:12px;color:var(--text2);margin-top:1px}
+.install-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0}
+.install-btn{background:var(--gold);color:#111;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;white-space:nowrap}
+.install-close{background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px;line-height:1}
+
+/* ── INSTALL MODAL ── */
+#install-modal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,0.75);
+  display:none;align-items:flex-end;justify-content:center;
+  padding:0 0 var(--safe-bottom);
+}
+#install-modal.show{display:flex}
+.install-sheet{
+  background:var(--bg2);
+  border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border-gold);
+  padding:24px 20px 32px;
+  width:100%;max-width:480px;
+  animation:sheetUp .3s ease;
+}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-handle{width:36px;height:3px;background:var(--border);border-radius:2px;margin:0 auto 20px}
+.sheet-title{font-family:var(--serif);font-size:22px;font-weight:300;color:var(--gold-pale);margin-bottom:6px}
+.sheet-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
+.install-step{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+.step-num{width:28px;height:28px;border-radius:50%;border:1px solid var(--border-gold);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--gold);flex-shrink:0;font-family:var(--serif)}
+.step-text h5{font-size:14px;font-weight:400;color:var(--text);margin-bottom:2px}
+.step-text p{font-size:12px;color:var(--text2);line-height:1.5}
+.step-icon{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--gold);margin-top:4px;font-family:var(--sans)}
+.sheet-close-btn{width:100%;padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--sans);font-size:14px;cursor:pointer;margin-top:8px}
+
+/* ── APP SHELL ── */
+#app{
+  height:100%;display:flex;flex-direction:column;
+  padding-top:var(--safe-top);
+}
+#app.banner-open{padding-top:calc(var(--safe-top) + 68px)}
+
+/* ── SCREENS ── */
+.screen{flex:1;overflow-y:auto;display:none;flex-direction:column;overscroll-behavior:contain}
+.screen.active{display:flex}
+[id^='screen-admin'].screen.active{position:fixed;inset:0;z-index:200;background:var(--bg);flex-direction:column}
+.screen-scroll{flex:1;overflow-y:auto;padding:0 0 80px;overscroll-behavior:contain}
+
+/* ── NAV ── */
+nav{
+  flex-shrink:0;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  padding-bottom:var(--safe-bottom);
+}
+.nav-btn{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:10px 4px 8px;
+  background:none;border:none;cursor:pointer;
+  transition:opacity .15s;
+}
+.nav-btn:active{opacity:.7}
+.nav-icon{width:22px;height:22px;opacity:.45;transition:opacity .2s}
+.nav-label{font-size:10px;font-family:var(--sans);font-weight:400;color:var(--text3);transition:color .2s;letter-spacing:.3px}
+.nav-btn.active .nav-icon{opacity:1}
+.nav-btn.active .nav-label{color:var(--gold)}
+.nav-btn.active .nav-icon path,.nav-btn.active .nav-icon circle,.nav-btn.active .nav-icon rect{stroke:var(--gold)}
+
+/* ── AUTH SCREEN ── */
+
+
+#screen-auth{background:var(--bg);align-items:center;justify-content:center;padding:16px 24px;overflow-y:auto}
+.auth-logo{text-align:center;margin-bottom:20px}
+.auth-logo svg{display:block;width:56px;height:56px;margin:0 auto 16px}
+.logo-img{display:block;margin:0 auto 6px;width:210px;filter:brightness(0) saturate(100%) invert(71%) sepia(42%) saturate(431%) hue-rotate(1deg) brightness(103%) contrast(90%)}
+.auth-logo p{font-size:11px;color:var(--text3);margin-top:6px;letter-spacing:2px;text-transform:uppercase}
+.auth-card{width:100%;max-width:360px}
+.auth-step{display:none}
+.auth-step.active{display:block}
+.auth-label{font-size:12px;color:var(--text2);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px}
+.phone-input-wrap{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);transition:border-color .2s}
+.phone-input-wrap:focus-within{border-color:var(--border-gold)}
+.phone-prefix{padding:14px 12px;font-size:15px;color:var(--text2);background:var(--surface2);border-right:1px solid var(--border)}
+.phone-input{flex:1;padding:14px 14px;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;font-family:var(--sans);font-weight:300}
+.phone-input::placeholder{color:var(--text3)}
+.auth-hint{font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5}
+.auth-btn{
+  width:100%;margin-top:20px;padding:15px;
+  background:var(--gold);color:#111;
+  border:none;border-radius:10px;
+  font-size:15px;font-family:var(--sans);font-weight:500;
+  cursor:pointer;letter-spacing:.5px;
+  transition:opacity .15s;
+}
+.auth-btn:active{opacity:.85}
+.auth-btn:disabled{opacity:.4;cursor:default}
+.otp-wrap{display:flex;gap:10px;justify-content:center;margin-bottom:4px}
+.otp-input{
+  width:56px;height:64px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  text-align:center;font-size:28px;font-family:var(--serif);
+  color:var(--text);outline:none;
+  transition:border-color .2s;
+  caret-color:var(--gold);
+}
+.otp-input:focus{border-color:var(--border-gold)}
+.otp-resend{font-size:13px;color:var(--text3);text-align:center;margin-top:16px}
+.otp-resend button{background:none;border:none;color:var(--gold);font-size:13px;cursor:pointer;font-family:var(--sans)}
+.auth-back{background:none;border:none;color:var(--text2);font-size:13px;font-family:var(--sans);cursor:pointer;margin-top:16px;display:block;text-align:center;width:100%}
+#otp-timer{color:var(--gold)}
+
+#auth-ai-block{width:100%;max-width:360px;margin-top:4px}
+
+/* ── HOME ── */
+.home-header{
+  padding:24px 20px 0;
+  background:linear-gradient(180deg,var(--bg2) 0%,var(--bg) 100%);
+}
+.home-greeting{font-family:var(--serif);font-size:13px;font-weight:300;color:var(--text2);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+.home-name{font-family:var(--serif);font-size:28px;font-weight:300;color:var(--gold-pale);letter-spacing:.3px}
+.gold-line{width:32px;height:1px;background:var(--gold-dim);margin:12px 0 20px}
+
+.next-card{
+  margin:0 20px 20px;
+  background:var(--surface);
+  border:1px solid var(--border-gold);
+  border-radius:14px;
+  padding:16px;
+  position:relative;overflow:hidden;
+}
+.next-card::before{
+  content:'';position:absolute;top:0;right:0;
+  width:80px;height:80px;
+  background:radial-gradient(circle at top right,rgba(201,169,110,.08),transparent 70%);
+}
+.next-label{font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+.next-row{display:flex;align-items:center;gap:14px}
+.date-badge{
+  background:var(--gold);color:#111;
+  border-radius:8px;padding:8px 12px;
+  text-align:center;flex-shrink:0;min-width:48px;
+}
+.date-badge .day{font-family:var(--serif);font-size:24px;font-weight:400;line-height:1}
+.date-badge .mon{font-size:10px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
+.next-info h4{font-family:var(--serif);font-size:17px;font-weight:400;color:var(--text)}
+.next-info p{font-size:12px;color:var(--text2);margin-top:3px}
+.no-appt{text-align:center;padding:20px;color:var(--text3);font-size:13px}
+
+.promo-scroll{display:flex;gap:12px;padding:0 20px 4px;overflow-x:auto;scrollbar-width:none}
+.promo-scroll::-webkit-scrollbar{display:none}
+.promo-tile{
+  flex-shrink:0;width:220px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px;position:relative;overflow:hidden;
+}
+.promo-tile.featured{border-color:var(--border-gold)}
+.promo-tile::after{
+  content:'';position:absolute;bottom:0;right:0;
+  width:60px;height:60px;
+  background:radial-gradient(circle at bottom right,rgba(201,169,110,.06),transparent 70%);
+}
+.promo-tag{font-size:10px;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.promo-title{font-family:var(--serif);font-size:16px;font-weight:300;color:var(--gold-pale);line-height:1.3;margin-bottom:6px}
+.promo-desc{font-size:12px;color:var(--text2)}
+.promo-more{font-size:11px;color:var(--gold);margin-top:10px;letter-spacing:.4px}
+.promo-tile-clickable{cursor:pointer}
+.promo-tile-clickable:active{opacity:.8}
+#promo-modal{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#promo-modal.show{display:flex}
+.promo-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);padding:20px 20px 32px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;animation:sheetUp .3s ease}
+.promo-sheet-handle{width:36px;height:3px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.promo-sheet-tag{font-size:10px;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px}
+.promo-sheet-title{font-family:var(--serif);font-size:20px;font-weight:300;color:var(--gold-pale);line-height:1.3;margin-bottom:16px}
+.promo-modal-desc{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:16px}
+.promo-modal-subtitle{font-size:11px;color:var(--gold);letter-spacing:.6px;text-transform:uppercase;margin:16px 0 8px}
+.promo-price-table{width:100%;border-collapse:collapse;margin-bottom:4px}
+.promo-price-table td{padding:6px 4px;font-size:13px;color:var(--text2);vertical-align:middle}
+.promo-price-table td:first-child{color:var(--text);width:55%}
+.promo-price-table td small{font-size:11px;color:var(--text3);display:block;margin-top:2px}
+.promo-price-table tr+tr td{border-top:1px solid var(--border)}
+.promo-price-old{text-decoration:line-through;color:var(--text3)!important;text-align:right;white-space:nowrap}
+.promo-price-new{color:var(--gold)!important;font-weight:500;text-align:right;white-space:nowrap}
+.promo-list{padding-left:18px;margin:0 0 8px}
+.promo-list li{font-size:13px;color:var(--text2);line-height:1.8}
+.promo-modal-note{font-size:12px;color:var(--text3);margin-top:12px;font-style:italic}
+.promo-chat-btn{display:block;width:100%;background:var(--gold);border:none;border-radius:12px;padding:14px;color:#1a1510;font-size:15px;font-weight:600;letter-spacing:.3px;cursor:pointer;margin-top:20px}
+.promo-chat-btn:active{opacity:.85}
+
+/* -- NEWS FEED -- */
+.news-scroll{display:flex;gap:12px;padding:0 20px 4px;overflow-x:auto;scrollbar-width:none}
+.news-scroll::-webkit-scrollbar{display:none}
+.news-tile{
+  flex-shrink:0;width:240px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px;cursor:pointer;position:relative;overflow:hidden;
+  transition:border-color .2s;
+}
+.news-tile:active{opacity:.8}
+.news-date{font-size:10px;color:var(--text3);letter-spacing:.6px;margin-bottom:8px;text-transform:uppercase}
+.news-text{font-size:13px;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.news-more{font-size:11px;color:var(--gold);margin-top:8px;letter-spacing:.3px}
+.news-empty{padding:14px 20px;font-size:13px;color:var(--text3)}
+
+/* -- NEWS POPUP -- */
+#news-modal{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#news-modal.show{display:flex}
+.news-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);padding:20px 20px 32px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;animation:sheetUp .3s ease}
+.news-sheet-handle{width:36px;height:3px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.news-sheet-date{font-size:11px;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:14px}
+.news-sheet-text{font-size:15px;color:var(--text2);line-height:1.7;white-space:pre-wrap}
+.news-sheet-media{margin-top:18px;border-radius:12px;overflow:hidden;background:var(--surface)}
+.news-sheet-media img,.news-sheet-media video{width:100%;display:block;border-radius:12px}
+.news-sheet-close{display:block;margin:20px auto 0;background:none;border:1px solid var(--border);border-radius:8px;padding:10px 28px;color:var(--text2);font-size:13px;font-family:var(--sans);cursor:pointer}
+.section-label{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;padding:16px 20px 10px;font-family:var(--sans)}
+
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px}
+.quick-tile{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:16px 14px;cursor:pointer;
+  transition:border-color .2s,background .2s;
+}
+.quick-tile:active{background:var(--surface2)}
+.quick-tile svg{width:22px;height:22px;margin-bottom:10px;opacity:.7}
+.quick-tile p{font-size:13px;color:var(--text2)}
+
+/* ── APPOINTMENTS ── */
+.appts-header{padding:24px 20px 16px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.screen-title{font-family:var(--serif);font-size:26px;font-weight:300;color:var(--gold-pale)}
+.screen-sub{font-size:12px;color:var(--text3);margin-top:3px;letter-spacing:.5px}
+.appt-group-label{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;padding:16px 20px 8px}
+.appt-card{
+  margin:0 20px 10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px;
+  transition:border-color .2s;
+}
+.appt-card.upcoming{border-color:var(--border-gold)}
+.appt-status{
+  display:inline-block;font-size:10px;letter-spacing:.8px;text-transform:uppercase;
+  padding:3px 10px;border-radius:20px;margin-bottom:10px;
+}
+.status-upcoming{background:rgba(201,169,110,.12);color:var(--gold)}
+.status-done{background:var(--surface2);color:var(--text3)}
+.appt-name{font-family:var(--serif);font-size:17px;font-weight:400;color:var(--text);margin-bottom:4px}
+.appt-meta{font-size:12px;color:var(--text2)}
+.appt-cancel-btn{margin-top:12px;padding:7px 16px;border:1px solid rgba(220,60,60,.35);border-radius:20px;background:rgba(220,60,60,.06);color:#e05050;font-size:12px;cursor:pointer;letter-spacing:.3px;transition:background .2s}
+.appt-cancel-btn:active{background:rgba(220,60,60,.15)}
+.appt-meta span{margin-right:12px}
+
+/* ── PRICE ── */
+.price-header{padding:24px 20px 16px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.price-search-wrap{padding:12px 20px 0;position:relative}
+.price-search{
+  width:100%;padding:12px 40px 12px 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:16px;font-family:var(--sans);outline:none;
+  transition:border-color .2s;
+}
+.price-search:focus{border-color:var(--border-gold)}
+.price-search::placeholder{color:var(--text3)}
+.search-icon{position:absolute;right:34px;top:50%;transform:translateY(-50%);opacity:.35}
+.price-cat-label{
+  font-size:11px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;
+  padding:18px 20px 8px;font-family:var(--sans);
+}
+.price-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:11px 20px;border-bottom:1px solid var(--border);
+  transition:background .15s;
+}
+.price-item:active{background:var(--surface)}
+.price-item:last-child{border-bottom:none}
+.price-name{font-size:14px;color:var(--text);padding-right:12px;flex:1;line-height:1.4}
+.price-val{font-family:var(--serif);font-size:16px;font-weight:400;color:var(--gold);white-space:nowrap;flex-shrink:0}
+.price-note{font-size:11px;color:var(--text3);padding:12px 20px 0;font-style:italic}
+
+/* ── MAP ── */
+.map-header{padding:24px 20px 16px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.map-placeholder{
+  margin:16px 20px 0;
+  height:180px;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  cursor:pointer;transition:border-color .2s;overflow:hidden;position:relative;
+}
+.map-placeholder:active{border-color:var(--border-gold)}
+.map-bg{
+  position:absolute;inset:0;
+  background:
+    repeating-linear-gradient(0deg,var(--border) 0,var(--border) 1px,transparent 1px,transparent 40px),
+    repeating-linear-gradient(90deg,var(--border) 0,var(--border) 1px,transparent 1px,transparent 40px);
+  opacity:.5;
+}
+.map-pin-wrap{position:relative;z-index:1;text-align:center}
+.map-pin-icon{font-size:36px;display:block;margin-bottom:6px}
+.map-tap{font-size:12px;color:var(--text2)}
+.map-address-card{margin:14px 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.map-address-card h4{font-family:var(--serif);font-size:17px;font-weight:400;color:var(--text);margin-bottom:4px}
+.map-address-card p{font-size:13px;color:var(--text2);line-height:1.6}
+.map-route-btn{
+  margin:14px 20px 0;width:calc(100% - 40px);padding:14px;
+  background:var(--gold);color:#111;border:none;border-radius:10px;
+  font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;
+  letter-spacing:.5px;transition:opacity .15s;display:block;
+}
+.map-route-btn:active{opacity:.85}
+.contact-items{padding:0 20px;margin-top:14px}
+.contact-row{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 0;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:opacity .15s;
+}
+.contact-row:last-child{border-bottom:none}
+.contact-row:active{opacity:.7}
+.c-icon{width:38px;height:38px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.c-info h5{font-size:14px;font-weight:400;color:var(--text)}
+.c-info p{font-size:12px;color:var(--text2);margin-top:2px}
+.c-arrow{margin-left:auto;color:var(--text3);font-size:18px}
+
+/* ── CHAT ── */
+.chat-header{padding:20px 20px 14px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.chat-options{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:20px}
+.chat-option{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:20px 14px;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;
+  text-decoration:none;display:block;
+}
+.chat-option:active{background:var(--surface2)}
+.chat-option.telegram{border-color:rgba(42,171,238,.2)}
+.chat-option.instagram{border-color:rgba(201,169,110,.2)}
+.chat-option-icon{font-size:32px;margin-bottom:10px;display:block}
+.chat-option h4{font-size:14px;font-weight:400;color:var(--text);margin-bottom:4px}
+.chat-option p{font-size:12px;color:var(--text2)}
+
+.chat-option.ai-option{grid-column:1/-1;text-align:left;padding:18px 16px 16px;border-color:rgba(201,169,110,.3);background:linear-gradient(135deg,var(--surface) 0%,rgba(201,169,110,.05) 100%)}
+.ai-option-top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.ai-option-top .chat-option-icon{font-size:26px;margin:0;flex-shrink:0}
+.ai-option-top h4{font-size:15px;font-weight:400;color:var(--text);margin:0}
+.ai-option-top p{font-size:12px;color:var(--text2);margin:0}
+.ai-option-top-text{display:flex;flex-direction:column;gap:2px}
+.ai-input-row{display:flex;gap:8px;align-items:center}
+.ai-input-row input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:var(--sans);font-size:16px;font-weight:300;color:var(--text);outline:none;transition:border-color .2s}
+.ai-input-row input:focus{border-color:var(--gold)}
+.ai-input-row input::placeholder{color:var(--text3)}
+.ai-send-btn{width:44px;height:44px;flex-shrink:0;border:none;border-radius:10px;background:linear-gradient(135deg,#c9a96e,#a07848);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .15s}
+.ai-send-btn:active{transform:scale(.93)}
+.ai-send-btn{font-size:18px;color:#111}
+.chat-info{margin:0 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.chat-info p{font-size:13px;color:var(--text2);line-height:1.6}
+.chat-info strong{color:var(--gold);font-weight:400}
+
+
+/* ── ADMIN ── */
+.admin-header{padding:20px 20px 0}
+.admin-greeting{font-family:var(--serif);font-size:12px;font-weight:300;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.admin-title{font-family:var(--serif);font-size:26px;font-weight:300;color:var(--gold-pale)}
+.admin-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 20px 0}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.stat-card.gold{border-color:var(--border-gold)}
+.stat-num{font-family:var(--serif);font-size:28px;font-weight:300;color:var(--gold);line-height:1}
+.stat-label{font-size:11px;color:var(--text3);margin-top:4px;letter-spacing:.5px;text-transform:uppercase}
+.admin-section{padding:16px 20px 0}
+.admin-section-title{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.sync-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);font-family:var(--sans);cursor:pointer;transition:border-color .2s}
+.sync-btn:active{border-color:var(--gold);color:var(--gold)}
+.admin-visit-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.admin-visit-row:last-child{border-bottom:none}
+.admin-visit-date{font-family:var(--serif);font-size:13px;color:var(--gold);flex-shrink:0;width:52px}
+.admin-visit-info{}
+.admin-visit-name{font-size:13px;color:var(--text);font-weight:400}
+.admin-visit-svc{font-size:12px;color:var(--text3)}
+/* Calendar */
+.cal-month{padding:0 20px 20px}
+.cal-month-title{font-family:var(--serif);font-size:18px;font-weight:300;color:var(--gold-pale);padding:14px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.cal-day{padding:6px 0}
+.cal-day-header{display:flex;align-items:center;gap:8px;padding:8px 0 4px}
+.cal-day-num{font-family:var(--serif);font-size:22px;color:var(--gold);line-height:1;width:32px;text-align:center}
+.cal-day-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.cal-appt-row{display:flex;align-items:flex-start;gap:10px;padding:6px 0 6px 40px;border-bottom:1px solid var(--border)}
+.cal-appt-row:last-child{border-bottom:none}
+.cal-appt-name{font-size:13px;color:var(--text);font-weight:400;flex:1}
+.cal-appt-svc{font-size:12px;color:var(--text2)}
+.cal-appt-phone{font-size:11px;color:var(--text3)}
+.admin-nav{display:grid;grid-template-columns:repeat(4,1fr)}
+
+/* ── LOADING ── */
+#loader{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9990;transition:opacity .4s;
+}
+#loader svg{width:52px;height:52px;margin-bottom:20px}
+#loader p{font-family:var(--serif);font-size:14px;color:var(--text3);letter-spacing:1px;text-transform:uppercase}
+#loader.hide{opacity:0;pointer-events:none}
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── UTILS ── */
+.divider{height:1px;background:var(--border);margin:0 20px}
+.empty-state{padding:48px 20px;text-align:center}
+.empty-state p{font-family:var(--serif);font-size:18px;color:var(--text3);font-weight:300}
+.empty-state span{font-size:13px;color:var(--text3);display:block;margin-top:6px}
+/* ── OFFLINE BAR ── */
+#offline-bar{
+  position:fixed;bottom:calc(56px + var(--safe-bottom));left:0;right:0;
+  z-index:500;background:var(--bg3);border-top:1px solid var(--border);
+  padding:8px 16px;text-align:center;font-size:11px;color:var(--text3);
+  letter-spacing:.3px;display:none;
+}
+#offline-bar.show{display:block}
+
+/* ── NOT-A-CLIENT MODAL ── */
+#push-modal{
+  position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,0.75);
+  display:none;align-items:flex-end;justify-content:center;
+  padding:0 0 var(--safe-bottom);
+}
+#push-modal.show{display:flex}
+.push-sheet{
+  background:var(--bg2);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border-gold);
+  padding:24px 20px 32px;
+  width:100%;max-width:480px;
+  animation:sheetUp .3s ease;
+}
+.push-sheet-icon{font-size:36px;margin-bottom:12px}
+.push-sheet-title{font-family:var(--serif);font-size:22px;font-weight:300;color:var(--gold-pale);margin-bottom:8px}
+.push-sheet-text{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.6}
+.push-allow-btn{width:100%;padding:14px;background:var(--gold);border:none;border-radius:12px;color:#000;font-family:var(--sans);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px}
+.push-skip-btn{width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer}
+#not-client-modal{
+  position:fixed;inset:0;z-index:9998;
+  background:rgba(0,0,0,0.75);
+  display:none;align-items:flex-end;justify-content:center;
+  padding:0 0 var(--safe-bottom);
+}
+#not-client-modal.show{display:flex}
+.not-client-sheet{
+  background:var(--bg2);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border-gold);
+  padding:24px 20px 32px;
+  width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+  animation:sheetUp .3s ease;
+}
+.not-client-map{
+  margin:16px 0 0;height:160px;border-radius:12px;overflow:hidden;
+  border:1px solid var(--border);
+}
+.not-client-map iframe{width:100%;height:100%;border:none;display:block}
+.not-client-links{margin-top:14px}
+.not-client-row{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 0;border-bottom:1px solid var(--border);
+  text-decoration:none;cursor:pointer;transition:opacity .15s;
+}
+.not-client-row:last-child{border-bottom:none}
+.not-client-row:active{opacity:.7}
+.not-client-icon{
+  width:40px;height:40px;border-radius:10px;
+  background:var(--surface2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;
+}
+.not-client-info h5{font-size:14px;font-weight:400;color:var(--text)}
+.not-client-info p{font-size:12px;color:var(--text2);margin-top:2px}
+.not-client-arrow{margin-left:auto;color:var(--text3);font-size:18px}
+.not-client-back{
+  width:100%;margin-top:20px;padding:13px;
+  background:none;border:1px solid var(--border);border-radius:10px;
+  color:var(--text2);font-family:var(--sans);font-size:14px;cursor:pointer;
+}
+
+/* ── OFFLINE OVERLAYS ── */
+.offline-overlay{
+  position:absolute;inset:0;z-index:10;
+  background:var(--bg2);border-radius:inherit;
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+}
+body.offline .offline-overlay{display:flex}
+.offline-overlay svg{width:32px;height:32px;opacity:.35}
+.offline-overlay p{font-size:13px;color:var(--text3);text-align:center;line-height:1.5}
+.offline-overlay span{font-size:11px;color:var(--text3);opacity:.6}
+.instagram-wrap{padding:0 20px 8px;overflow:hidden;position:relative}
+body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <svg viewBox="0 0 56 56" fill="none" class="pulse">
+    <path d="M28 8C17 8 8 17 8 28s9 20 20 20 20-9 20-20S39 8 28 8Z" stroke="#c9a96e" stroke-width="1"/>
+    <path d="M28 16c-6.6 0-12 5.4-12 12s5.4 12 12 12 12-5.4 12-12-5.4-12-12-12Z" stroke="#c9a96e" stroke-width=".5" stroke-dasharray="3 3"/>
+    <circle cx="28" cy="28" r="4" fill="#c9a96e" opacity=".6"/>
+  </svg>
+  <p>Dr. Gómon</p>
+</div>
+
+<!-- OFFLINE BAR -->
+<div id="offline-bar">● Офлайн-режим · дані можуть бути застарілими</div>
+
+<!-- INSTALL BANNER -->
+<div id="install-banner">
+  <div class="install-content">
+    <div class="install-logo">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="19" stroke="#c9a96e" stroke-width=".8"/>
+        <circle cx="20" cy="20" r="12" stroke="#c9a96e" stroke-width=".4" stroke-dasharray="2 2"/>
+        <circle cx="20" cy="20" r="4" fill="#c9a96e" opacity=".7"/>
+      </svg>
+    </div>
+    <div class="install-text">
+      <h4>Dr. Gómon</h4>
+      <p>Встановити як додаток</p>
+    </div>
+    <div class="install-actions">
+      <button class="install-btn" onclick="showInstallModal()">Встановити</button>
+      <button class="install-close" onclick="closeBanner()">×</button>
+    </div>
+  </div>
+</div>
+
+<!-- PUSH PERMISSION MODAL -->
+<div id="push-modal">
+  <div class="push-sheet">
+    <div class="sheet-handle"></div>
+    <div class="push-sheet-icon">🔔</div>
+    <div class="push-sheet-title">Сповіщення від Dr. Gomon</div>
+    <div class="push-sheet-text">
+      Дозвольте надсилати вам нагадування про повторні процедури та підтвердження ваших записів.<br><br>
+      Жодного спаму — тільки корисне.
+    </div>
+    <button class="push-allow-btn" onclick="_doPushSubscribe()">Дозволити сповіщення</button>
+    <button class="push-skip-btn" onclick="_closePushModal(true)">Нагадати пізніше</button>
+  </div>
+</div>
+
+<!-- INSTALL MODAL -->
+<div id="install-modal">
+  <div class="install-sheet">
+    <div class="sheet-handle"></div>
+    <div id="install-modal-content"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- AUTH SCREEN -->
+  <div class="screen active" id="screen-auth" style="display:flex">
+    <div class="auth-logo">
+      <svg viewBox="0 0 56 56" fill="none">
+        <circle cx="28" cy="28" r="27" stroke="#c9a96e" stroke-width=".8"/>
+        <circle cx="28" cy="28" r="18" stroke="#c9a96e" stroke-width=".4" stroke-dasharray="2 2"/>
+        <circle cx="28" cy="28" r="6" fill="#c9a96e" opacity=".7"/>
+      </svg>
+      <img class="logo-img" src="icons/logo.png" alt="Dr. Gomon Cosmetology">
+      <p>Черкаси</p>
+    </div>
+    <div class="auth-card">
+      <!-- Step 1: Phone -->
+      <div class="auth-step active" id="auth-step-phone">
+        <p class="auth-label">Ваш номер телефону</p>
+        <div class="phone-input-wrap">
+          <span class="phone-prefix">+38</span>
+          <input class="phone-input" id="phone-input" type="tel" inputmode="numeric"
+            placeholder="(0XX) XXX-XX-XX" maxlength="13"
+            oninput="formatPhone(this)" onkeydown="if(event.key==='Enter')sendOtp()">
+        </div>
+        <p class="auth-hint">Для клієнтів — вхід в кабінет. Для нових — AI-підбір процедури</p>
+        <button class="auth-btn" id="phone-btn" onclick="sendOtp()">Отримати код</button>
+      </div>
+      <!-- Step 2: OTP -->
+      <div class="auth-step" id="auth-step-otp">
+        <p class="auth-label">Код із SMS</p>
+        <div class="otp-wrap">
+          <input class="otp-input" maxlength="1" inputmode="numeric" autocomplete="one-time-code" oninput="otpInput(this,0)" onkeydown="otpKey(this,0,event)">
+          <input class="otp-input" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpKey(this,1,event)">
+          <input class="otp-input" maxlength="1" inputmode="numeric" oninput="otpInput(this,2)" onkeydown="otpKey(this,2,event)">
+          <input class="otp-input" maxlength="1" inputmode="numeric" oninput="otpInput(this,3)" onkeydown="otpKey(this,3,event)">
+        </div>
+        <p id="otp-sent" style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px"></p>
+        <button class="auth-btn" id="otp-btn" onclick="verifyOtp()">Увійти</button>
+        <p class="otp-resend">Не отримали код? <button onclick="resendOtp()" id="resend-btn">Надіслати ще</button> <span id="otp-timer"></span></p>
+        <button class="auth-back" onclick="backToPhone()">← Змінити номер</button>
+      </div>
+    </div>
+    <div id="auth-ai-block">
+      <div class="chat-option ai-option">
+          <div class="ai-option-top">
+            <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
+            <div class="ai-option-top-text">
+              <h4>AI-асистент клініки</h4>
+              <p>Підбір процедури онлайн</p>
+            </div>
+          </div>
+          <div class="ai-input-row">
+            <input type="text" id="ai-auth-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-send-btn" id="ai-auth-send" aria-label="Відправити">&#10148;</button>
+          </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- HOME SCREEN -->
+  <div class="screen" id="screen-home">
+    <div class="screen-scroll" id="home-scroll">
+      <div class="home-header">
+        <p class="home-greeting">Вітаємо</p>
+        <h2 class="home-name" id="home-name">...</h2>
+        <div class="gold-line"></div>
+      </div>
+      <p class="section-label">Найближчий запис</p>
+      <div id="home-next-appt"></div>
+      <p class="section-label">Акції</p>
+      <div class="promo-scroll" id="home-promos"></div>
+      <p class="section-label">Новини</p>
+      <div class="news-scroll" id="home-news"><p class="news-empty">Завантаження...</p></div>
+      <p class="section-label">Швидкий доступ</p>
+      <div class="quick-grid">
+        <div class="quick-tile" onclick="go('appointments')">
+          <svg viewBox="0 0 22 22" fill="none" stroke="#c9a96e" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/><path d="M7 14h2M13 14h2M7 17h2" stroke-linecap="round"/></svg>
+          <p>Мої записи</p>
+        </div>
+        <div class="quick-tile" onclick="go('price')">
+          <svg viewBox="0 0 22 22" fill="none" stroke="#c9a96e" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5-1 1.5-2 1.5-2 .7-2 1.5.9 1.5 2 1.5 2-.7 2-1.5" stroke-linecap="round"/></svg>
+          <p>Прайс-лист</p>
+        </div>
+        <div class="quick-tile" onclick="go('map')">
+          <svg viewBox="0 0 22 22" fill="none" stroke="#c9a96e" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg>
+          <p>Адреса</p>
+        </div>
+        <div class="quick-tile" onclick="go('chat')">
+          <svg viewBox="0 0 22 22" fill="none" stroke="#c9a96e" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg>
+          <p>Написати нам</p>
+        </div>
+      </div>
+      <p class="section-label">Ми в Instagram</p>
+      <div class="instagram-wrap">
+        <div class="offline-overlay">
+          <svg viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="2" y="2" width="18" height="18" rx="5"/><circle cx="11" cy="11" r="4"/><circle cx="16" cy="6" r="1.2" fill="var(--gold)" stroke="none"/></svg>
+          <p>@dr.gomon</p>
+          <span>Instagram доступний з інтернетом</span>
+        </div>
+        <div class="elfsight-app-391b5e59-82cb-4398-92ff-f21819491bea" data-elfsight-app-lazy></div>
+      </div>
+    </div>
+    <nav id="nav-home">
+      <button class="nav-btn active" onclick="go('home')" id="nb-home">
+        <svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg>
+        <span class="nav-label">Головна</span>
+      </button>
+      <button class="nav-btn" onclick="go('appointments')" id="nb-appointments">
+        <svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg>
+        <span class="nav-label">Записи</span>
+      </button>
+      <button class="nav-btn" onclick="go('price')" id="nb-price">
+        <svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg>
+        <span class="nav-label">Прайс</span>
+      </button>
+      <button class="nav-btn" onclick="go('map')" id="nb-map">
+        <svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg>
+        <span class="nav-label">Адреса</span>
+      </button>
+      <button class="nav-btn" onclick="go('chat')" id="nb-chat">
+        <svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg>
+        <span class="nav-label">Чат</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- APPOINTMENTS SCREEN -->
+  <div class="screen" id="screen-appointments">
+    <div class="appts-header">
+      <h2 class="screen-title">Мої записи</h2>
+      <p class="screen-sub">Заплановані та завершені процедури</p>
+    </div>
+    <div class="screen-scroll">
+      <div id="appts-list"></div>
+    </div>
+    <nav>
+      <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+      <button class="nav-btn active" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
+      <button class="nav-btn" onclick="go('price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+      <button class="nav-btn" onclick="go('map')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg><span class="nav-label">Адреса</span></button>
+      <button class="nav-btn" onclick="go('chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    </nav>
+  </div>
+
+  <!-- PRICE SCREEN -->
+  <div class="screen" id="screen-price">
+    <div class="price-header">
+      <h2 class="screen-title">Прайс-лист</h2>
+      <p class="screen-sub">Актуальні ціни на послуги</p>
+    </div>
+    <div class="screen-scroll">
+      <div class="price-search-wrap">
+        <input class="price-search" id="price-search" type="search" placeholder="Пошук послуги..." oninput="filterPrice(this.value)">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/></svg>
+      </div>
+      <div id="price-list"></div>
+      <p class="price-note">* Ціни актуальні. При записі онлайн — знижки на акційні процедури.</p>
+    </div>
+    <nav>
+      <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+      <button class="nav-btn" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+      <button class="nav-btn active" onclick="go('price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label" style="color:var(--gold)">Прайс</span></button>
+      <button class="nav-btn" onclick="go('map')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg><span class="nav-label">Адреса</span></button>
+      <button class="nav-btn" onclick="go('chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    </nav>
+  </div>
+
+  <!-- MAP SCREEN -->
+  <div class="screen" id="screen-map">
+    <div class="map-header">
+      <h2 class="screen-title">Як дістатись</h2>
+      <p class="screen-sub">вул. Смілянська, 23 · БЦ Галерея · Черкаси</p>
+    </div>
+    <div class="screen-scroll">
+      <div class="map-placeholder">
+        <iframe src="https://maps.google.com/maps?q=вул.+Смілянська,+23,+Черкаси,+Україна&z=16&output=embed&hl=uk" style="width:100%;height:100%;border:none" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+        <div class="offline-overlay">
+          <svg viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg>
+          <p>вул. Смілянська, 23<br>БЦ Галерея, Черкаси</p>
+          <span>Карта доступна з інтернетом</span>
+        </div>
+      </div>
+      <div class="map-address-card">
+        <h4>Dr. Gómon Cosmetology</h4>
+        <p>вул. Смілянська, 23<br>БЦ Галерея, Черкаси<br><br>
+          ◈ Поряд з ТЦ Будинок Торгівлі<br>
+          ◈ Вхід з парковки KFC Drive<br>
+          ◈ Перехрестя бул. Шевченка та вул. Смілянської
+        </p>
+      </div>
+      <button class="map-route-btn" onclick="openMap()">Прокласти маршрут</button>
+      <div class="contact-items">
+        <div class="contact-row" onclick="callClinic()">
+          <div class="c-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
+          <div class="c-info"><h5>Телефон</h5><p>073-310-31-10</p></div>
+          <span class="c-arrow">›</span>
+        </div>
+
+        <div class="contact-row">
+          <div class="c-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div class="c-info"><h5>Графік роботи</h5><p>Без вихідних, за попереднім записом</p></div>
+        </div>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+      <button class="nav-btn" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+      <button class="nav-btn" onclick="go('price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+      <button class="nav-btn active" onclick="go('map')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg><span class="nav-label" style="color:var(--gold)">Адреса</span></button>
+      <button class="nav-btn" onclick="go('chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    </nav>
+  </div>
+
+  <!-- CHAT SCREEN -->
+  <div class="screen" id="screen-chat">
+    <div class="chat-header">
+      <h2 class="screen-title">Написати нам</h2>
+      <p class="screen-sub">Оберіть зручний месенджер</p>
+    </div>
+    <div class="screen-scroll">
+      <div class="chat-options">
+        <div class="chat-option ai-option">
+          <div class="ai-option-top">
+            <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
+            <div class="ai-option-top-text">
+              <h4>AI-асистент клініки</h4>
+              <p>Підбір процедури онлайн</p>
+            </div>
+          </div>
+          <div class="ai-input-row">
+            <input type="text" id="ai-quick-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-send-btn" id="ai-quick-send" aria-label="Відправити">&#10148;</button>
+          </div>
+        </div>
+        <a class="chat-option telegram" href="https://t.me/DrGomonCosmetology" target="_blank">
+          <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></span>
+          <h4>Telegram</h4>
+          <p>Швидка відповідь</p>
+        </a>
+        <a class="chat-option instagram" href="https://ig.me/m/dr.gomon" target="_blank">
+          <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1" fill="#C9A96E" stroke="none"/></svg></span>
+          <h4>Instagram</h4>
+          <p>Direct повідомлення</p>
+        </a>
+      </div>
+      <div class="chat-info">
+        <p>Відповідаємо протягом <strong>30 хвилин</strong> у робочий час.<br>
+        Для термінового запису телефонуйте: <strong><a href="tel:+380733103110" style="color:inherit;text-decoration:none">073-310-31-10</a></strong></p>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+      <button class="nav-btn" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+      <button class="nav-btn" onclick="go('price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+      <button class="nav-btn" onclick="go('map')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg><span class="nav-label">Адреса</span></button>
+      <button class="nav-btn active" onclick="go('chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label" style="color:var(--gold)">Чат</span></button>
+    </nav>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+const API_BASE = '/api';
+
+/* ── STATE ── */
+let user        = null;
+let appointments = [];
+let prices      = [];
+let token       = null;
+let otpTimer    = null;
+let _currentPhone = '';
+
+let PROMOS = [];
+
+async function loadPromos() {
+  try {
+    const cached = localStorage.getItem('gomon_promos');
+    if (cached) PROMOS = JSON.parse(cached);
+    const r = await fetch('/promos.json');
+    const data = await r.json();
+    if (Array.isArray(data) && data.length) {
+      PROMOS = data;
+      localStorage.setItem('gomon_promos', JSON.stringify(data));
+    }
+  } catch(e) {
+    const cached = localStorage.getItem('gomon_promos');
+    if (cached) PROMOS = JSON.parse(cached);
+  }
+  renderPromos();
+}
+
+/* ── INIT ── */
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hide');
+    checkSession();
+    initInstall();
+    updateOfflineBar();
+  }, 800);
+});
+
+// ── iOS Safari: фікс "пливе" при відкритті клавіатури ─────────────────────
+// visualViewport відстежує реальну висоту видимої зони,
+// щоб fixed-елементи не зміщувались коли клавіатура відкривається
+if (window.visualViewport) {
+  const app = document.getElementById('app');
+  function _syncVP() {
+    const h = window.visualViewport.height;
+    app.style.height = h + 'px';
+  }
+  window.visualViewport.addEventListener('resize', _syncVP);
+  window.visualViewport.addEventListener('scroll', _syncVP);
+  _syncVP();
+}
+
+async function checkSession() {
+  const saved = localStorage.getItem('gomon_session');
+  if (!saved) return;
+  try {
+    const s = JSON.parse(saved);
+    token = s.token;
+    user  = s.user;
+    const res = await fetch(API_BASE + '/me/appointments', {
+      headers: {'Content-Type':'application/json','Authorization':'Bearer ' + token}
+    });
+    if (res.status === 401) {
+      token = null; user = null;
+      localStorage.removeItem('gomon_session');
+      return;
+    }
+    if (!res.ok) throw new Error('server_error');
+    const data = await res.json();
+    if (data.error === 'offline') throw new Error('offline');
+    appointments = data.appointments || [];
+    localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
+    await loadPrices();
+    afterLogin();
+  } catch(e) {
+    if (token) {
+      const cached = localStorage.getItem('gomon_appointments');
+      appointments = cached ? JSON.parse(cached) : [];
+      await loadPrices();
+      afterLogin();
+    }
+  }
+}
+
+/* ── API HELPERS ── */
+async function api(path, opts = {}) {
+  const headers = {'Content-Type': 'application/json'};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API_BASE + path, {headers, ...opts});
+  if (res.status === 401) {
+    token = null; user = null;
+    localStorage.removeItem('gomon_session');
+    document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = ''; });
+    const a = document.getElementById('screen-auth');
+    if (a) { a.style.display = 'flex'; a.classList.add('active'); }
+    return {};
+  }
+  return res.json();
+}
+
+/* ── AUTH ── */
+function formatPhone(el) {
+  let v = el.value.replace(/\D/g, '');
+  if (v.startsWith('380')) v = v.slice(2);
+  if (v.startsWith('38'))  v = v.slice(2);
+  el.value = v.slice(0, 10);
+}
+
+async function sendOtp() {
+  const ph  = document.getElementById('phone-input').value.replace(/\D/g, '');
+  if (ph.length < 9) return;
+  const btn = document.getElementById('phone-btn');
+  btn.disabled = true; btn.textContent = 'Надсилаємо...';
+
+  _currentPhone = '380' + ph.replace(/^0/, '');
+
+  try {
+    const res = await api('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({phone: _currentPhone})
+    });
+    if (res.ok && res.guest) {
+      // Не клієнт — гостьовий режим: одразу в AI чат
+      localStorage.setItem('guest_phone', _currentPhone);
+      btn.disabled = false; btn.textContent = 'Отримати код';
+      if (window.GomonChat) GomonChat.openAsGuest();
+    } else if (res.ok) {
+      document.getElementById('auth-step-phone').classList.remove('active');
+      document.getElementById('auth-step-otp').classList.add('active');
+      document.getElementById('otp-sent').textContent = 'Код надіслано на +38' + ph;
+      document.querySelectorAll('.otp-input')[0].focus();
+      startWebOTP();
+      startOtpTimer(120);
+      // debug_code — тільки для тестування, прибрати на проді
+      if (res.debug_code) console.log('DEBUG OTP:', res.debug_code);
+    } else {
+      throw new Error(res.error || 'sms_failed');
+    }
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Отримати код';
+    alert('Помилка відправки SMS. Спробуйте ще раз.');
+  }
+}
+
+let _webOTPAbort = null;
+function startWebOTP() {
+  if (!('OTPCredential' in window)) return;
+  if (_webOTPAbort) _webOTPAbort.abort();
+  _webOTPAbort = new AbortController();
+  navigator.credentials.get({ otp: { transport: ['sms'] }, signal: _webOTPAbort.signal })
+    .then(otp => {
+      if (!otp || !otp.code) return;
+      const inputs = document.querySelectorAll('.otp-input');
+      const digits = otp.code.replace(/\D/g,'').split('');
+      inputs.forEach((inp, i) => { inp.value = digits[i] || ''; });
+      setTimeout(verifyOtp, 80);
+    })
+    .catch(() => {});
+}
+
+function otpInput(el, idx) {
+  const inputs = document.querySelectorAll('.otp-input');
+  if (el.value.length > 1) {
+    // paste — розкидаємо по полях
+    const digits = el.value.replace(/\D/g,'').split('');
+    inputs.forEach((inp, i) => { inp.value = digits[i] || ''; });
+    inputs[Math.min(digits.length, 3)].focus();
+    el.value = el.value.slice(-1);
+  } else if (el.value.length === 1 && idx < 3) {
+    inputs[idx + 1].focus();
+  }
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  const full = Array.from(inputs).map(i => i.value).join('');
+  if (full.length === 4) setTimeout(verifyOtp, 80);
+}
+
+function otpKey(el, idx, e) {
+  if (e.key === 'Backspace' && !el.value && idx > 0)
+    document.querySelectorAll('.otp-input')[idx - 1].focus();
+}
+
+async function verifyOtp() {
+  const inputs = document.querySelectorAll('.otp-input');
+  const code   = Array.from(inputs).map(i => i.value).join('');
+  if (code.length < 4) return;
+  const btn = document.getElementById('otp-btn');
+  btn.disabled = true; btn.textContent = 'Перевірка...';
+
+  try {
+    const res = await api('/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({phone: _currentPhone, code})
+    });
+
+    if (!res.ok) throw new Error(res.error || 'wrong_code');
+
+    token = res.token;
+    user  = res.client;
+    localStorage.setItem('gomon_session', JSON.stringify({token, user}));
+    clearOtpTimer();
+
+    // Підвантажуємо записи і прайс паралельно
+    await Promise.all([loadAppointments(), loadPrices()]);
+    afterLogin();
+
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Увійти';
+    inputs.forEach(i => { i.value = ''; });
+    inputs[0].focus();
+    const msgs = {
+      wrong_code:       'Невірний код. Спробуйте ще раз.',
+      code_expired:     'Час дії коду минув. Запросіть новий.',
+      too_many_attempts:'Забагато спроб. Запросіть новий код.',
+    };
+    alert(msgs[e.message] || 'Помилка. Спробуйте ще раз.');
+  }
+}
+
+async function loadAppointments() {
+  try {
+    const res = await api('/me/appointments');
+    if (res.error === 'offline') throw new Error('offline');
+    appointments = res.appointments || [];
+    localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
+  } catch(e) {
+    const cached = localStorage.getItem('gomon_appointments');
+    appointments = cached ? JSON.parse(cached) : [];
+  }
+}
+
+async function loadPrices() {
+  try {
+    const res = await api('/prices');
+    if (res.error === 'offline') throw new Error('offline');
+    // prices.json може бути масивом категорій або об'єктом
+    if (Array.isArray(res)) prices = res;
+    else if (res.categories) prices = res.categories;
+    else prices = [];
+    if (prices.length) localStorage.setItem('gomon_prices', JSON.stringify(prices));
+  } catch(e) {
+    const cached = localStorage.getItem('gomon_prices');
+    prices = cached ? JSON.parse(cached) : [];
+  }
+  renderPrice();
+}
+
+
+/* ── ADMIN ── */
+const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-chat'];
+
+function adminGo(id) {
+  //ховаємо всі адмін-екрани
+  ADMIN_SCREENS.forEach(s => {
+    const sc = document.getElementById('screen-'+s);
+    if (sc) { sc.classList.remove('active'); sc.style.display=''; }
+  });
+  const sc = document.getElementById('screen-'+id);
+  if (sc) { sc.classList.add('active'); sc.style.display='flex'; }
+
+  // Lazy load
+  if (id === 'admin-appts' && !window._adminApptLoaded) {
+    loadAdminAppointments();
+    window._adminApptLoaded = true;
+  }
+  if (id === 'admin-price' && !window._adminPriceLoaded) {
+    // копіюємо контент прайсу
+    const src = document.getElementById('screen-price');
+    const dst = document.getElementById('adm-price-scroll');
+    if (src && dst) {
+      const scroll = src.querySelector('.screen-scroll');
+      if (scroll) dst.innerHTML = scroll.innerHTML;
+    }
+    window._adminPriceLoaded = true;
+  }
+}
+
+async function loadAdminStats() {
+  try {
+    const res  = await fetch('/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    document.getElementById('adm-stat-clients').textContent = data.total_clients ?? '—';
+    document.getElementById('adm-stat-users').textContent   = data.total_users   ?? '—';
+    document.getElementById('adm-stat-push').textContent    = data.push_subs     ?? '—';
+    document.getElementById('adm-stat-month').textContent   = data.visits_month  ?? '—';
+
+    const list = document.getElementById('adm-recent-list');
+    if (data.recent && data.recent.length) {
+      list.innerHTML = data.recent.map(r => {
+        const d = (r.date||'').slice(5).replace('-','.');
+        return `<div class="admin-visit-row">
+          <span class="admin-visit-date">${d}</span>
+          <div class="admin-visit-info">
+            <div class="admin-visit-name">${r.first_name||''} ${r.last_name||''}</div>
+            <div class="admin-visit-svc">${r.service||''}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) { console.error('admin stats:', e); }
+}
+
+async function loadAdminAppointments() {
+  const container = document.getElementById('adm-cal-container');
+  container.innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">Завантаження...</p>';
+  try {
+    const res  = await fetch('/api/admin/appointments', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    const appts = data.appointments || [];
+
+    // Групуємо по місяцю і даті
+    const byMonth = {};
+    appts.forEach(a => {
+      if (!a.date) return;
+      const [y,m,d] = a.date.split('-');
+      const monthKey = y + '-' + m;
+      if (!byMonth[monthKey]) byMonth[monthKey] = {};
+      if (!byMonth[monthKey][d]) byMonth[monthKey][d] = [];
+      byMonth[monthKey][d].push(a);
+    });
+
+    const monthNames = ['','Січень','Лютий','Березень','Квітень','Травень','Червень',
+                        'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+    const dayNames   = ['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+    let html = '';
+    Object.keys(byMonth).sort().reverse().forEach(mk => {
+      const [y,m] = mk.split('-');
+      html += `<div class="cal-month"><div class="cal-month-title">${monthNames[+m]} ${y}</div>`;
+      Object.keys(byMonth[mk]).sort().reverse().forEach(d => {
+        const dt = new Date(+y, +m-1, +d);
+        const dow = dayNames[dt.getDay()];
+        html += `<div class="cal-day">
+          <div class="cal-day-header">
+            <span class="cal-day-num">${+d}</span>
+            <span class="cal-day-label">${dow}</span>
+          </div>`;
+        byMonth[mk][d].forEach(a => {
+          const ph = (a.phone||'').replace(/^38/,'0');
+          html += `<div class="cal-appt-row">
+            <div>
+              <div class="cal-appt-name">${a.first_name||''} ${a.last_name||''}</div>
+              <div class="cal-appt-svc">${a.service||''}</div>
+              <div class="cal-appt-phone">${ph}</div>
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    container.innerHTML = html || '<p style="color:var(--text3);padding:20px">Немає записів</p>';
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--text3);padding:20px">Помилка завантаження</p>';
+  }
+}
+
+async function adminSync() {
+  const btn = document.querySelector('.sync-btn');
+  if (btn) btn.textContent = '↻ Синхронізація...';
+  try {
+    await fetch('/api/admin/sync', { method:'POST', headers:{ Authorization:'Bearer '+token }});
+    await loadAdminStats();
+    window._adminApptLoaded = false;
+    if (btn) btn.textContent = '✓ Готово';
+    setTimeout(() => { if(btn) btn.textContent = '↻ Синхронізувати'; }, 2000);
+  } catch(e) {
+    if (btn) btn.textContent = '↻ Синхронізувати';
+  }
+}
+
+
+function logout() {
+  token = null;
+  user  = null;
+  localStorage.removeItem('gomon_session');
+  localStorage.removeItem('gomon_appointments');
+  // ховаємо всі екрани
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = '';
+  });
+  // показуємо авторизацію
+  const auth = document.getElementById('screen-auth');
+  if (auth) { auth.style.display = 'flex'; auth.classList.add('active'); }
+  // скидаємо форму
+  const ph = document.getElementById('phone-input');
+  if (ph) ph.value = '';
+  document.getElementById('auth-step-phone').classList.add('active');
+  document.getElementById('auth-step-otp').classList.remove('active');
+}
+
+function afterLogin() {
+  document.getElementById('screen-auth').style.display = 'none';
+
+  if (user.is_admin) {
+    // Адмін-режим
+    loadAdminStats();
+    adminGo('admin-home');
+    return;
+  }
+
+  // Звичайний клієнт
+  document.getElementById('home-name').textContent = user.name || 'Вітаємо';
+  renderHomeAppt();
+  loadPromos();
+  loadNews();
+  renderAppointments();
+  const hashScreen = location.hash ? location.hash.slice(1) : null;
+  go(hashScreen || 'home');
+  if (hashScreen) history.replaceState(null, '', location.pathname);
+  setTimeout(initPush, 1500);
+}
+
+function backToPhone() {
+  clearOtpTimer();
+  document.getElementById('auth-step-otp').classList.remove('active');
+  document.getElementById('auth-step-phone').classList.add('active');
+  document.getElementById('phone-btn').disabled = false;
+  document.getElementById('phone-btn').textContent = 'Отримати код';
+}
+
+function startOtpTimer(sec) {
+  clearOtpTimer();
+  const el     = document.getElementById('otp-timer');
+  const resend = document.getElementById('resend-btn');
+  resend.disabled = true;
+  let s = sec;
+  el.textContent = '(' + s + 'с)';
+  otpTimer = setInterval(() => {
+    s--;
+    if (s <= 0) { clearOtpTimer(); el.textContent = ''; resend.disabled = false; }
+    else el.textContent = '(' + s + 'с)';
+  }, 1000);
+}
+
+function clearOtpTimer() { if (otpTimer) { clearInterval(otpTimer); otpTimer = null; } }
+function resendOtp() { sendOtp(); }
+
+/* ── RENDER ── */
+function fmtDate(dateStr) {
+  // "2025-09-24" → "24 вересня 2025"
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('uk-UA', {day:'numeric', month:'long', year:'numeric'});
+  } catch(e) { return dateStr; }
+}
+
+function fmtDateShort(dateStr) {
+  // "2025-09-24" → "24 вер"
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('uk-UA', {day:'numeric', month:'short'});
+  } catch(e) { return dateStr; }
+}
+
+function renderHomeAppt() {
+  const el = document.getElementById('home-next-appt');
+  const upcoming = appointments.filter(a => a.status === 'upcoming');
+  if (!upcoming.length) {
+    el.innerHTML = `<div class="next-card" onclick="go('chat')" style="cursor:pointer"><div class="no-appt">Немає запланованих записів<br>
+      <small style="margin-top:6px;display:block">Запишіться через Instagram або Telegram</small></div></div>`;
+    return;
+  }
+  const a    = upcoming[0];
+  const d    = new Date((a.date || '') + 'T00:00:00');
+  const day  = isNaN(d) ? '—' : d.getDate();
+  const mon  = isNaN(d) ? ''  : d.toLocaleDateString('uk-UA', {month:'short'});
+  el.innerHTML = `<div class="next-card">
+    <p class="next-label">Найближчий запис</p>
+    <div class="next-row">
+      <div class="date-badge"><div class="day">${day}</div><div class="mon">${mon}</div></div>
+      <div class="next-info">
+        <h4>${a.service || a.name || ''}</h4>
+        <p>${fmtDate(a.date)}${a.time ? ' · ' + a.time : ''}</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPromos() {
+  document.getElementById('home-promos').innerHTML = PROMOS.map((p,i) => `
+    <div class="promo-tile${p.featured ? ' featured' : ''}${p.details ? ' promo-tile-clickable' : ''}" ${p.details ? `onclick="openPromo(${i})"` : ''}>
+      <p class="promo-tag">${p.tag}</p>
+      <p class="promo-title">${p.title}</p>
+      <p class="promo-desc">${p.desc}</p>
+      ${p.details ? '<p class="promo-more">Детальніше →</p>' : ''}
+    </div>`).join('');
+}
+
+let _newsData = [];
+
+async function loadNews() {
+  try {
+    const r = await fetch('/api/feed');
+    const data = await r.json();
+    if (data.error === 'offline') throw new Error('offline');
+    _newsData = Array.isArray(data) ? data : [];
+    if (_newsData.length) localStorage.setItem('gomon_news', JSON.stringify(_newsData));
+  } catch(e) {
+    const cached = localStorage.getItem('gomon_news');
+    _newsData = cached ? JSON.parse(cached) : [];
+  }
+  renderNews();
+}
+
+function renderNews() {
+  const el = document.getElementById('home-news');
+  if (!_newsData.length) {
+    el.innerHTML = '<p class="news-empty">Новини ще не додано</p>';
+    return;
+  }
+  el.innerHTML = _newsData.map((p, i) => {
+    const d = new Date(p.date * 1000);
+    const dateStr = d.toLocaleDateString('uk-UA', {day:'numeric',month:'long'});
+    const text = (p.text || '').trim();
+    const long = text.length > 160;
+    const preview = long ? text.slice(0, 160) + '...' : text;
+    return `<div class="news-tile" onclick="openNews(${i})">`
+      + `<p class="news-date">${dateStr}</p>`
+      + `<p class="news-text">${preview.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</p>`
+      + (long || p.media_type ? '<p class="news-more">Читати далі &rsaquo;</p>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function openNews(i) {
+  const p = _newsData[i];
+  if (!p) return;
+  const d = new Date(p.date * 1000);
+  document.getElementById('news-modal-date').textContent =
+    d.toLocaleDateString('uk-UA', {day:'numeric',month:'long',year:'numeric'});
+  const text = (p.text || '').trim();
+  document.getElementById('news-modal-text').innerHTML =
+    text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  const mediaEl = document.getElementById('news-modal-media');
+  if (p.media_type && p.file_id) {
+    const src = '/api/feed/media/' + p.file_id;
+    if (p.media_type === 'photo') {
+      mediaEl.innerHTML = `<img src="${src}" alt="">` ;
+    } else {
+      mediaEl.innerHTML = `<video src="${src}" controls playsinline></video>`;
+    }
+    mediaEl.style.display = '';
+  } else {
+    mediaEl.style.display = 'none';
+    mediaEl.innerHTML = '';
+  }
+  document.getElementById('news-modal').classList.add('show');
+}
+
+function closeNewsModal() {
+  document.getElementById('news-modal').classList.remove('show');
+  document.getElementById('news-modal-media').innerHTML = '';
+  document.getElementById('news-modal-media').style.display = 'none';
+}
+
+function openPromo(i) {
+  const p = PROMOS[i];
+  if (!p || !p.details) return;
+  document.getElementById('promo-modal-tag').textContent = p.tag;
+  document.getElementById('promo-modal-title').textContent = p.title;
+  document.getElementById('promo-modal-body').innerHTML = p.details;
+  document.getElementById('promo-modal').classList.add('show');
+}
+function closePromoModal() {
+  document.getElementById('promo-modal').classList.remove('show');
+}
+
+function renderAppointments() {
+  const el       = document.getElementById('appts-list');
+  const upcoming = appointments.filter(a => a.status === 'upcoming');
+  const done     = appointments.filter(a => a.status === 'done');
+  let html = '';
+
+  if (upcoming.length) {
+    html += '<p class="appt-group-label">Заплановані</p>';
+    html += upcoming.map(a => `<div class="appt-card upcoming">
+      <span class="appt-status status-upcoming">Заплановано</span>
+      <p class="appt-name">${a.service || a.name || ''}</p>
+      <p class="appt-meta"><span>${fmtDate(a.date)}</span>${a.time ? '<span>' + a.time + '</span>' : ''}</p>
+      <button class="appt-cancel-btn" onclick="cancelAppointment('${a.appt_id||''}','${a.date}','${(a.service||'').replace(/'/g,"\\'")}')">Скасувати запис</button>
+    </div>`).join('');
+  }
+
+  if (done.length) {
+    html += '<p class="appt-group-label">Завершені</p>';
+    html += done.map(a => `<div class="appt-card">
+      <span class="appt-status status-done">Виконано</span>
+      <p class="appt-name">${a.service || a.name || ''}</p>
+      <p class="appt-meta"><span>${fmtDate(a.date)}</span></p>
+    </div>`).join('');
+  }
+
+  if (!html) html = `<div class="empty-state">
+    <p>Записів ще немає</p>
+    <span>Запишіться через Instagram або Telegram</span></div>`;
+  el.innerHTML = html;
+}
+
+async function cancelAppointment(apptId, date, service) {
+  if (!confirm('Скасувати запис "' + service + '" на ' + fmtDate(date) + '?')) return;
+  try {
+    const r = await api('/me/appointments/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ appt_id: apptId, date, service })
+    });
+    if (r.ok) {
+      // Видаляємо з локального масиву щоб не чекати синхронізацію
+      appointments = appointments.filter(a => !(a.date === date && a.service === service));
+      localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
+      renderAppointments();
+      // Оновлюємо home-next-appt
+      renderHomeNextAppt();
+      alert('Запис скасовано.');
+    } else {
+      alert('Не вдалося скасувати. ' + (r.error || r.detail || ''));
+    }
+  } catch(e) {
+    alert('Помилка: ' + e.message);
+  }
+}
+
+function renderPrice(filter = '') {
+  const el = document.getElementById('price-list');
+  const q  = filter.toLowerCase();
+
+  if (!prices.length) {
+    el.innerHTML = '<div class="empty-state"><p>Ціни тимчасово недоступні</p><span>Спробуйте оновити сторінку</span></div>';
+    return;
+  }
+
+  let html = '';
+  prices.forEach(cat => {
+    // Підтримуємо обидва формати: {cat, items} і {category/name, services/items}
+    const catName  = cat.cat || cat.category || cat.name || '';
+    const catItems = cat.items || cat.services || [];
+    const catMatch = q && catName.toLowerCase().includes(q);
+    const filtered = q
+      ? (catMatch ? catItems : catItems.filter(i => (i.name || i.service || i.title || '').toLowerCase().includes(q)))
+      : catItems;
+    if (!filtered.length) return;
+    html += `<p class="price-cat-label">${catName}</p>`;
+    filtered.forEach(i => {
+      const name  = i.name  || i.service || '';
+      const price = i.price || i.cost    || '';
+      html += `<div class="price-item">
+        <span class="price-name">${name}</span>
+        <span class="price-val">${price}</span>
+      </div>`;
+    });
+  });
+
+  if (!html) html = '<div class="empty-state"><p>Не знайдено</p></div>';
+  el.innerHTML = html;
+}
+
+function filterPrice(q) { renderPrice(q); }
+
+/* ── NAV ── */
+const SCREENS = ['home','appointments','price','map','chat'];
+function go(id) {
+  SCREENS.forEach(s => {
+    const sc = document.getElementById('screen-'+s);
+    if (sc) { sc.classList.remove('active'); sc.style.display=''; }
+  });
+  const sc = document.getElementById('screen-'+id);
+  if (sc) { sc.classList.add('active'); sc.style.display='flex'; }
+}
+
+/* ── ACTIONS ── */
+function openMap() { window.open('https://maps.app.goo.gl/LqWgda1A5ZjK8QE76','_blank'); }
+function callClinic() { window.location.href='tel:+380733103110'; }
+function openTelegram() { window.open('https://t.me/DrGomonCosmetology','_blank'); }
+
+/* ── INSTALL LOGIC ── */
+let deferredPrompt = null;
+const ua = navigator.userAgent;
+const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+const isAndroid = /Android/.test(ua);
+const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+const isChrome = /Chrome/.test(ua) && /Android/.test(ua);
+const isFirefox = /Firefox/.test(ua);
+const isSamsungBrowser = /SamsungBrowser/.test(ua);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) showBanner();
+});
+
+function initInstall() {
+  if (isStandalone) return;
+  // iOS Safari — показати хінт автоматично через 3 сек
+  if (isIOS && isSafari) {
+    setTimeout(showBanner, 3000);
+  }
+  // Android Chrome — чекаємо beforeinstallprompt
+  // Інші — показати через 5 сек
+  if (!isIOS && !isChrome && !isSamsungBrowser) {
+    setTimeout(showBanner, 5000);
+  }
+}
+
+function showBanner() {
+  const b = document.getElementById('install-banner');
+  b.style.display = 'block';
+  document.getElementById('app').classList.add('banner-open');
+}
+
+function closeBanner() {
+  document.getElementById('install-banner').style.display = 'none';
+  document.getElementById('app').classList.remove('banner-open');
+}
+
+function showInstallModal() {
+  closeBanner();
+  // Android Chrome — нативний prompt
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(r => { deferredPrompt = null; });
+    return;
+  }
+  // Інакше — інструкції
+  const modal = document.getElementById('install-modal');
+  const content = document.getElementById('install-modal-content');
+  content.innerHTML = getInstallInstructions();
+  modal.classList.add('show');
+  modal.addEventListener('click', e => { if(e.target===modal) modal.classList.remove('show'); });
+}
+
+function getInstallInstructions() {
+  let steps = '';
+  if (isIOS && isSafari) {
+    steps = `
+      <div class="install-step"><div class="step-num">1</div><div class="step-text"><h5>Натисніть кнопку «Поділитись»</h5><p>Кнопка <span class="step-icon">⎙ Поділитись</span> внизу Safari</p></div></div>
+      <div class="install-step"><div class="step-num">2</div><div class="step-text"><h5>Оберіть «На початковий екран»</h5><p><span class="step-icon">＋ На початковий екран</span> у меню</p></div></div>
+      <div class="install-step"><div class="step-num">3</div><div class="step-text"><h5>Натисніть «Додати»</h5><p>Додаток з'явиться на робочому столі</p></div></div>`;
+  } else if (isIOS && !isSafari) {
+    steps = `
+      <div class="install-step"><div class="step-num">1</div><div class="step-text"><h5>Відкрийте в Safari</h5><p>PWA встановлюється лише через Safari на iPhone / iPad</p></div></div>
+      <div class="install-step"><div class="step-num">2</div><div class="step-text"><h5>Натисніть «Поділитись»</h5><p><span class="step-icon">⎙ Поділитись</span> → «На початковий екран»</p></div></div>`;
+  } else if (isAndroid && isFirefox) {
+    steps = `
+      <div class="install-step"><div class="step-num">1</div><div class="step-text"><h5>Меню Firefox</h5><p>Натисніть <span class="step-icon">⋮ Меню</span> у верхньому правому куті</p></div></div>
+      <div class="install-step"><div class="step-num">2</div><div class="step-text"><h5>Встановити</h5><p>Оберіть <span class="step-icon">＋ Встановити</span></p></div></div>`;
+  } else if (isSamsungBrowser) {
+    steps = `
+      <div class="install-step"><div class="step-num">1</div><div class="step-text"><h5>Меню Samsung Internet</h5><p>Натисніть <span class="step-icon">☰</span> внизу</p></div></div>
+      <div class="install-step"><div class="step-num">2</div><div class="step-text"><h5>Додати на головний екран</h5><p><span class="step-icon">＋ Додати сторінку</span></p></div></div>`;
+  } else {
+    steps = `
+      <div class="install-step"><div class="step-num">1</div><div class="step-text"><h5>Меню браузера</h5><p>Натисніть <span class="step-icon">⋮</span> або адресний рядок</p></div></div>
+      <div class="install-step"><div class="step-num">2</div><div class="step-text"><h5>Встановити додаток</h5><p><span class="step-icon">＋ Встановити</span> або «Додати на головний екран»</p></div></div>`;
+  }
+  return `
+    <div class="sheet-title">Встановити додаток</div>
+    <p class="sheet-sub">Для швидкого доступу до записів та прайсу</p>
+    ${steps}
+    <button class="sheet-close-btn" onclick="document.getElementById('install-modal').classList.remove('show')">Зрозуміло</button>`;
+}
+
+/* ── NOT-A-CLIENT ── */
+function closeNotClientModal() {
+  document.getElementById('not-client-modal').classList.remove('show');
+  document.getElementById('phone-btn').disabled = false;
+  document.getElementById('phone-btn').textContent = 'Отримати код';
+}
+
+/* ── OFFLINE INDICATOR ── */
+function updateOfflineBar() {
+  const bar = document.getElementById('offline-bar');
+  if (!bar) return;
+  if (navigator.onLine) {
+    bar.classList.remove('show');
+    document.body.classList.remove('offline');
+  } else {
+    bar.classList.add('show');
+    document.body.classList.add('offline');
+  }
+}
+window.addEventListener('online',  updateOfflineBar);
+window.addEventListener('offline', updateOfflineBar);
+
+/* ── PUSH NOTIFICATIONS ── */
+const VAPID_CACHE_KEY = 'gomon_vapid_pub';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw     = window.atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission === 'denied') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      // підписка є в браузері — переконуємось що сервер теж знає
+      await _sendSubToServer(existing);
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      await _doPushSubscribe();
+      return;
+    }
+    // permission === 'default' — показуємо свій попап
+    const snoozed = localStorage.getItem('push_snooze');
+    if (snoozed && Date.now() < parseInt(snoozed)) return;
+    document.getElementById('push-modal').classList.add('show');
+  } catch(e) {
+    console.warn('[push] init failed:', e);
+  }
+}
+
+async function _sendSubToServer(sub) {
+  try {
+    const r = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+    if (r.ok) console.log('[push] subscription synced to server');
+    else console.warn('[push] server sync failed:', r.status);
+  } catch(e) {
+    console.warn('[push] _sendSubToServer failed:', e);
+  }
+}
+
+function _closePushModal(snooze) {
+  document.getElementById('push-modal').classList.remove('show');
+  if (snooze) localStorage.setItem('push_snooze', Date.now() + 3 * 24 * 60 * 60 * 1000);
+}
+
+async function _doPushSubscribe() {
+  _closePushModal(false);
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+    const reg = await navigator.serviceWorker.ready;
+    let vapidKey = sessionStorage.getItem(VAPID_CACHE_KEY);
+    if (!vapidKey) {
+      const r = await fetch('/api/push/vapid-key');
+      const d = await r.json();
+      vapidKey = d.publicKey;
+      sessionStorage.setItem(VAPID_CACHE_KEY, vapidKey);
+    }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+    await _sendSubToServer(sub);
+  } catch(e) {
+    console.warn('[push] subscribe failed:', e);
+  }
+}
+
+async function unsubscribePush() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    const subJson = sub.toJSON();
+    await sub.unsubscribe();
+    await fetch('/api/push/unsubscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ subscription: subJson }),
+    });
+    console.log('[push] unsubscribed');
+  } catch(e) {
+    console.warn('[push] unsubscribe failed:', e);
+  }
+}
+
+
+/* ── SERVICE WORKER REGISTRATION ── */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/app/sw.js').catch(e => console.warn('[sw] register failed:', e));
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'navigate' && e.data.screen) {
+      go(e.data.screen);
+    }
+  });
+}
+</script>
+<div id="not-client-modal" onclick="if(event.target===this)closeNotClientModal()">
+  <div class="not-client-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Тільки для клієнтів</div>
+    <p class="sheet-sub">Застосунок доступний виключно для діючих клієнтів<br><strong style="color:var(--gold-pale);font-weight:400">Dr. Gómon Cosmetology</strong></p>
+    <p class="sheet-sub" style="margin-top:4px">Запишіться на процедуру — і отримаєте доступ до особистого кабінету.</p>
+    <div class="not-client-links">
+      <div class="chat-option ai-option">
+          <div class="ai-option-top">
+            <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
+            <div class="ai-option-top-text">
+              <h4>AI-асистент клініки</h4>
+              <p>Підбір процедури онлайн</p>
+            </div>
+          </div>
+          <div class="ai-input-row">
+            <input type="text" id="ai-nc-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-send-btn" id="ai-nc-send" aria-label="Відправити">&#10148;</button>
+          </div>
+        </div>
+      <a class="not-client-row" href="https://t.me/DrGomonCosmetology" target="_blank">
+        <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></div>
+        <div class="not-client-info"><h5>Telegram</h5><p>@DrGomonCosmetology</p></div>
+        <span class="not-client-arrow">›</span>
+      </a>
+      <a class="not-client-row" href="https://ig.me/m/dr.gomon" target="_blank">
+        <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1.2" fill="var(--gold)" stroke="none"/></svg></div>
+        <div class="not-client-info"><h5>Instagram</h5><p>@dr.gomon</p></div>
+        <span class="not-client-arrow">›</span>
+      </a>
+      <a class="not-client-row" href="tel:+380733103110">
+        <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
+        <div class="not-client-info"><h5>Телефон</h5><p>073-310-31-10</p></div>
+        <span class="not-client-arrow">›</span>
+      </a>
+      <a class="not-client-row" href="https://gomonclinic.com" target="_blank">
+        <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg></div>
+        <div class="not-client-info"><h5>Сайт</h5><p>gomonclinic.com</p></div>
+        <span class="not-client-arrow">›</span>
+      </a>
+    </div>
+    <div class="not-client-map">
+      <iframe src="https://maps.google.com/maps?q=вул.+Смілянська,+23,+Черкаси,+Україна&z=16&output=embed&hl=uk" loading="eager" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    <button class="not-client-back" onclick="closeNotClientModal()">← Змінити номер</button>
+  </div>
+</div>
+
+<div id="promo-modal" onclick="if(event.target===this)closePromoModal()">
+  <div class="promo-sheet">
+    <div class="promo-sheet-handle"></div>
+    <p class="promo-sheet-tag" id="promo-modal-tag"></p>
+    <p class="promo-sheet-title" id="promo-modal-title"></p>
+    <div id="promo-modal-body"></div>
+    <button class="promo-chat-btn" onclick="closePromoModal();go('chat')">Записатись у чат</button>
+    <button class="news-sheet-close" onclick="closePromoModal()">Закрити</button>
+  </div>
+</div>
+<div id="news-modal" onclick="if(event.target===this)closeNewsModal()">
+  <div class="news-sheet">
+    <div class="news-sheet-handle"></div>
+    <p class="news-sheet-date" id="news-modal-date"></p>
+    <div class="news-sheet-text" id="news-modal-text"></div>
+    <div class="news-sheet-media" id="news-modal-media" style="display:none"></div>
+    <button class="news-sheet-close" onclick="closeNewsModal()">Закрити</button>
+  </div>
+</div>
+
+<!-- ══ ADMIN HOME ══ -->
+<div class="screen" id="screen-admin-home">
+  <div class="screen-scroll">
+    <div class="admin-header">
+      <p class="admin-greeting">Панель управління</p>
+      <h1 class="admin-title">Dr. Gómon</h1>
+    </div>
+    <div style="padding:8px 20px 0;text-align:right"><button onclick="logout()" style="background:none;border:none;font-family:var(--sans);font-size:12px;color:var(--text3);cursor:pointer;letter-spacing:.5px">Вийти ↗</button></div>
+    <div class="admin-stats">
+      <div class="stat-card gold">
+        <div class="stat-num" id="adm-stat-clients">—</div>
+        <div class="stat-label">Клієнтів у базі</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="adm-stat-users">—</div>
+        <div class="stat-label">В додатку</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="adm-stat-push">—</div>
+        <div class="stat-label">Push підписок</div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-num" id="adm-stat-month">—</div>
+        <div class="stat-label">Записів за місяць</div>
+      </div>
+    </div>
+    <div class="admin-section">
+      <div class="admin-section-title">
+        Останні відвідування
+        <button class="sync-btn" onclick="adminSync()">↻ Синхронізувати</button>
+      </div>
+      <div id="adm-recent-list"></div>
+    </div>
+  </div>
+  <nav class="admin-nav">
+    <button class="nav-btn active" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label" style="color:var(--gold)">Головна</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+  </nav>
+</div>
+
+<!-- ══ ADMIN APPOINTMENTS ══ -->
+<div class="screen" id="screen-admin-appts">
+  <div class="screen-header" style="padding:16px 20px 12px;flex-shrink:0">
+    <h2 class="screen-title">Всі записи</h2>
+  </div>
+  <div class="screen-scroll" id="adm-cal-scroll">
+    <div id="adm-cal-container" style="padding:0 20px 80px"></div>
+  </div>
+  <nav class="admin-nav">
+    <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+  </nav>
+</div>
+
+<!-- ══ ADMIN PRICE (re-uses regular price screen content) ══ -->
+<div class="screen" id="screen-admin-price">
+  <div class="screen-header" style="padding:16px 20px 0;flex-shrink:0">
+    <h2 class="screen-title">Прайс</h2>
+    <p class="screen-sub">Перегляд</p>
+  </div>
+  <div class="screen-scroll" id="adm-price-scroll" style="padding:0 0 80px"></div>
+  <nav class="admin-nav">
+    <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label" style="color:var(--gold)">Прайс</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+  </nav>
+</div>
+
+<!-- ══ ADMIN CHAT ══ -->
+<div class="screen" id="screen-admin-chat">
+  <div class="screen-header" style="flex-shrink:0;padding:20px 20px 0">
+    <h2 class="screen-title">Написати нам</h2>
+    <p class="screen-sub">Оберіть месенджер</p>
+  </div>
+  <div class="screen-scroll">
+    <div class="chat-options" style="padding:20px">
+      <a class="chat-option telegram" href="https://t.me/DrGomonCosmetology" target="_blank" style="grid-column:1/-1">
+        <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></span>
+        <h4>Telegram</h4>
+        <p>Переписка з клієнтами</p>
+      </a>
+      <a class="chat-option instagram" href="https://ig.me/m/dr.gomon" target="_blank" style="grid-column:1/-1">
+        <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1" fill="#C9A96E" stroke="none"/></svg></span>
+        <h4>Instagram Direct</h4>
+        <p>Повідомлення в Direct</p>
+      </a>
+    </div>
+  </div>
+  <nav class="admin-nav">
+    <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label" style="color:var(--gold)">Чат</span></button>
+  </nav>
+</div>
+
+<script>
+  (function(){
+    var s = localStorage.getItem("gomon_session");
+    var u = s ? JSON.parse(s).user : {};
+    window.GomonChatConfig = {
+      apiUrl:    "/app/chat.php",
+      userName:  u.name  || "",
+      userPhone: u.phone || "",
+    };
+  })();
+</script>
+<script src="/app/gomon-chat.js?v=20260326j"></script>
+<script>
+  (function(){
+    function initAiEntry(){
+      var inp = document.getElementById("ai-quick-input");
+      var btn = document.getElementById("ai-quick-send");
+      if(!inp || !btn) return;
+      function send(){
+        var txt = inp.value.trim();
+        if(!txt){ if(window.GomonChat) window.GomonChat.open(); return; }
+        if(!window.GomonChat) return;
+        inp.value = "";
+        window.GomonChat.openWithMessage(txt);
+      }
+      btn.addEventListener("click", send);
+      inp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); send(); } });
+    }
+    function initAiExtra() {
+      // auth screen
+      var authInp = document.getElementById("ai-auth-input");
+      var authBtn = document.getElementById("ai-auth-send");
+      if (authInp && authBtn) {
+        function sendAuth() {
+          var txt = authInp.value.trim();
+          if (!txt) { if(window.GomonChat) GomonChat.open(); return; }
+          if (!window.GomonChat) return;
+          authInp.value = "";
+          GomonChat.openWithMessage(txt);
+        }
+        authBtn.addEventListener("click", sendAuth);
+        authInp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); sendAuth(); } });
+      }
+      // not-client modal
+      var ncInp = document.getElementById("ai-nc-input");
+      var ncBtn = document.getElementById("ai-nc-send");
+      if (ncInp && ncBtn) {
+        function sendNc() {
+          var txt = ncInp.value.trim();
+          if (!txt) return;
+          ncInp.value = "";
+          if (typeof closeNotClientModal === "function") closeNotClientModal();
+          setTimeout(function() {
+            if (!window.GomonChat) return;
+            GomonChat.openWithMessage(txt);
+          }, 200);
+        }
+        ncBtn.addEventListener("click", sendNc);
+        ncInp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); sendNc(); } });
+      }
+    }
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ initAiEntry(); initAiExtra(); });
+    else { initAiEntry(); initAiExtra(); }
+  })();
+</script>
+
+
+<script>
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    var inp = document.getElementById('gc-input');
+    if (document.activeElement !== inp) return;
+    var txt = (inp.value || '').trim().toLowerCase();
+    if (txt === '/logout' || txt === '/exit' || txt === '/вийти' || txt === 'вийти з акаунту') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      inp.value = '';
+      if (typeof logout === 'function') logout();
+    }
+  }, true);
+  document.addEventListener('click', function(e) {
+    var btn = document.getElementById('gc-send');
+    if (!btn || !btn.contains(e.target) && e.target !== btn) return;
+    var inp = document.getElementById('gc-input');
+    if (!inp) return;
+    var txt = (inp.value || '').trim().toLowerCase();
+    if (txt === '/logout' || txt === '/exit' || txt === '/вийти' || txt === 'вийти з акаунту') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      inp.value = '';
+      if (typeof logout === 'function') logout();
+    }
+  }, true);
+</script>
+</body>
+</html>
