@@ -1,0 +1,2 @@
+0 9,21 * * * /home/gomoncli/zadarma/sync_with_notification.sh >> /home/gomoncli/zadarma/cron.log 2>&1
+0 * * * * cd /home/gomoncli/zadarma && /usr/bin/python3 sync_appointments.py >> /home/gomoncli/zadarma/cron.log 2>&1

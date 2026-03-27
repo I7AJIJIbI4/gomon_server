@@ -1,0 +1,84 @@
+═══════════════════════════════════════════════════════════════
+   НАЛАШТУВАННЯ CRON JOBS через cPanel
+═══════════════════════════════════════════════════════════════
+
+Додайте наступні cron jobs через cPanel > Advanced > Cron Jobs
+
+───────────────────────────────────────────────────────────────
+1. СИНХРОНІЗАЦІЯ КЛІЄНТІВ (двічі на день: 09:00 та 21:00)
+───────────────────────────────────────────────────────────────
+Minute: 0
+Hour: 9,21
+Day: *
+Month: *
+Weekday: *
+Command: /home/gomoncli/zadarma/sync_with_notification.sh >> /home/gomoncli/zadarma/cron.log 2>&1
+
+───────────────────────────────────────────────────────────────
+2. СИНХРОНІЗАЦІЯ APPOINTMENTS (кожну годину)
+───────────────────────────────────────────────────────────────
+Minute: 0
+Hour: *
+Day: *
+Month: *
+Weekday: *
+Command: cd /home/gomoncli/zadarma && /usr/bin/python3 sync_appointments.py >> /home/gomoncli/zadarma/cron.log 2>&1
+
+───────────────────────────────────────────────────────────────
+3. SMS НАГАДУВАННЯ (щодня о 09:00)
+───────────────────────────────────────────────────────────────
+Minute: 0
+Hour: 9
+Day: *
+Month: *
+Weekday: *
+Command: cd /home/gomoncli/zadarma && /usr/bin/python3 sms_reminder.py >> /home/gomoncli/zadarma/sms_reminder.log 2>&1
+
+───────────────────────────────────────────────────────────────
+4. PUSH НАГАДУВАННЯ (кожні 15 хвилин з 8:00 до 22:00)
+───────────────────────────────────────────────────────────────
+Minute: */15
+Hour: 8-22
+Day: *
+Month: *
+Weekday: *
+Command: cd /home/gomoncli/zadarma && /usr/bin/python3 push_reminder.py >> /home/gomoncli/zadarma/push_reminder.log 2>&1
+
+───────────────────────────────────────────────────────────────
+5. ПЕРЕВІРКА FLASK API (кожні 5 хвилин)
+───────────────────────────────────────────────────────────────
+Minute: */5
+Hour: *
+Day: *
+Month: *
+Weekday: *
+Command: /home/gomoncli/zadarma/check_flask.sh >> /home/gomoncli/zadarma/flask_check.log 2>&1
+
+───────────────────────────────────────────────────────────────
+6. ПЕРЕВІРКА TELEGRAM БОТА (кожні 5 хвилин)
+───────────────────────────────────────────────────────────────
+Minute: */5
+Hour: *
+Day: *
+Month: *
+Weekday: *
+Command: /home/gomoncli/zadarma/check_and_run_bot.sh >> /home/gomoncli/zadarma/bot_cron.log 2>&1
+
+═══════════════════════════════════════════════════════════════
+   ВАЖЛИВІ ПРИМІТКИ
+═══════════════════════════════════════════════════════════════
+
+Синхронізація appointments оновлює записи за:
+   - Останні 7 днів (минулі візити)
+   - Наступні 90 днів (майбутні записи)
+
+Якщо створюється новий запис для нового клієнта:
+   - Appointments sync (кожну годину) оновить запис
+   - Client sync (двічі на день) оновить основні дані клієнта
+
+Логи:
+   - /home/gomoncli/zadarma/cron.log - загальні cron логи
+   - /home/gomoncli/zadarma/sync_appointments.log - логи синхронізації appointments
+   - /home/gomoncli/zadarma/sync_notification.log - логи синхронізації клієнтів
+
+═══════════════════════════════════════════════════════════════

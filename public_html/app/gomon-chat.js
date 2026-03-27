@@ -561,7 +561,12 @@
       <strong>✨ Підібрана процедура</strong>
       <div class="gc-procedure-name-row">
         <span class="gc-procedure-name">${escapeHtml(procedure)}</span>
-        <button class="gc-copy-btn" title="Скопіювати назву">📋</button>
+        <button class="gc-copy-btn" title="Скопіювати назву">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+        </button>
       </div>
       <a
         class="gc-ig-btn"
@@ -586,15 +591,17 @@
     }, { once: true });
     const copyBtn = card.querySelector('.gc-copy-btn');
     if (copyBtn) {
+      const copySvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+      const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
       copyBtn.addEventListener('click', () => {
         const nameEl = card.querySelector('.gc-procedure-name');
         const name = nameEl ? nameEl.textContent : procedure;
         navigator.clipboard.writeText(name).then(() => {
-          copyBtn.textContent = '✅';
-          setTimeout(() => { copyBtn.textContent = '📋'; }, 2000);
+          copyBtn.innerHTML = checkSvg;
+          setTimeout(() => { copyBtn.innerHTML = copySvg; }, 2000);
         }).catch(() => {
-          copyBtn.textContent = '✅';
-          setTimeout(() => { copyBtn.textContent = '📋'; }, 2000);
+          copyBtn.innerHTML = checkSvg;
+          setTimeout(() => { copyBtn.innerHTML = copySvg; }, 2000);
         });
         _cancelReminder();
         _sendProcedureNotify(name, 'copy');
