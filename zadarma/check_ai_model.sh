@@ -3,9 +3,11 @@
 
 CACHE_FILE="/home/gomoncli/private_data/active_model.txt"
 LOG="/home/gomoncli/zadarma/check_model.log"
-TG_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
+
+# Читаємо API ключі з PHP config
+TG_TOKEN=$(php -r "require '/home/gomoncli/public_html/app/config.php'; echo TELEGRAM_BOT_TOKEN;")
 TG_CHAT="573368771"
-API_KEY="YOUR_ANTHROPIC_API_KEY"
+API_KEY=$(php -r "require '/home/gomoncli/public_html/app/config.php'; echo ANTHROPIC_API_KEY;")
 
 MODELS=(
   "claude-sonnet-4-6"
@@ -15,19 +17,12 @@ MODELS=(
 )
 
 tg() {
-  curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-    -d "chat_id=${TG_CHAT}" -d "text=$1" -d "parse_mode=HTML" > /dev/null
+  curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage"     -d "chat_id=${TG_CHAT}" -d "text=$1" -d "parse_mode=HTML" > /dev/null
 }
 
 test_model() {
   local model="$1"
-  local resp=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST "https://api.anthropic.com/v1/messages" \
-    -H "Content-Type: application/json" \
-    -H "x-api-key: ${API_KEY}" \
-    -H "anthropic-version: 2023-06-01" \
-    -d "{\"model\":\"${model}\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}" \
-    --max-time 15)
+  local resp=$(curl -s -o /dev/null -w "%{http_code}"     -X POST "https://api.anthropic.com/v1/messages"     -H "Content-Type: application/json"     -H "x-api-key: ${API_KEY}"     -H "anthropic-version: 2023-06-01"     -d "{\"model\":\"${model}\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}"     --max-time 15)
   echo "$resp"
 }
 
