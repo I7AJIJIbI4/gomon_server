@@ -10,8 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-define('TELEGRAM_BOT_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN');
-define('TELEGRAM_CHAT_ID',   '7930079513');
+// Завантажуємо конфігурацію з окремого файлу
+require_once __DIR__ . '/config.php';
+
+define('DR_GOMON_CHAT_ID', '7930079513');  // Телеграм ID доктора Гомон
 define('DB_PATH', '/home/gomoncli/zadarma/users.db');
 
 $raw  = file_get_contents('php://input');
@@ -83,7 +85,7 @@ $lines[] = "";
 $lines[] = "<i>Підібрано AI-асистентом клініки</i>";
 
 $payload = [
-    'chat_id'    => TELEGRAM_CHAT_ID,
+    'chat_id'    => DR_GOMON_CHAT_ID,
     'text'       => implode("\n", $lines),
     'parse_mode' => 'HTML',
 ];
