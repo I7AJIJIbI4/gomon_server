@@ -32,13 +32,13 @@
       position: fixed;
       inset: 0;
       z-index: 99999;
-      background: rgba(11,10,8,0.72);
+      background: rgba(11,10,8,0.85);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 24px 20px;
+      padding: 12px;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.28s ease;
@@ -54,8 +54,9 @@
       border: 1px solid rgba(184,149,90,0.22);
       border-radius: 18px;
       width: 100%;
-      max-width: 900px;
-      height: min(700px, 86vh);
+      max-width: 1000px;
+      height: 96vh;
+      max-height: 96vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -68,12 +69,13 @@
       transform: translateY(0) scale(1);
     }
     @media (max-width: 600px) {
-      #gw-overlay { padding: 0; align-items: flex-end; }
+      #gw-overlay { padding: 0; align-items: stretch; }
       #gw-panel {
         max-width: 100%;
-        height: 91dvh;
-        border-radius: 18px 18px 0 0;
-        border-bottom: none;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
         transform: translateY(30px);
       }
     }
@@ -151,8 +153,15 @@
       color: #d4b07a;
       text-decoration: underline;
       text-underline-offset: 2px;
+      display: inline-block;
+      padding: 2px 0;
+      min-height: 44px;
+      line-height: 1.8;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(212, 176, 122, 0.2);
     }
     .gw-bubble-ai a:hover { color: #e8d5b0; }
+    .gw-bubble-ai a:active { color: #c9a76a; }
 
     /* ── Procedure card ── */
     .gw-procedure-card {
@@ -423,7 +432,7 @@
     if (role === 'assistant') {
       div.innerHTML = content
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
         .replace(/\n/g, '<br>');
     } else {

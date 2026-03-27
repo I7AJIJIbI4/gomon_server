@@ -5,12 +5,11 @@
  */
 
 // ═══════════════════════════════════════════════════════════════
-//  КОНФІГУРАЦІЯ — замінити на реальні значення
+//  КОНФІГУРАЦІЯ — завантажується з config.php
 // ═══════════════════════════════════════════════════════════════
 
-define('ANTHROPIC_API_KEY',  'YOUR_ANTHROPIC_API_KEY');
-define('TELEGRAM_BOT_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN');
-define('TELEGRAM_CHAT_ID',   '7930079513');  // твій особистий chat_id
+// Завантажуємо конфігурацію з окремого файлу (не в Git)
+require_once __DIR__ . '/config.php';
 
 // Шлях до системного промпту — рекомендується вище webroot
 define('SYSTEM_PROMPT_FILE', __DIR__ . '/system_prompt.txt');
@@ -259,10 +258,10 @@ if ($source === 'site') {
 
 // Порядок пріоритету: найновіші спочатку
 $model_chain = [
-    'claude-haiku-4-5-20251001',
     'claude-sonnet-4-6',
     'claude-sonnet-4-5',
     'claude-3-5-sonnet-20241022',
+    'claude-haiku-4-5-20251001',
 ];
 
 // Кеш активної моделі — не тестуємо щоразу

@@ -1,26 +1,137 @@
-# Secrets
+# === SECRETS ===
 .env
+vapid_private.pem
+config.py
 *.pem
 *.key
-config.py
+private_data/
 
-# Databases
+# === DATABASES (user data) ===
 *.db
 *.sqlite
 
-# Logs & runtime
+# === HOSTING SYSTEM DIRS ===
+.ssh/
+.cpanel/
+.cagefs/
+.cl.selector/
+.koality/
+.razor/
+.softaculous/
+.spamassassin/
+.cache/
+.local/
+.trash/
+.pyenv/
+.gem/
+access-logs/
+logs/
+mail/
+ssl/
+repositories/
+etc/
+backup/
+
+# === HOSTING SYSTEM FILES ===
+.bash_history
+.bash_logout
+.bash_profile
+.bashrc
+.lastlogin
+.lesshst
+.wget-hsts
+.ftpquota
+.gemrc
+.gitconfig
+.htaccess
+.wp-toolkit-identifier
+.myimunify_id
+.imunify_patch_id
+.spamassassinenable
+.spbldr_localStorage
+.sslredirectset
+
+# === WORDPRESS (окремий репо) ===
+public_html/home/
+
+# === LOGS & RUNTIME ===
 *.log
 error_log
 __pycache__/
 *.pyc
+*.pyo
 *.pid
+.first_sync_done
 
-# Backups
-*.bak
+# === BACKUPS & OLD FILES ===
+zadarma.zip
+zadarma/backup/
 *.backup
+*.bak
+*_backup_*.py
+*_backup_*.sh
+*.py.backup.*
+zadarma/bot.py.backup.*
+zadarma/bot.py.bak*
+zadarma/bot.py.syntax_backup.*
+zadarma/pwa_api.py.bak
+zadarma/user_db.py.backup
+zadarma/process_webhook.py.backup
+zadarma/process_webhook.py.bak
+zadarma/simple_webhook_backup*
+zadarma/simple_webhook_fixed.py
+zadarma/simple_webhook_old_*.py
+zadarma/simple_webhook_original.py
+zadarma/simple_webhook_with_logs.py
+zadarma/temp_webhook_logging.py
+zadarma/bot_backup_*.py
+zadarma/bot_network_fix_backup.py
+zadarma/bot_py36_patch.py
+zadarma/sync_clients_backup_*.py
+zadarma/sync_with_notification_backup_*.sh
+zadarma/user_db_backup_*.py
+zadarma/wlaunch_api_backup_*.py
+zadarma/zadarma_api_webhook.py.bak
+zadarma/process_webhook_old.py
+zadarma/process_webhook_working.py
 
-# OS
+# === RUNTIME CONFIGS ===
+final_correct_crontab.txt
+mycron
+zadarma/final_correct_crontab.txt
+zadarma/api_states.json
+zadarma/bot.pid
+zadarma/flask.pid
+zadarma/pwa_api.pid
+
+# === OS ===
 .DS_Store
+Thumbs.db
 
-# WordPress (separate repo)
-public_html/home/
+# === CLAUDE ===
+.claude/
+
+# === VIRTUAL ENVS ===
+venv/
+zadarma_venv/
+.pyenv/
+
+# === SYSTEM/TEMP ===
+tmp/
+www
+access-logs
+user-api-py-v1/
+
+# === OLD BOT DIR ===
+my_telegram_bot/
+
+# === MEDIA (great & gallery, store separately) ===
+public_html/sitepro/gallery/
+public_html/sitepro/gallery_gen/
+public_html/sitepro/tcpdf/
+
+# === TEMP BUILD FILES ===
+tmp/
+*.backup_[0-9]*
+*_backup_[0-9]*
+public_html/app/config.php
