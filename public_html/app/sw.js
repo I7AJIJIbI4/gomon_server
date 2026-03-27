@@ -1,6 +1,6 @@
 // sw.js — Service Worker для Dr. Gomon PWA
 // CACHE_VERSION — оновлюй при кожному деплої (YYYY-MM-DD)
-const CACHE = "gomon-2026-03-27a";
+const CACHE = "gomon-2026-03-28";
 const STATIC = [
   '/app/index.html',
   '/app/gomon-chat.js',

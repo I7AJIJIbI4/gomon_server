@@ -466,6 +466,24 @@ nav{
 #offline-bar.show{display:block}
 
 /* ── NOT-A-CLIENT MODAL ── */
+#confirm-modal{
+  position:fixed;inset:0;z-index:10000;
+  background:rgba(0,0,0,0.75);
+  display:none;align-items:flex-end;justify-content:center;
+  padding:0 0 var(--safe-bottom);
+}
+#confirm-modal.show{display:flex}
+.confirm-sheet{
+  background:var(--bg2);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border-gold);
+  padding:24px 20px 32px;
+  width:100%;max-width:480px;
+  animation:sheetUp .3s ease;
+}
+.confirm-sheet-title{font-family:var(--serif);font-size:20px;font-weight:300;color:var(--gold-pale);margin-bottom:8px}
+.confirm-sheet-text{font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6}
+.confirm-ok-btn{width:100%;padding:14px;background:#c0392b;border:none;border-radius:12px;color:#fff;font-family:var(--sans);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px}
+.confirm-cancel-btn{width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer}
 #push-modal{
   position:fixed;inset:0;z-index:9999;
   background:rgba(0,0,0,0.75);
@@ -596,6 +614,17 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
   <div class="install-sheet">
     <div class="sheet-handle"></div>
     <div id="install-modal-content"></div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div id="confirm-modal">
+  <div class="confirm-sheet">
+    <div class="sheet-handle"></div>
+    <div class="confirm-sheet-title" id="confirm-modal-title"></div>
+    <div class="confirm-sheet-text" id="confirm-modal-text"></div>
+    <button class="confirm-ok-btn" id="confirm-modal-ok">Так, скасувати</button>
+    <button class="confirm-cancel-btn" id="confirm-modal-cancel">Відміна</button>
   </div>
 </div>
 
@@ -1463,8 +1492,30 @@ function renderAppointments() {
   el.innerHTML = html;
 }
 
+function showConfirm(title, text) {
+  return new Promise(resolve => {
+    document.getElementById('confirm-modal-title').textContent = title;
+    document.getElementById('confirm-modal-text').textContent = text;
+    const modal = document.getElementById('confirm-modal');
+    modal.classList.add('show');
+    const ok = document.getElementById('confirm-modal-ok');
+    const cancel = document.getElementById('confirm-modal-cancel');
+    function cleanup(val) {
+      modal.classList.remove('show');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      resolve(val);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+  });
+}
+
 async function cancelAppointment(apptId, date, service) {
-  if (!confirm('Скасувати запис "' + service + '" на ' + fmtDate(date) + '?')) return;
+  const confirmed = await showConfirm('Скасування запису', 'Скасувати "' + service + '" на ' + fmtDate(date) + '?');
+  if (!confirmed) return;
   try {
     const r = await api('/me/appointments/cancel', {
       method: 'POST',
