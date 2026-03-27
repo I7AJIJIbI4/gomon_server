@@ -1,6 +1,6 @@
 // sw.js — Service Worker для Dr. Gomon PWA
 // CACHE_VERSION — оновлюй при кожному деплої (YYYY-MM-DD)
-const CACHE = "gomon-2026-03-27";
+const CACHE = "gomon-2026-03-28e";
 const STATIC = [
   '/app/index.html',
   '/app/gomon-chat.js',
@@ -20,6 +20,9 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
+     .then(() => self.clients.matchAll({includeUncontrolled: true}).then(cls => {
+       cls.forEach(c => c.postMessage({type: 'sw-updated'}));
+     }))
   );
 });
 
@@ -39,7 +42,7 @@ self.addEventListener('fetch', e => {
   // HTML — network first (щоб завжди отримувати свіжу версію)
   if (e.request.mode === 'navigate' || e.request.destination === 'document') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('/app/index.html'))
+      fetch(e.request, {cache:"reload"}).catch(() => caches.match('/app/index.html'))
     );
     return;
   }
