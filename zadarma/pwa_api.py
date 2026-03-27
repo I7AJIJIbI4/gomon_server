@@ -552,6 +552,168 @@ def admin_appointments():
     conn.close()
     return jsonify({'appointments': rows})
 
+
+# ── ADMIN DETAIL LISTS ──────────────────────────────────────────────────────
+
+def _build_price_lookup():
+    """Flat dict {service_name_lower: price_str} from prices.json"""
+    lookup = {}
+    try:
+        import json as _json
+        data = _json.load(open(PRICES_PATH))
+        cats = data.values() if isinstance(data, dict) else data
+        for cat in cats:
+            items = cat if isinstance(cat, list) else [cat]
+            for item in items:
+                rows = item.get('rows', []) if isinstance(item, dict) else []
+                for row in rows:
+                    if isinstance(row, list) and len(row) >= 3:
+                        name  = (row[0] or '').strip()
+                        price = (row[2] or '').strip()
+                        if name:
+                            lookup[name.lower()] = price
+                    elif isinstance(row, dict):
+                        name  = (row.get('name') or '').strip()
+                        price = (row.get('price') or row.get('cost') or '').strip()
+                        if name:
+                            lookup[name.lower()] = price
+    except Exception:
+        pass
+    return lookup
+
+def _client_appts(services_json_str):
+    try:
+        items = json.loads(services_json_str or '[]')
+    except Exception:
+        items = []
+    result = []
+    for it in items:
+        result.append({
+            'service': it.get('service', ''),
+            'date':    it.get('date', ''),
+            'hour':    it.get('hour'),
+            'status':  it.get('status', ''),
+            'appt_id': it.get('appt_id', ''),
+        })
+    result.sort(key=lambda x: x['date'], reverse=True)
+    return result
+
+@app.route('/api/admin/clients-list', methods=['GET'])
+@require_admin
+def admin_clients_list():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("""SELECT phone, first_name, last_name, last_service,
+                        last_visit, visits_count, services_json
+                 FROM clients ORDER BY last_visit DESC""")
+    rows = c.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip()
+        result.append({
+            'phone':        r['phone'],
+            'name':         name or r['phone'],
+            'last_service': r['last_service'] or '',
+            'last_visit':   r['last_visit'] or '',
+            'visits_count': r['visits_count'] or 0,
+            'appointments': _client_appts(r['services_json']),
+        })
+    return jsonify({'clients': result})
+
+@app.route('/api/admin/users-list', methods=['GET'])
+@require_admin
+def admin_users_list():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("""SELECT u.phone, u.first_name,
+                        cl.first_name as cl_first, cl.last_name as cl_last,
+                        cl.last_service, cl.last_visit, cl.services_json
+                 FROM users u
+                 LEFT JOIN clients cl ON cl.phone = u.phone
+                 ORDER BY cl.last_visit DESC""")
+    rows = c.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        name = ((r['cl_first'] or '') + ' ' + (r['cl_last'] or '')).strip()
+        if not name:
+            name = r['first_name'] or r['phone']
+        result.append({
+            'phone':        r['phone'],
+            'name':         name,
+            'last_service': r['last_service'] or '',
+            'last_visit':   r['last_visit'] or '',
+            'appointments': _client_appts(r['services_json']),
+        })
+    return jsonify({'clients': result})
+
+@app.route('/api/admin/push-list', methods=['GET'])
+@require_admin
+def admin_push_list():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("""SELECT ps.phone,
+                        cl.first_name, cl.last_name,
+                        cl.last_service, cl.last_visit, cl.services_json
+                 FROM push_subscriptions ps
+                 LEFT JOIN clients cl ON cl.phone = ps.phone
+                 WHERE ps.active = 1
+                 GROUP BY ps.phone
+                 ORDER BY cl.last_visit DESC""")
+    rows = c.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip()
+        result.append({
+            'phone':        r['phone'],
+            'name':         name or r['phone'],
+            'last_service': r['last_service'] or '',
+            'last_visit':   r['last_visit'] or '',
+            'appointments': _client_appts(r['services_json']),
+        })
+    return jsonify({'clients': result})
+
+@app.route('/api/admin/month-visits', methods=['GET'])
+@require_admin
+def admin_month_visits():
+    from datetime import datetime
+    since = datetime.now().strftime('%Y-%m') + '-01'
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("""SELECT phone, first_name, last_name, services_json
+                 FROM clients""")
+    rows = c.fetchall()
+    conn.close()
+    price_lookup = _build_price_lookup()
+    visits = []
+    for r in rows:
+        name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip() or r['phone']
+        try:
+            items = json.loads(r['services_json'] or '[]')
+        except Exception:
+            items = []
+        for it in items:
+            date = it.get('date', '')
+            if date >= since:
+                service = it.get('service', '')
+                price = price_lookup.get(service.lower(), '')
+                visits.append({
+                    'client':  name,
+                    'phone':   r['phone'],
+                    'service': service,
+                    'date':    date,
+                    'hour':    it.get('hour'),
+                    'price':   price,
+                })
+    visits.sort(key=lambda x: x['date'], reverse=True)
+    return jsonify({'visits': visits})
+
 @app.route('/api/admin/sync', methods=['POST'])
 @require_admin
 def admin_sync():
