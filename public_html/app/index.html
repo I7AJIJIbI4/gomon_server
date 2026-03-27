@@ -2383,6 +2383,16 @@ async function _admShowMonth() {
   }
 }
 /* ── END ADMIN STAT MODALS ─────────────────────────────── */
+
+/* ── SW UPDATE → AUTO RELOAD ── */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'sw-updated') {
+      window.location.reload();
+    }
+  });
+}
+/* ── END SW UPDATE ── */
 </script>
 </body>
 </html>
