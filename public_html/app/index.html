@@ -484,6 +484,14 @@ nav{
 .confirm-sheet-text{font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.6}
 .confirm-ok-btn{width:100%;padding:14px;background:#c0392b;border:none;border-radius:12px;color:#fff;font-family:var(--sans);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px}
 .confirm-cancel-btn{width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer}
+#ptr-loader{
+  position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-60px);
+  z-index:9990;transition:transform .2s ease;pointer-events:none;
+  width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+}
+#ptr-loader.visible{transform:translateX(-50%) translateY(12px)}
+#ptr-loader svg{animation:ptr-spin 1s linear infinite}
+@keyframes ptr-spin{to{transform:rotate(360deg)}}
 #push-modal{
   position:fixed;inset:0;z-index:9999;
   background:rgba(0,0,0,0.75);
@@ -626,6 +634,13 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
     <button class="confirm-ok-btn" id="confirm-modal-ok">Так, скасувати</button>
     <button class="confirm-cancel-btn" id="confirm-modal-cancel">Відміна</button>
   </div>
+</div>
+
+<!-- PULL-TO-REFRESH LOADER -->
+<div id="ptr-loader">
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+    <circle cx="14" cy="14" r="11" stroke="#c9a96e" stroke-width="2.5" stroke-dasharray="52 18" stroke-linecap="round"/>
+  </svg>
 </div>
 
 <!-- APP -->
@@ -2073,6 +2088,92 @@ if ('serviceWorker' in navigator) {
       if (typeof logout === 'function') logout();
     }
   }, true);
+
+/* ── PULL-TO-REFRESH ─────────────────────────────── */
+(function(){
+  const THRESHOLD = 72;   // px to trigger refresh
+  const EXCLUDED_SCREENS = ['auth'];  // never PTR on these
+  const MODAL_IDS = ['push-modal','install-modal','confirm-modal','promo-modal','news-modal','not-client-modal'];
+
+  let startY = 0, curY = 0, pulling = false, triggered = false;
+  const loader = document.getElementById('ptr-loader');
+
+  function activeScreen() {
+    return document.querySelector('.screen.active');
+  }
+  function anyModalOpen() {
+    return MODAL_IDS.some(id => {
+      const el = document.getElementById(id);
+      return el && el.classList.contains('show');
+    });
+  }
+  function getScrollEl(screen) {
+    return screen.querySelector('.screen-scroll') || screen;
+  }
+  function isAdminScreen(screen) {
+    return screen && screen.id && screen.id.startsWith('screen-admin');
+  }
+  function isExcluded(screen) {
+    if (!screen) return true;
+    for (const ex of EXCLUDED_SCREENS) {
+      if (screen.id === 'screen-' + ex) return true;
+    }
+    return isAdminScreen(screen);
+  }
+
+  async function doRefresh() {
+    const screen = activeScreen();
+    if (!screen) return;
+    const id = screen.id.replace('screen-', '');
+    try {
+      if (id === 'home') {
+        await Promise.all([loadAppointments(), loadPromos(), loadNews()]);
+        renderHomeAppt();
+        renderPromos();
+        renderNews();
+      } else if (id === 'appointments') {
+        await loadAppointments();
+        renderAppointments();
+      } else if (id === 'price') {
+        await loadPrices();
+      }
+      // map, chat — статичні, нічого не вантажимо
+    } catch(e) { /* offline — ignore */ }
+  }
+
+  document.addEventListener('touchstart', e => {
+    if (anyModalOpen()) return;
+    const screen = activeScreen();
+    if (isExcluded(screen)) return;
+    const scrollEl = getScrollEl(screen);
+    if (scrollEl.scrollTop > 2) return;   // not at top
+    startY = e.touches[0].clientY;
+    pulling = true;
+    triggered = false;
+  }, {passive: true});
+
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    curY = e.touches[0].clientY;
+    const dist = curY - startY;
+    if (dist <= 0) { pulling = false; return; }
+    // показуємо loader
+    loader.classList.add('visible');
+  }, {passive: true});
+
+  document.addEventListener('touchend', async () => {
+    if (!pulling) return;
+    pulling = false;
+    const dist = curY - startY;
+    if (dist >= THRESHOLD && !triggered) {
+      triggered = true;
+      await doRefresh();
+    }
+    loader.classList.remove('visible');
+    startY = curY = 0;
+  });
+})();
+/* ── END PULL-TO-REFRESH ─────────────────────────── */
 </script>
 </body>
 </html>
