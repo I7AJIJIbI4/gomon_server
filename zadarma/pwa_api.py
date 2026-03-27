@@ -913,7 +913,7 @@ def _find_wlaunch_appt_id(phone, date_str, service):
 
 
 def _cancel_wlaunch_appt(appt_id):
-    """Скасовує запис у WLaunch через PATCH"""
+    """Скасовує запис у WLaunch через POST {"appointment": {"id": ..., "status": "CANCELLED"}}"""
     import requests as _req
     from config import WLAUNCH_API_KEY, COMPANY_ID
     headers = {
@@ -935,7 +935,9 @@ def _cancel_wlaunch_appt(appt_id):
 
     url = "{}/company/{}/branch/{}/appointment/{}".format(base, COMPANY_ID, branch_id, appt_id)
     try:
-        resp = _req.patch(url, headers=headers, json={"status": "CANCELLED"}, timeout=10)
+        resp = _req.post(url, headers=headers,
+                         json={"appointment": {"id": appt_id, "status": "CANCELLED"}},
+                         timeout=10)
         resp.raise_for_status()
         return True, None
     except Exception as e:
