@@ -642,6 +642,13 @@
     function doSendModal() {
       var text = (els.textarea.value || '').trim();
       if (!text || isBusy) return;
+      // ── Fire Google Ads conversion on first ever chat message ──
+      if (!localStorage.getItem('gw_chat_lead_sent')) {
+        localStorage.setItem('gw_chat_lead_sent', '1');
+        if (typeof gtag === 'function') {
+          gtag('event', 'conversion', { send_to: 'AW-719653819/WaavCKa45JAcELuXlNcC' });
+        }
+      }
       els.textarea.value = '';
       els.textarea.style.height = 'auto';
       messages.push({ role: 'user', content: text });
@@ -656,6 +663,13 @@
       if (!els.inlineTextarea) return;
       var text = (els.inlineTextarea.value || '').trim();
       if (!text || isBusy) return;
+      // ── Fire Google Ads conversion on first ever chat message ──
+      if (!localStorage.getItem('gw_chat_lead_sent')) {
+        localStorage.setItem('gw_chat_lead_sent', '1');
+        if (typeof gtag === 'function') {
+          gtag('event', 'conversion', { send_to: 'AW-719653819/WaavCKa45JAcELuXlNcC' });
+        }
+      }
       els.inlineTextarea.value = '';
       els.inlineTextarea.style.height = 'auto';
       messages.push({ role: 'user', content: text });
