@@ -810,6 +810,8 @@ def _do_sync(bot, chat_id):
     import subprocess
     bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...")
     subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])
+    subprocess.Popen(["/usr/bin/python3", "/home/gomoncli/zadarma/sync_appointments.py"],
+                     cwd="/home/gomoncli/zadarma")
 
 
 def admin_callback(bot, update):
