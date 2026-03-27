@@ -35,7 +35,7 @@ logger = logging.getLogger('pwa_api')
 # ── CONFIG ──
 DB_PATH      = '/home/gomoncli/zadarma/users.db'
 FEED_DB      = '/home/gomoncli/zadarma/feed.db'
-TG_TOKEN     = 'YOUR_TELEGRAM_BOT_TOKEN'
+from config import TELEGRAM_TOKEN as TG_TOKEN
 
 def init_feed_db():
     conn = sqlite3.connect(FEED_DB)
@@ -172,12 +172,16 @@ def parse_services(client: dict) -> list:
     today_str = datetime.now().strftime('%Y-%m-%d')
     result = []
     for item in items:
+        if item.get('status') == 'CANCELLED':
+            continue
         date_str = item.get('date', '')
+        hour     = item.get('hour')
         result.append({
             'service': item.get('service', ''),
             'date':    date_str,
             'appt_id': item.get('appt_id', ''),
-            # Якщо дата в майбутньому — "upcoming", інакше — "done"
+            'time':    '{:02d}:00'.format(hour) if hour is not None else '',
+            # Якщо дата сьогодні або в майбутньому — "upcoming", інакше — "done"
             'status':  'upcoming' if date_str >= today_str else 'done',
         })
 
