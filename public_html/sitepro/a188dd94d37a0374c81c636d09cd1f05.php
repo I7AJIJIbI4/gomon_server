@@ -159,7 +159,7 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'AW-719653819');
+  gtag('config', 'AW-719653819', {'allow_enhanced_conversions': true});
   gtag('config', 'G-8FC2X4SHKE');
 </script>
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">

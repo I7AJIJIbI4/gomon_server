@@ -127,7 +127,7 @@ def get_client(phone: str) -> dict | None:
 def parse_services(client: dict) -> list:
     """
     Парсить services_json клієнта.
-    Формат в базі: [{"date": "2025-09-24", "service": "WOW-чистка обличчя"}, ...]
+    Формат в базі: [{"appt_id": "...", "date": "2025-09-24", "hour": 10, "service": "...", "status": "CONFIRMED_BY_CLIENT"}, ...]
     Повертає відсортований список (новіші першими) з доданим полем status.
     """
     raw = client.get('services_json') or '[]'
@@ -139,20 +139,24 @@ def parse_services(client: dict) -> list:
     today_str = datetime.now().strftime('%Y-%m-%d')
     result = []
     for item in items:
+        db_status = item.get('status', '')
+        # Пропускаємо скасовані записи
+        if db_status == 'CANCELLED':
+            continue
         date_str = item.get('date', '')
+        hour     = item.get('hour')
         result.append({
+            'appt_id': item.get('appt_id', ''),
             'service': item.get('service', ''),
             'date':    date_str,
-            # Якщо дата в майбутньому — "upcoming", інакше — "done"
+            'time':    f'{hour:02d}:00' if hour is not None else '',
+            # Якщо дата сьогодні або в майбутньому — "upcoming", інакше — "done"
             'status':  'upcoming' if date_str >= today_str else 'done',
         })
 
-    # Сортуємо: upcoming вперед, потім по даті спадання
-    result.sort(key=lambda x: (x['status'] != 'upcoming', x['date']), reverse=False)
-    result.sort(key=lambda x: x['date'], reverse=True)
-    # Upcoming — на початку
-    upcoming = [x for x in result if x['status'] == 'upcoming']
-    done     = [x for x in result if x['status'] == 'done']
+    # Upcoming — на початку (за датою зростання), done — за датою спадання
+    upcoming = sorted([x for x in result if x['status'] == 'upcoming'], key=lambda x: x['date'])
+    done     = sorted([x for x in result if x['status'] == 'done'],     key=lambda x: x['date'], reverse=True)
     return upcoming + done
 
 def require_auth(f):
@@ -280,6 +284,53 @@ def get_my_appointments():
 
     appointments = parse_services(client)
     return jsonify({'appointments': appointments})
+
+@app.route('/api/me/appointments/cancel', methods=['POST'])
+@require_auth
+def cancel_appointment():
+    """
+    Скасовує запис клієнта. Body: { appt_id: str }
+    Змінює status на CANCELLED у services_json клієнта.
+    """
+    data    = request.get_json(force=True) or {}
+    appt_id = data.get('appt_id', '').strip()
+    if not appt_id:
+        return jsonify({'error': 'appt_id required'}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    normalized = norm_phone(request.user_phone)
+    tail = normalized[-9:] if len(normalized) >= 9 else normalized
+    c.execute("SELECT id, services_json FROM clients WHERE phone = ? OR phone = ? OR phone LIKE ?",
+              (normalized, request.user_phone, f'%{tail}'))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'client not found'}), 404
+
+    try:
+        items = json.loads(row['services_json'] or '[]')
+    except (json.JSONDecodeError, TypeError):
+        items = []
+
+    found = False
+    for item in items:
+        if item.get('appt_id') == appt_id:
+            item['status'] = 'CANCELLED'
+            found = True
+            break
+
+    if not found:
+        conn.close()
+        return jsonify({'error': 'appointment not found'}), 404
+
+    c.execute("UPDATE clients SET services_json = ? WHERE id = ?",
+              (json.dumps(items, ensure_ascii=False), row['id']))
+    conn.commit()
+    conn.close()
+    logger.info(f"Appointment {appt_id} cancelled by {request.user_phone}")
+    return jsonify({'ok': True})
 
 # ── PRICES ──
 

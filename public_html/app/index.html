@@ -266,6 +266,19 @@ nav{
 .news-sheet-media{margin-top:18px;border-radius:12px;overflow:hidden;background:var(--surface)}
 .news-sheet-media img,.news-sheet-media video{width:100%;display:block;border-radius:12px}
 .news-sheet-close{display:block;margin:20px auto 0;background:none;border:1px solid var(--border);border-radius:8px;padding:10px 28px;color:var(--text2);font-size:13px;font-family:var(--sans);cursor:pointer}
+
+/* -- CANCEL APPOINTMENT CONFIRM -- */
+#cancel-confirm-modal{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#cancel-confirm-modal.show{display:flex}
+.cancel-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);padding:20px 20px 32px;width:100%;max-width:480px;animation:sheetUp .3s ease}
+.cancel-sheet-handle{width:36px;height:3px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.cancel-sheet-title{font-family:var(--serif);font-size:20px;font-weight:300;color:var(--gold-pale);line-height:1.3;margin-bottom:12px;text-align:center}
+.cancel-sheet-text{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:24px;text-align:center}
+.cancel-confirm-btn{display:block;width:100%;background:#c85050;border:none;border-radius:12px;padding:14px;color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px;cursor:pointer;margin-bottom:10px}
+.cancel-confirm-btn:active{opacity:.85}
+.cancel-dismiss-btn{display:block;width:100%;background:none;border:1px solid var(--border);border-radius:12px;padding:13px;color:var(--text);font-size:15px;font-family:var(--sans);cursor:pointer}
+.cancel-dismiss-btn:active{background:var(--surface)}
+
 .section-label{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;padding:16px 20px 10px;font-family:var(--sans)}
 
 .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px}
@@ -1463,14 +1476,28 @@ function renderAppointments() {
   el.innerHTML = html;
 }
 
-async function cancelAppointment(apptId, date, service) {
-  if (!confirm('Скасувати запис "' + service + '" на ' + fmtDate(date) + '?')) return;
+function cancelAppointment(apptId, date, service) {
+  // Показуємо модалку підтвердження
+  document.getElementById('cancel-modal-text').textContent =
+    'Скасувати "' + service + '" на ' + fmtDate(date) + '?';
+
+  const modal = document.getElementById('cancel-confirm-modal');
+  modal.classList.add('show');
+
+  // Встановлюємо обробник на кнопку підтвердження
+  const confirmBtn = document.getElementById('cancel-confirm-btn');
+  confirmBtn.onclick = () => performCancelAppointment(apptId, date, service);
+}
+
+async function performCancelAppointment(apptId, date, service) {
+  closeCancelModal();
+
   try {
     const r = await api('/me/appointments/cancel', {
       method: 'POST',
       body: JSON.stringify({ appt_id: apptId, date, service })
     });
-    if (r.ok) {
+    if (r.ok === true) {
       // Видаляємо з локального масиву щоб не чекати синхронізацію
       appointments = appointments.filter(a => !(a.date === date && a.service === service));
       localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
@@ -1484,6 +1511,10 @@ async function cancelAppointment(apptId, date, service) {
   } catch(e) {
     alert('Помилка: ' + e.message);
   }
+}
+
+function closeCancelModal() {
+  document.getElementById('cancel-confirm-modal').classList.remove('show');
 }
 
 function renderPrice(filter = '') {
@@ -1825,6 +1856,17 @@ if ('serviceWorker' in navigator) {
     <div class="news-sheet-text" id="news-modal-text"></div>
     <div class="news-sheet-media" id="news-modal-media" style="display:none"></div>
     <button class="news-sheet-close" onclick="closeNewsModal()">Закрити</button>
+  </div>
+</div>
+
+<!-- CANCEL APPOINTMENT CONFIRM MODAL -->
+<div id="cancel-confirm-modal" onclick="if(event.target===this)closeCancelModal()">
+  <div class="cancel-sheet">
+    <div class="cancel-sheet-handle"></div>
+    <p class="cancel-sheet-title" id="cancel-modal-title">Скасувати запис?</p>
+    <div class="cancel-sheet-text" id="cancel-modal-text"></div>
+    <button class="cancel-confirm-btn" id="cancel-confirm-btn">Так, скасувати</button>
+    <button class="cancel-dismiss-btn" onclick="closeCancelModal()">Відміна</button>
   </div>
 </div>
 
