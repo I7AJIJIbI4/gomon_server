@@ -241,7 +241,7 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    msg = (f"Dr.Gomon: ваш код — {code}. Дійсний 5 хвилин."
+    msg = (f"Ваш код — {code}. Дійсний 5 хвилин."
            f"\n\n@www.gomonclinic.com #{code}")
     ok  = send_sms(phone, msg)
     if not ok:
@@ -494,8 +494,10 @@ def admin_stats():
     c.execute("SELECT COUNT(*) FROM clients")
     total_clients = c.fetchone()[0]
 
-    c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
+    otp_conn2 = sqlite3.connect(OTP_DB)
+    pwa_users = otp_conn2.execute("SELECT COUNT(DISTINCT phone) FROM sessions").fetchone()[0]
+    pwa_active = otp_conn2.execute("SELECT COUNT(DISTINCT phone) FROM sessions WHERE expires_at > strftime('%s','now')").fetchone()[0]
+    otp_conn2.close()
 
     c.execute("SELECT COUNT(*) FROM push_subscriptions WHERE active=1")
     push_subs = c.fetchone()[0]
@@ -526,7 +528,8 @@ def admin_stats():
 
     return jsonify({
         'total_clients': total_clients,
-        'total_users':   total_users,
+        'pwa_users':     pwa_users,
+        'pwa_active':    pwa_active,
         'push_subs':     push_subs,
         'visits_month':  visits_month,
         'recent':        recent,
@@ -625,29 +628,46 @@ def admin_clients_list():
 @app.route('/api/admin/users-list', methods=['GET'])
 @require_admin
 def admin_users_list():
+    # PWA users: унікальні телефони з otp_sessions.db
+    otp_conn = sqlite3.connect(OTP_DB)
+    otp_conn.row_factory = sqlite3.Row
+    otp_c = otp_conn.cursor()
+    otp_c.execute("""SELECT phone,
+                            datetime(MIN(created_at), 'unixepoch') as first_login,
+                            datetime(MAX(expires_at) - 2592000, 'unixepoch') as last_login,
+                            COUNT(*) as login_count
+                     FROM sessions GROUP BY phone ORDER BY last_login DESC""")
+    session_rows = otp_c.fetchall()
+    otp_conn.close()
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("""SELECT u.phone, u.first_name,
-                        cl.first_name as cl_first, cl.last_name as cl_last,
-                        cl.last_service, cl.last_visit, cl.services_json
-                 FROM users u
-                 LEFT JOIN clients cl ON cl.phone = u.phone
-                 ORDER BY cl.last_visit DESC""")
-    rows = c.fetchall()
-    conn.close()
     result = []
-    for r in rows:
-        name = ((r['cl_first'] or '') + ' ' + (r['cl_last'] or '')).strip()
-        if not name:
-            name = r['first_name'] or r['phone']
+    for s in session_rows:
+        c.execute("SELECT first_name, last_name, last_service, last_visit, services_json FROM clients WHERE phone=?", (s['phone'],))
+        cl = c.fetchone()
+        if cl:
+            name = ((cl['first_name'] or '') + ' ' + (cl['last_name'] or '')).strip() or s['phone']
+            last_service = cl['last_service'] or ''
+            last_visit = cl['last_visit'] or ''
+            appts = _client_appts(cl['services_json'])
+        else:
+            name = s['phone']
+            last_service = ''
+            last_visit = ''
+            appts = []
         result.append({
-            'phone':        r['phone'],
+            'phone':        s['phone'],
             'name':         name,
-            'last_service': r['last_service'] or '',
-            'last_visit':   r['last_visit'] or '',
-            'appointments': _client_appts(r['services_json']),
+            'last_service': last_service,
+            'last_visit':   last_visit,
+            'first_login':  s['first_login'],
+            'last_login':   s['last_login'],
+            'login_count':  s['login_count'],
+            'appointments': appts,
         })
+    conn.close()
     return jsonify({'clients': result})
 
 @app.route('/api/admin/push-list', methods=['GET'])
