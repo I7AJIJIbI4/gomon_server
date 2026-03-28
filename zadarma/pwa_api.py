@@ -232,6 +232,11 @@ def send_otp():
         logger.info(f"Guest mode (not a client): {phone}")
         return jsonify({'ok': True, 'guest': True})
 
+    # Адмін → статичний PIN, нічого не надсилаємо
+    if phone == ADMIN_PHONE:
+        logger.info(f"Admin login: static PIN mode")
+        return jsonify({'ok': True})
+
     code    = ''.join(random.choices(string.digits, k=4))
     expires = int(time.time()) + OTP_TTL
 
@@ -261,6 +266,20 @@ def verify_otp():
     data  = request.get_json() or {}
     phone = norm_phone(data.get('phone', ''))
     code  = str(data.get('code', '')).strip()
+
+    # Адмін → перевіряємо статичний PIN
+    if phone == ADMIN_PHONE:
+        if code != '0375':
+            return jsonify({'error': 'wrong_code'}), 400
+        token = gen_token()
+        now   = int(time.time())
+        conn2 = sqlite3.connect(OTP_DB)
+        conn2.execute('INSERT INTO sessions VALUES (?,?,?,?)', (token, phone, now, now + SESSION_TTL))
+        conn2.commit()
+        conn2.close()
+        client = get_client(phone)
+        logger.info(f"Admin login via static PIN: {phone}")
+        return jsonify({'ok': True, 'token': token, 'client': _client_payload(client, phone)})
 
     conn = sqlite3.connect(OTP_DB)
     c    = conn.cursor()
