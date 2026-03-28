@@ -1634,7 +1634,7 @@ async function cancelAppointment(apptId, date, service) {
       localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
       renderAppointments();
       // Оновлюємо home-next-appt
-      renderHomeNextAppt();
+      renderHomeAppt();
       alert('Запис скасовано.');
     } else {
       alert('Не вдалося скасувати. ' + (r.error || r.detail || ''));
