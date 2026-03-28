@@ -1279,7 +1279,7 @@ async function loadAdminStats() {
     const res  = await fetch('/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } });
     const data = await res.json();
     document.getElementById('adm-stat-clients').textContent = data.total_clients ?? '—';
-    document.getElementById('adm-stat-users').textContent   = data.total_users   ?? '—';
+    document.getElementById('adm-stat-users').textContent   = data.pwa_users ?? '—';
     document.getElementById('adm-stat-push').textContent    = data.push_subs     ?? '—';
     document.getElementById('adm-stat-month').textContent   = data.visits_month  ?? '—';
 
@@ -2001,7 +2001,7 @@ if ('serviceWorker' in navigator) {
       </div>
       <div class="stat-card" onclick="_admStatClick('users')">
         <div class="stat-num" id="adm-stat-users">—</div>
-        <div class="stat-label">В додатку</div>
+        <div class="stat-label">Юзерів PWA</div>
       </div>
       <div class="stat-card" onclick="_admStatClick('push')">
         <div class="stat-num" id="adm-stat-push">—</div>
@@ -2330,7 +2330,7 @@ function _admShowList(title, clients) {
 async function _admStatClick(type) {
   let url, title;
   if (type === 'clients') { url = '/api/admin/clients-list'; title = 'Всі клієнти'; }
-  else if (type === 'users') { url = '/api/admin/users-list'; title = 'В додатку'; }
+  else if (type === 'users') { url = '/api/admin/users-list'; title = 'Юзери PWA'; }
   else if (type === 'push')  { url = '/api/admin/push-list';  title = 'Push підписки'; }
   else if (type === 'month') {
     await _admShowMonth();
