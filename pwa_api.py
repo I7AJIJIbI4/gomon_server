@@ -241,7 +241,7 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    msg = (f"Dr.Gomon: ваш код — {code}. Дійсний 5 хвилин."
+    msg = (f"Ваш код — {code}. Дійсний 5 хвилин."
            f"\n\n@www.gomonclinic.com #{code}")
     ok  = send_sms(phone, msg)
     if not ok:
