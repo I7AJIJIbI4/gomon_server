@@ -764,7 +764,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
       </div>
       <!-- Step 2: OTP -->
       <div class="auth-step" id="auth-step-otp">
-        <p class="auth-label">Код із SMS</p>
+        <p class="auth-label">Код з Viber або SMS</p>
         <div class="otp-wrap">
           <input class="otp-input" maxlength="1" inputmode="numeric" autocomplete="one-time-code" oninput="otpInput(this,0)" onkeydown="otpKey(this,0,event)">
           <input class="otp-input" maxlength="1" inputmode="numeric" oninput="otpInput(this,1)" onkeydown="otpKey(this,1,event)">
@@ -773,7 +773,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
         </div>
         <p id="otp-sent" style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px"></p>
         <button class="auth-btn" id="otp-btn" onclick="verifyOtp()">Увійти</button>
-        <p class="otp-resend">Не отримали код? <button onclick="resendOtp()" id="resend-btn">Надіслати ще</button> <span id="otp-timer"></span></p>
+        <p class="otp-resend">Не отримали код у Viber чи SMS? <button onclick="resendOtp()" id="resend-btn">Надіслати ще</button> <span id="otp-timer"></span></p>
         <button class="auth-back" onclick="backToPhone()">← Змінити номер</button>
       </div>
     </div>
@@ -1127,7 +1127,7 @@ async function sendOtp() {
     } else if (res.ok) {
       document.getElementById('auth-step-phone').classList.remove('active');
       document.getElementById('auth-step-otp').classList.add('active');
-      document.getElementById('otp-sent').textContent = 'Код надіслано на +38' + ph;
+      document.getElementById('otp-sent').textContent = 'Код надіслано у Viber (або SMS) на +38' + ph;
       document.querySelectorAll('.otp-input')[0].focus();
       startWebOTP();
       startOtpTimer(120);
@@ -1138,7 +1138,7 @@ async function sendOtp() {
     }
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Отримати код';
-    alert('Помилка відправки SMS. Спробуйте ще раз.');
+    alert('Помилка надсилання коду. Спробуйте ще раз.');
   }
 }
 
