@@ -720,15 +720,20 @@ def admin_sync():
     """Запускає синхронізацію з Wlaunch"""
     import subprocess
     try:
-        result = subprocess.run(
+        r1 = subprocess.run(
             ['python3', '/home/gomoncli/zadarma/sync_clients.py'],
             capture_output=True, text=True, timeout=60,
             cwd='/home/gomoncli/zadarma'
         )
+        r2 = subprocess.run(
+            ['python3', '/home/gomoncli/zadarma/sync_appointments.py'],
+            capture_output=True, text=True, timeout=120,
+            cwd='/home/gomoncli/zadarma'
+        )
         return jsonify({
             'ok':     True,
-            'stdout': result.stdout[-500:] if result.stdout else '',
-            'stderr': result.stderr[-200:] if result.stderr else '',
+            'stdout': (r1.stdout + r2.stdout)[-800:],
+            'stderr': (r1.stderr + r2.stderr)[-300:],
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -738,7 +743,7 @@ def admin_sync():
 try:
     from push_sender import (
         init_push_tables, save_subscription, remove_subscription,
-        get_subscriptions
+        get_subscriptions, send_push_to_phone
     )
     init_push_tables()
     _push_ok = True
