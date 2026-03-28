@@ -67,9 +67,20 @@ services_json TEXT  -- JSON масив [{appt_id, date, hour, service, status}]
 
 ### Таблиця `users`
 ```sql
-telegram_id INTEGER PRIMARY KEY, phone TEXT, name TEXT, created_at TEXT
+telegram_id INTEGER PRIMARY KEY, phone TEXT, username TEXT, first_name TEXT
 ```
-- Унікальні PWA-логіни (69 станом на 2026-03-28)
+- **Telegram-бот юзери** (69 станом на 2026-03-28) — НЕ PWA-юзери
+- Заповнюється через bot.py коли юзер пише боту
+
+### БД `otp_sessions.db` (окремий файл)
+```sql
+sessions: token TEXT PK, phone TEXT, created_at INT, expires_at INT
+otp_codes: phone TEXT PK, code TEXT, expires_at INT, attempts INT
+leads: phone TEXT PK, name TEXT, procedure TEXT, created_at TEXT, source TEXT
+```
+- **PWA-юзери** — унікальні телефони в `sessions` (3 станом на 2026-03-28)
+- Сесія: 30 днів sliding window
+- `/api/admin/stats` → `pwa_users` = COUNT(DISTINCT phone) FROM sessions
 
 ### Таблиця `push_subscriptions`
 ```sql
@@ -83,7 +94,7 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 ### Auth
 | Endpoint | Метод | Опис |
 |----------|-------|------|
-| `/api/auth/send-otp` | POST | Відправляє OTP через SMS. Для не-клієнтів — гостьовий режим |
+| `/api/auth/send-otp` | POST | Відправляє OTP через Viber (з SMS-фолбеком). Для не-клієнтів — гостьовий режим |
 | `/api/auth/verify` | POST | Верифікує OTP, видає сесію (30 днів, sliding window) |
 
 ### Клієнт
@@ -110,10 +121,10 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 ### Адмін (require_admin — тільки ADMIN_PHONE)
 | Endpoint | Метод | Опис |
 |----------|-------|------|
-| `/api/admin/stats` | GET | Статистика: clients, users, push_subs, visits_month |
+| `/api/admin/stats` | GET | Статистика: clients, `pwa_users` (otp_sessions.db), `pwa_active`, push_subs, visits_month |
 | `/api/admin/appointments` | GET | Всі записи всіх клієнтів |
 | `/api/admin/clients-list` | GET | Список клієнтів з appointments для модалки |
-| `/api/admin/users-list` | GET | PWA-юзери (JOIN clients) |
+| `/api/admin/users-list` | GET | PWA-юзери з otp_sessions.db (унікальні телефони + дати логінів) |
 | `/api/admin/push-list` | GET | Push-підписники (JOIN clients) |
 | `/api/admin/month-visits` | GET | Записи за поточний місяць з цінами з prices.json |
 | `/api/admin/sync` | POST | Запускає sync_clients.py + sync_appointments.py послідовно |
@@ -283,3 +294,6 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **WLaunch cancel**: використовує `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
 - **Sync**: `sync_appointments.py` зберігає топ-5 записів по даті (новіші першими), включаючи CANCELLED
 - **Parse services**: `pwa_api.py::parse_services()` фільтрує CANCELLED при поверненні клієнту
+- **OTP доставка**: Viber (відправник `PROMO`, TTL 5хв) → SMS-фолбек. Керується через `SMS_FLY_VIBER_SENDER` в config.py
+- **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот (69 осіб). Реальні PWA-юзери = `otp_sessions.db::sessions`
+- **Фото локації**: `location-aerial.jpg`, `location-entrance.jpg` лежать у `/home/gomoncli/public_html/sitepro/`
