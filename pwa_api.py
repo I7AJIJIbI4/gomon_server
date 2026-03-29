@@ -838,12 +838,16 @@ def admin_role():
 @app.route('/api/admin/calendar/appointments', methods=['GET'])
 @require_admin
 def admin_cal_get():
-    """Список записів з фільтром по даті. Specialist бачить тільки свої."""
+    """Список записів: manual_appointments + WLaunch (services_json), фільтр по даті."""
     from_date = request.args.get('from', '')
     to_date   = request.args.get('to', '')
+    result = []
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    query = 'SELECT * FROM manual_appointments WHERE 1=1'
+
+    # 1. Manual appointments
+    query = 'SELECT * FROM manual_appointments WHERE status != \'CANCELLED\''
     params = []
     if from_date:
         query += ' AND date >= ?'
@@ -855,9 +859,49 @@ def admin_cal_get():
         query += ' AND specialist = ?'
         params.append(request.admin_specialist)
     query += ' ORDER BY date ASC, time ASC'
-    rows = conn.execute(query, params).fetchall()
+    for r in conn.execute(query, params).fetchall():
+        result.append(dict(r))
+
+    # 2. WLaunch appointments from services_json (не для specialist ролі)
+    if request.admin_role != 'specialist':
+        rows = conn.execute(
+            'SELECT phone, first_name, last_name, services_json FROM clients'
+        ).fetchall()
+        for row in rows:
+            try:
+                items = json.loads(row['services_json'] or '[]')
+            except Exception:
+                items = []
+            for it in items:
+                d = it.get('date', '')
+                if not d:
+                    continue
+                status = (it.get('status') or '').upper()
+                if status == 'CANCELLED':
+                    continue
+                if from_date and d < from_date:
+                    continue
+                if to_date and d > to_date:
+                    continue
+                hour = it.get('hour')
+                time_str = '{:02d}:00'.format(hour) if hour is not None else ''
+                name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+                result.append({
+                    'id': 'wl_{}'.format(it.get('appt_id', '')),
+                    'client_phone': row['phone'],
+                    'client_name':  name or row['phone'],
+                    'procedure_name': it.get('service', ''),
+                    'specialist': None,
+                    'date': d,
+                    'time': time_str,
+                    'status': status or 'CONFIRMED',
+                    'notes': '',
+                    'source': 'wlaunch',
+                })
+
     conn.close()
-    return jsonify({'appointments': [dict(r) for r in rows]})
+    result.sort(key=lambda x: (x['date'], x['time'] or ''))
+    return jsonify({'appointments': result})
 
 @app.route('/api/admin/calendar/appointments', methods=['POST'])
 @require_admin

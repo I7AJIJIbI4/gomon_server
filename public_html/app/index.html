@@ -1566,6 +1566,23 @@ function _statusClass(s) {
 }
 function _specLabel(s) { return s==='victoria'?'В':'А'; }
 
+function _apptCard(a) {
+  const isWl = a.source === 'wlaunch';
+  const clickAttr = isWl ? '' : `onclick="openApptAction(${a.id})"`;
+  const specBadge = a.specialist
+    ? `<div class="adm-appt-spec adm-spec-${a.specialist}">${_specLabel(a.specialist)}</div>`
+    : (isWl ? `<div class="adm-appt-spec" style="background:#2a2a1e;color:#a09060;font-size:9px">WL</div>` : '');
+  return `<div class="adm-appt-card" ${clickAttr} style="${isWl?'opacity:.85':''}">
+    <div class="adm-appt-time">${(a.time||'').slice(0,5)}</div>
+    <div class="adm-appt-body">
+      <div class="adm-appt-name">${a.client_name||a.client_phone||'—'}</div>
+      <div class="adm-appt-proc">${a.procedure_name||''}</div>
+      ${a.client_phone ? `<div class="adm-appt-phone">${(a.client_phone||'').replace(/^38/,'0')}</div>` : ''}
+    </div>
+    ${specBadge}
+  </div>`;
+}
+
 function renderCalDay() {
   const ds = _fmtDate(calDate);
   const appts = calAppointments.filter(a => a.date === ds)
@@ -1575,17 +1592,7 @@ function renderCalDay() {
     c.innerHTML = `<div class="adm-cal-empty">Немає записів<br><span style="font-size:13px;color:var(--text3)">Натисніть + щоб додати</span></div>`;
     return;
   }
-  c.innerHTML = appts.map(a => `
-    <div class="adm-appt-card" onclick="openApptAction(${a.id})">
-      <div class="adm-appt-time">${(a.time||'').slice(0,5)}</div>
-      <div class="adm-appt-body">
-        <div class="adm-appt-name">${a.client_name||a.client_phone||'—'}</div>
-        <div class="adm-appt-proc">${a.procedure_name||''}</div>
-        ${a.client_phone ? `<div class="adm-appt-phone">${(a.client_phone||'').replace(/^38/,'0')}</div>` : ''}
-      </div>
-      <div class="adm-appt-spec adm-spec-${a.specialist||''}">${_specLabel(a.specialist)}</div>
-    </div>
-  `).join('');
+  c.innerHTML = appts.map(a => _apptCard(a)).join('');
 }
 
 function renderCalWeek() {
@@ -1604,10 +1611,14 @@ function renderCalWeek() {
         <span class="adm-week-num">${d.getDate()}</span>
       </div>
       <div class="adm-week-appts">
-        ${dayAppts.map(a=>`<div class="adm-week-appt adm-spec-${a.specialist||''}" onclick="event.stopPropagation();openApptAction(${a.id})">
-          <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}</div>
-          <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
-        </div>`).join('')}
+        ${dayAppts.map(a=>{
+          const isWl = a.source==='wlaunch';
+          const click = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
+          return `<div class="adm-week-appt adm-spec-${a.specialist||''}" style="${isWl?'background:#2a2a1e;opacity:.8':''}" ${click}>
+            <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}</div>
+            <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   }
