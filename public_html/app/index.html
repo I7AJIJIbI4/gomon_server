@@ -2111,6 +2111,19 @@ if ('serviceWorker' in navigator) {
   </div>
   <div class="screen-scroll">
     <div class="chat-options" style="padding:20px">
+      <div class="chat-option ai-option">
+        <div class="ai-option-top">
+          <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
+          <div class="ai-option-top-text">
+            <h4>AI-асистент клініки</h4>
+            <p>Підбір процедури онлайн</p>
+          </div>
+        </div>
+        <div class="ai-input-row">
+          <input type="text" id="ai-admin-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+          <button class="ai-send-btn" id="ai-admin-send" aria-label="Відправити">&#10148;</button>
+        </div>
+      </div>
       <a class="chat-option telegram" href="https://t.me/DrGomonCosmetology" target="_blank" style="grid-column:1/-1">
         <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></span>
         <h4>Telegram</h4>
@@ -2173,6 +2186,20 @@ if ('serviceWorker' in navigator) {
         }
         authBtn.addEventListener("click", sendAuth);
         authInp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); sendAuth(); } });
+      }
+      // admin chat screen
+      var admInp = document.getElementById("ai-admin-input");
+      var admBtn = document.getElementById("ai-admin-send");
+      if (admInp && admBtn) {
+        function sendAdm() {
+          var txt = admInp.value.trim();
+          if (!txt) { if(window.GomonChat) GomonChat.open(); return; }
+          if (!window.GomonChat) return;
+          admInp.value = "";
+          GomonChat.openWithMessage(txt);
+        }
+        admBtn.addEventListener("click", sendAdm);
+        admInp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); sendAdm(); } });
       }
       // not-client modal
       var ncInp = document.getElementById("ai-nc-input");

@@ -638,11 +638,27 @@
     }
 
     function _applyViewportHeight() {
-      if (!els.panel || window.innerWidth > 600) return;
-      var h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
-      els.panel.style.height = h + 'px';
-      els.panel.style.maxHeight = h + 'px';
+      if (window.innerWidth > 600) return;
+      var vv = window.visualViewport;
+      if (!vv) return;
+      // Reposition overlay to match visual viewport (iOS keyboard shifts visual viewport offset)
+      els.overlay.style.top    = vv.offsetTop + 'px';
+      els.overlay.style.left   = vv.offsetLeft + 'px';
+      els.overlay.style.right  = 'auto';
+      els.overlay.style.bottom = 'auto';
+      els.overlay.style.width  = vv.width + 'px';
+      els.overlay.style.height = vv.height + 'px';
+      els.panel.style.height    = vv.height + 'px';
+      els.panel.style.maxHeight = vv.height + 'px';
       setTimeout(function () { els.messagesEl.scrollTop = els.messagesEl.scrollHeight; }, 30);
+    }
+
+    function _resetOverlayPosition() {
+      ['top','left','right','bottom','width','height'].forEach(function(p) {
+        els.overlay.style[p] = '';
+      });
+      els.panel.style.height = '';
+      els.panel.style.maxHeight = '';
     }
 
     function openModal() {
@@ -655,6 +671,7 @@
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', _applyViewportHeight);
         window.visualViewport.addEventListener('scroll', _applyViewportHeight);
+        _applyViewportHeight();
       }
     }
 
@@ -662,12 +679,11 @@
       isOpen = false;
       document.body.style.overflow = '';
       els.overlay.classList.remove('gw-open');
-      els.panel.style.height = '';
-      els.panel.style.maxHeight = '';
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', _applyViewportHeight);
         window.visualViewport.removeEventListener('scroll', _applyViewportHeight);
       }
+      _resetOverlayPosition();
     }
 
     function setDisabled(val) {
