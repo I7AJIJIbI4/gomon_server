@@ -73,10 +73,15 @@
       #gw-panel {
         max-width: 100%;
         height: 100vh;
+        height: 100dvh;
         max-height: 100vh;
+        max-height: 100dvh;
         border-radius: 0;
         border: none;
         transform: translateY(30px);
+      }
+      #gw-input-area {
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
       }
     }
 
@@ -632,6 +637,14 @@
       saveMessages(messages);
     }
 
+    function _applyViewportHeight() {
+      if (!els.panel || window.innerWidth > 600) return;
+      var h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+      els.panel.style.height = h + 'px';
+      els.panel.style.maxHeight = h + 'px';
+      setTimeout(function () { els.messagesEl.scrollTop = els.messagesEl.scrollHeight; }, 30);
+    }
+
     function openModal() {
       if (isOpen) return;
       isOpen = true;
@@ -639,12 +652,22 @@
       renderAllMessages(messages, els.messagesEl);
       els.overlay.classList.add('gw-open');
       setTimeout(function () { els.textarea.focus(); }, 50);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', _applyViewportHeight);
+        window.visualViewport.addEventListener('scroll', _applyViewportHeight);
+      }
     }
 
     function closeModal() {
       isOpen = false;
       document.body.style.overflow = '';
       els.overlay.classList.remove('gw-open');
+      els.panel.style.height = '';
+      els.panel.style.maxHeight = '';
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', _applyViewportHeight);
+        window.visualViewport.removeEventListener('scroll', _applyViewportHeight);
+      }
     }
 
     function setDisabled(val) {
