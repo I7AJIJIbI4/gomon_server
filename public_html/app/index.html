@@ -1131,8 +1131,6 @@ async function sendOtp() {
       document.querySelectorAll('.otp-input')[0].focus();
       startWebOTP();
       startOtpTimer(120);
-      // debug_code — тільки для тестування, прибрати на проді
-      if (res.debug_code) console.log('DEBUG OTP:', res.debug_code);
     } else {
       throw new Error(res.error || 'sms_failed');
     }
