@@ -194,9 +194,9 @@
   .hero-eyebrow { font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 28px; opacity: 0; animation: fadeUp 0.8s 0.2s ease forwards; }
   @media (max-width: 480px) { .hero-eyebrow .mob-br { display: block; } }
   .hero-eyebrow .mob-br { display: none; }
-  .hero-logo { width: clamp(200px, 50vw, 340px); height: auto; margin: 0 auto 12px; display: block; filter: invert(1) sepia(1) saturate(0.6) hue-rotate(5deg) brightness(1.1); opacity: 0; animation: fadeUp 0.8s 0.4s ease forwards; }
-  .hero-divider { width: 60px; height: 1px; background: var(--gold); margin: 0 auto 36px; opacity: 0; animation: fadeUp 0.8s 0.7s ease forwards; }
-  .hero-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 56px; max-width: 480px; margin-left: auto; margin-right: auto; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
+  .hero-logo { width: clamp(200px, 50vw, 340px); height: auto; margin: 0 auto 0; display: block; filter: invert(1) sepia(1) saturate(0.6) hue-rotate(5deg) brightness(1.1); opacity: 0; animation: fadeUp 0.8s 0.4s ease forwards; }
+  .hero-divider { width: 60px; height: 1px; background: var(--gold); margin: 0 auto 24px; opacity: 0; animation: fadeUp 0.8s 0.7s ease forwards; }
+  .hero-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 24px; max-width: 480px; margin-left: auto; margin-right: auto; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
   .cta-group { display: flex; flex-direction: column; gap: 14px; align-items: center; opacity: 0; animation: fadeUp 0.8s 1s ease forwards; }
   .btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 36px; border-radius: 2px; font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; transition: all 0.3s ease; justify-content: center; width: 300px; max-width: 90vw; }
   .btn-primary { background: var(--gold); color: var(--dark); border: 1px solid var(--gold); }
@@ -205,7 +205,7 @@
   .btn-outline:hover { background: rgba(184,149,90,0.1); border-color: var(--gold-light); transform: translateY(-2px); }
   .btn svg { flex-shrink: 0; }
   .location-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-bottom: 60px; opacity: 0; animation: fadeUp 0.8s 1.2s ease forwards; }
-  @media (max-width: 480px) { .hero-desc { margin-bottom: 36px; } .hero-divider { margin-bottom: 24px; } .location-tag { margin-bottom: 36px; } }
+  @media (max-width: 480px) { .hero-desc { margin-bottom: 20px; } .hero-divider { margin-bottom: 20px; } .location-tag { margin-bottom: 28px; } }
   .location-tag::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
 
   /* ── TRUST BAR ── */
@@ -217,8 +217,8 @@
   .trust-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-top: 4px; }
 
   /* ── SECTIONS ── */
-  .section { padding: clamp(60px, 10vw, 110px) 24px; }
-  @media (max-width: 480px) { .section { padding: 44px 20px; } }
+  .section { padding: clamp(44px, 7vw, 80px) 24px; }
+  @media (max-width: 480px) { .section { padding: 32px 20px; } }
   .section-inner { max-width: 960px; margin: 0 auto; }
   .section-label { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
   .section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 6vw, 58px); font-weight: 300; line-height: 1.1; color: var(--cream); margin-bottom: 50px; }
@@ -226,7 +226,7 @@
 
   /* ── PROMO SECTION ── */
   /* ── DEALS (АКЦІЇ TILES) ── */
-  .deals-section { padding: clamp(44px, 8vw, 80px) 0 0; position: relative; }
+  .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
   .deals-scroll { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; margin-top: 36px; }
   .deals-scroll::-webkit-scrollbar { display: none; }
@@ -239,7 +239,7 @@
   .deal-desc { font-size: 13px; color: var(--text-light); line-height: 1.6; }
   @media (max-width: 480px) { .deal-tile { width: 200px; padding: 20px 16px; } .deal-title { font-size: 17px; } }
 
-  .promo-section { padding: clamp(44px, 8vw, 110px) 0; position: relative; }
+  .promo-section { padding: clamp(28px, 5vw, 80px) 0; position: relative; }
   .promo-section-inner { max-width: 960px; margin: 0 auto; padding: 0 24px; margin-bottom: 40px; }
   .promo-elfsight-wrap, .promo-section-inner { max-width: 1100px; margin-left: auto; margin-right: auto; padding-left: clamp(16px, 5vw, 60px); padding-right: clamp(16px, 5vw, 60px); }
   .promo-elfsight-wrap { padding-top: 0; }
@@ -295,7 +295,7 @@
   .price-note { font-size: 12px; color: var(--gold); font-style: italic; margin-top: 8px; padding: 8px 12px; background: rgba(184,149,90,0.06); border-left: 2px solid rgba(184,149,90,0.25); }
 
   /* ── ABOUT ── */
-  .about-section { padding: clamp(44px, 8vw, 110px) 24px; background: rgba(247,243,238,0.02); border-top: 1px solid rgba(184,149,90,0.1); border-bottom: 1px solid rgba(184,149,90,0.1); }
+  .about-section { padding: clamp(28px, 5vw, 80px) 24px; background: rgba(247,243,238,0.02); border-top: 1px solid rgba(184,149,90,0.1); border-bottom: 1px solid rgba(184,149,90,0.1); }
   .about-inner { max-width: 960px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
   @media (max-width: 700px) { .about-inner { grid-template-columns: 1fr; gap: 36px; } }
   .about-text p { font-size: 16px; font-weight: 300; color: var(--text-light); line-height: 1.9; margin-bottom: 20px; }
@@ -303,7 +303,7 @@
   .about-quote { font-family: 'Cormorant Garamond', serif; font-size: clamp(22px, 3.5vw, 32px); font-style: italic; font-weight: 300; color: var(--gold-pale); line-height: 1.5; padding-left: 24px; border-left: 2px solid var(--gold); }
 
   /* ── CTA BOTTOM ── */
-  .cta-section { padding: 60px 24px clamp(60px, 8vw, 120px); text-align: center; position: relative; overflow: hidden; }
+  .cta-section { padding: 40px 24px clamp(44px, 6vw, 80px); text-align: center; position: relative; overflow: hidden; }
   .cta-section::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(184,149,90,0.08) 0%, transparent 70%); pointer-events: none; }
   .cta-inner { position: relative; max-width: 600px; margin: 0 auto; }
   .cta-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(40px, 7vw, 70px); font-weight: 300; line-height: 1.05; color: var(--cream); margin-bottom: 20px; }
@@ -417,12 +417,15 @@
   .deal-modal-card .promo-list li { font-size:13px; color:#c8bfb2; line-height:1.8; }
 
   /* AI SECTION */
-  .ai-section { padding: 100px 20px; background: linear-gradient(180deg, var(--bg) 0%, rgba(184,149,90,0.04) 50%, var(--bg) 100%); border-top: 1px solid rgba(184,149,90,0.12); }
-  .ai-section-inner { max-width: 640px; margin: 0 auto; text-align: center; }
+  .ai-section { padding: 60px 20px 40px; background: linear-gradient(180deg, var(--bg) 0%, rgba(184,149,90,0.04) 50%, var(--bg) 100%); border-top: 1px solid rgba(184,149,90,0.12); }
+  .ai-section-inner { max-width: 820px; margin: 0 auto; text-align: center; }
+  .ai-section-badge { display: inline-flex; align-items: center; gap: 10px; background: rgba(184,149,90,0.08); border: 1px solid rgba(184,149,90,0.22); border-radius: 40px; padding: 8px 18px 8px 12px; margin-bottom: 24px; }
+  .ai-section-badge svg { flex-shrink: 0; }
+  .ai-section-badge span { font-family: 'Jost', sans-serif; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-light); }
   .ai-section-sub { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
-  .ai-section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 7vw, 64px); font-weight: 300; color: var(--cream); line-height: 1.1; margin-bottom: 24px; }
+  .ai-section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(34px, 6vw, 56px); font-weight: 300; color: var(--cream); line-height: 1.1; margin-bottom: 20px; }
   .ai-section-title em { font-style: italic; color: var(--gold-light); }
-  .ai-section-desc { color: var(--text-light); font-size: 16px; line-height: 1.7; margin-bottom: 40px; }
+  .ai-section-desc { color: var(--text-light); font-size: 16px; line-height: 1.7; margin-bottom: 32px; }
   .ai-section-btn { font-size: 13px; letter-spacing: 2px; padding: 16px 40px; display: inline-flex; align-items: center; gap: 10px; }
 </style>
 <script src="https://static.elfsight.com/platform/platform.js" defer></script>
@@ -685,7 +688,11 @@
 <!-- AI ASSISTANT -->
 <section class="ai-section" id="ai-section"><a name="ai" id="ai"></a>
   <div class="ai-section-inner">
-    <p class="ai-section-sub reveal">Залишились питання?</p>
+    <div class="ai-section-badge reveal visible">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg>
+      <span>AI-асистент клініки</span>
+    </div>
+    <p class="ai-section-sub reveal visible">Залишились питання?</p>
     <h2 class="ai-section-title reveal">Наш <em>ШІ асистент</em><br>радий допомогти</h2>
     <p class="ai-section-desc reveal">Підбере процедуру, розповість про ціни та підготовку — онлайн, без очікування</p>
     <button class="btn btn-primary ai-section-btn reveal" onclick="if(window.GomonWidget)GomonWidget.open()">

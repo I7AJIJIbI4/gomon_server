@@ -315,7 +315,7 @@
       border-radius: 14px;
       padding: 10px 12px 10px 16px;
       margin-top: 32px;
-      max-width: 560px;
+      max-width: 680px;
       margin-left: auto;
       margin-right: auto;
       transition: border-color 0.2s;
