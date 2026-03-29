@@ -438,6 +438,122 @@ nav{
 .cal-appt-svc{font-size:12px;color:var(--text2)}
 .cal-appt-phone{font-size:11px;color:var(--text3)}
 .admin-nav{display:grid;grid-template-columns:repeat(4,1fr)}
+/* ── ADMIN CALENDAR NEW ── */
+.admin-cal-header{display:flex;flex-direction:column;gap:8px;padding:12px 20px 10px;flex-shrink:0;border-bottom:1px solid var(--border)}
+.cal-tabs{display:flex;gap:4px;background:var(--bg3);border-radius:10px;padding:3px}
+.cal-tab{flex:1;padding:5px 0;background:transparent;border:none;border-radius:8px;font-family:var(--sans);font-size:12px;color:var(--text3);cursor:pointer;transition:all .15s}
+.cal-tab.active{background:var(--surface);color:var(--text);font-weight:500}
+.cal-nav-row{display:flex;align-items:center;gap:4px}
+.cal-nav-btn{background:none;border:none;font-size:20px;color:var(--text2);cursor:pointer;padding:2px 8px;border-radius:6px;line-height:1;font-weight:300}
+.cal-nav-title{font-family:var(--serif);font-size:15px;color:var(--gold-pale);flex:1;text-align:center}
+.adm-cal-today-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--text3);cursor:pointer;font-family:var(--sans)}
+/* Day view */
+.adm-appt-card{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border);cursor:pointer}
+.adm-appt-card:active{background:var(--bg3)}
+.adm-appt-time{font-family:var(--serif);font-size:14px;color:var(--gold);width:40px;flex-shrink:0;text-align:center}
+.adm-appt-body{flex:1;min-width:0}
+.adm-appt-name{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-appt-proc{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-appt-phone{font-size:11px;color:var(--text3)}
+.adm-appt-spec{width:22px;height:22px;border-radius:11px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.adm-spec-victoria .adm-appt-spec,.adm-spec-victoria.adm-appt-spec{background:#1e2e1e;color:#6db56d}
+.adm-spec-anastasia .adm-appt-spec,.adm-spec-anastasia.adm-appt-spec{background:#1e1e2e;color:#6d6db5}
+.adm-cal-empty{padding:40px 20px;text-align:center;font-family:var(--serif);font-size:16px;color:var(--text3);font-weight:300}
+.adm-appt-status-badge{font-size:10px;padding:2px 6px;border-radius:8px;margin-top:2px;display:inline-block}
+.adm-badge-confirmed{background:#1e2e1e;color:#6db56d}.adm-badge-done{background:#1e1e1e;color:var(--text3)}.adm-badge-no_show{background:#2e1e1e;color:#b56d6d}.adm-badge-cancelled{background:#2e1e1e;color:#b56d6d}
+/* Week view */
+.adm-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:6px 8px 80px}
+.adm-week-day{padding:6px 3px;border:1px solid var(--border);border-radius:8px;cursor:pointer;min-height:70px}
+.adm-week-day.today{border-color:var(--gold);background:var(--bg3)}
+.adm-week-day-hdr{text-align:center;margin-bottom:3px}
+.adm-week-dow{font-size:9px;color:var(--text3);display:block;text-transform:uppercase;letter-spacing:.3px}
+.adm-week-num{font-family:var(--serif);font-size:13px;color:var(--text);display:block}
+.adm-week-day.today .adm-week-num{color:var(--gold)}
+.adm-week-appt{border-radius:3px;padding:2px 3px;margin-bottom:2px;cursor:pointer;overflow:hidden}
+.adm-week-appt.adm-spec-victoria{background:#1e2e1e}
+.adm-week-appt.adm-spec-anastasia{background:#1e1e2e}
+.adm-week-appt-time{color:var(--text3);font-size:8px;line-height:1.2}
+.adm-week-appt-name{color:var(--text);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+/* Month view */
+.adm-month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:4px 8px 80px}
+.adm-month-dow{text-align:center;font-size:9px;color:var(--text3);text-transform:uppercase;padding:4px 0;letter-spacing:.3px}
+.adm-month-cell{border:1px solid var(--border);border-radius:6px;padding:4px;min-height:42px;cursor:pointer;display:flex;flex-direction:column}
+.adm-month-cell.today{border-color:var(--gold)}
+.adm-month-cell.empty{border-color:transparent;background:transparent;cursor:default}
+.adm-month-dnum{font-size:11px;color:var(--text2);line-height:1.4}
+.adm-month-cell.today .adm-month-dnum{color:var(--gold);font-weight:600}
+.adm-month-dots{display:flex;gap:2px;flex-wrap:wrap;margin-top:2px}
+.adm-dot{width:6px;height:6px;border-radius:3px;flex-shrink:0}
+.adm-dot.victoria{background:#4a8a4a}
+.adm-dot.anastasia{background:#4a4a8a}
+/* FAB */
+.adm-fab{position:fixed;right:20px;bottom:calc(56px + var(--safe-bottom) + 16px);width:52px;height:52px;border-radius:26px;background:var(--gold);border:none;font-size:26px;color:#1a1209;cursor:pointer;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-weight:300;line-height:1}
+/* New appt overlay */
+#adm-new-appt-overlay{position:fixed;inset:0;z-index:10200;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#adm-new-appt-overlay.show{display:flex}
+.adm-new-appt-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:20px 20px 32px}
+.adm-form-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 5px;display:block}
+.adm-form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;box-sizing:border-box;-webkit-appearance:none}
+.adm-form-input:focus{border-color:var(--gold)}
+.adm-dropdown{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:3px;overflow:hidden;max-height:160px;overflow-y:auto}
+.adm-dropdown-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)}
+.adm-dropdown-item:last-child{border-bottom:none}
+.adm-dropdown-item:active{background:var(--bg3)}
+.adm-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:6px 10px 6px 12px;font-size:13px;color:var(--gold-pale)}
+.adm-chip button{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1}
+.adm-spec-row{display:flex;gap:8px;margin-top:5px}
+.adm-spec-btn{flex:1;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s}
+.adm-spec-btn.active{background:var(--surface);border-color:var(--gold);color:var(--gold-pale)}
+.adm-date-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.adm-save-btn{width:100%;margin-top:20px;padding:14px;background:var(--gold);border:none;border-radius:12px;font-family:var(--sans);font-size:15px;font-weight:600;color:#1a1209;cursor:pointer;transition:opacity .2s}
+.adm-save-btn:disabled{opacity:.5;cursor:not-allowed}
+.adm-cancel-link{display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--text3);cursor:pointer;padding:6px 0}
+/* Admin clients screen */
+.screen-header-row{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 10px;flex-shrink:0}
+.screen-header-row h2{font-family:var(--serif);font-size:20px;font-weight:300;color:var(--gold-pale);margin:0}
+.adm-header-btn{background:var(--gold);border:none;border-radius:8px;padding:6px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:#1a1209;cursor:pointer}
+.adm-search-wrap{padding:0 20px 10px;flex-shrink:0}
+.adm-search-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;box-sizing:border-box;-webkit-appearance:none}
+.adm-search-input:focus{border-color:var(--gold)}
+.adm-client-row{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);cursor:pointer}
+.adm-client-row:active{background:var(--bg3)}
+.adm-client-name{font-size:14px;color:var(--text)}
+.adm-client-phone{font-size:12px;color:var(--text3);margin-top:1px}
+.adm-client-meta{text-align:right;flex-shrink:0}
+.adm-client-visits{font-family:var(--serif);font-size:13px;color:var(--gold)}
+.adm-client-last{font-size:11px;color:var(--text3);margin-top:1px}
+/* Add client modal */
+#adm-add-client-modal{position:fixed;inset:0;z-index:10200;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#adm-add-client-modal.show{display:flex}
+/* Procedures screen */
+.adm-proc-cat{padding:0 20px 12px}
+.adm-proc-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.adm-proc-cat-name{font-family:var(--serif);font-size:16px;color:var(--gold-pale)}
+.adm-proc-add-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--text3);cursor:pointer}
+.adm-proc-item{padding:8px 0;border-bottom:1px solid var(--border)}
+.adm-proc-item:last-child{border-bottom:none}
+.adm-proc-item-main{display:flex;align-items:center;gap:6px}
+.adm-proc-name-inp{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text);font-family:var(--sans);outline:none;min-width:0}
+.adm-proc-price-inp{width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:12px;color:var(--gold);font-family:var(--sans);outline:none;text-align:right}
+.adm-proc-name-ro{font-size:13px;color:var(--text);flex:1}
+.adm-proc-price-ro{font-size:12px;color:var(--gold);flex-shrink:0}
+.adm-proc-specs{display:flex;align-items:center;gap:12px;margin-top:5px;padding-left:1px}
+.adm-spec-check{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer}
+.adm-proc-del{margin-left:auto;background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 2px;line-height:1}
+.adm-proc-add-cat-btn{width:100%;padding:10px;background:transparent;border:1px dashed var(--border);border-radius:10px;font-family:var(--sans);font-size:13px;color:var(--text3);cursor:pointer;margin:0 20px 80px;width:calc(100% - 40px)}
+/* Appt action sheet */
+#adm-appt-action{position:fixed;inset:0;z-index:10300;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
+#adm-appt-action.show{display:flex}
+.adm-action-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);width:100%;max-width:480px;padding:20px 20px 24px}
+.adm-action-title{font-family:var(--serif);font-size:15px;color:var(--gold-pale);margin-bottom:2px}
+.adm-action-sub{font-size:12px;color:var(--text3);margin-bottom:14px}
+.adm-action-btns{display:flex;flex-direction:column;gap:8px}
+.adm-action-btn{width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-family:var(--sans);font-size:14px;color:var(--text);cursor:pointer;text-align:center}
+.adm-action-btn.danger{border-color:#5a2a2a;color:#d96d6d;background:#2e1e1e}
+.adm-action-cancel{width:100%;padding:10px;background:transparent;border:none;font-family:var(--sans);font-size:13px;color:var(--text3);cursor:pointer;margin-top:2px}
+/* Toast */
+#adm-toast{position:fixed;bottom:calc(70px + var(--safe-bottom));left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:8px 18px;font-size:13px;color:var(--gold-pale);z-index:10500;opacity:0;transition:opacity .3s;white-space:nowrap;pointer-events:none}
+#adm-toast.show{opacity:1}
 
 /* ── LOADING ── */
 #loader{
@@ -1290,10 +1406,11 @@ async function loadPrices() {
 
 
 /* ── ADMIN ── */
-const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-chat'];
+const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-chat','admin-clients'];
+let adminRole = null;
+let adminSpecialist = null;
 
 function adminGo(id) {
-  //ховаємо всі адмін-екрани
   ADMIN_SCREENS.forEach(s => {
     const sc = document.getElementById('screen-'+s);
     if (sc) { sc.classList.remove('active'); sc.style.display=''; }
@@ -1301,20 +1418,17 @@ function adminGo(id) {
   const sc = document.getElementById('screen-'+id);
   if (sc) { sc.classList.add('active'); sc.style.display='flex'; }
 
-  // Lazy load
-  if (id === 'admin-appts' && !window._adminApptLoaded) {
-    loadAdminAppointments();
-    window._adminApptLoaded = true;
+  if (id === 'admin-appts' && !window._calLoaded) {
+    window._calLoaded = true;
+    loadCalendarData();
   }
-  if (id === 'admin-price' && !window._adminPriceLoaded) {
-    // копіюємо контент прайсу
-    const src = document.getElementById('screen-price');
-    const dst = document.getElementById('adm-price-scroll');
-    if (src && dst) {
-      const scroll = src.querySelector('.screen-scroll');
-      if (scroll) dst.innerHTML = scroll.innerHTML;
-    }
-    window._adminPriceLoaded = true;
+  if (id === 'admin-clients' && !window._clientsLoaded) {
+    window._clientsLoaded = true;
+    loadClientsAdmin();
+  }
+  if (id === 'admin-price' && !window._procLoaded) {
+    window._procLoaded = true;
+    loadProcedures();
   }
 }
 
@@ -1343,60 +1457,7 @@ async function loadAdminStats() {
   } catch(e) { console.error('admin stats:', e); }
 }
 
-async function loadAdminAppointments() {
-  const container = document.getElementById('adm-cal-container');
-  container.innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">Завантаження...</p>';
-  try {
-    const res  = await fetch('/api/admin/appointments', { headers: { Authorization: 'Bearer ' + token } });
-    const data = await res.json();
-    const appts = data.appointments || [];
-
-    // Групуємо по місяцю і даті
-    const byMonth = {};
-    appts.forEach(a => {
-      if (!a.date) return;
-      const [y,m,d] = a.date.split('-');
-      const monthKey = y + '-' + m;
-      if (!byMonth[monthKey]) byMonth[monthKey] = {};
-      if (!byMonth[monthKey][d]) byMonth[monthKey][d] = [];
-      byMonth[monthKey][d].push(a);
-    });
-
-    const monthNames = ['','Січень','Лютий','Березень','Квітень','Травень','Червень',
-                        'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
-    const dayNames   = ['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
-
-    let html = '';
-    Object.keys(byMonth).sort().reverse().forEach(mk => {
-      const [y,m] = mk.split('-');
-      html += `<div class="cal-month"><div class="cal-month-title">${monthNames[+m]} ${y}</div>`;
-      Object.keys(byMonth[mk]).sort().reverse().forEach(d => {
-        const dt = new Date(+y, +m-1, +d);
-        const dow = dayNames[dt.getDay()];
-        html += `<div class="cal-day">
-          <div class="cal-day-header">
-            <span class="cal-day-num">${+d}</span>
-            <span class="cal-day-label">${dow}</span>
-          </div>`;
-        byMonth[mk][d].forEach(a => {
-          const ph = (a.phone||'').replace(/^38/,'0');
-          html += `<div class="cal-appt-row">
-            <div>
-              <div class="cal-appt-name">${a.first_name||''} ${a.last_name||''}</div>
-              <div class="cal-appt-svc">${a.service||''}</div>
-              <div class="cal-appt-phone">${ph}</div>
-            </div>
-          </div>`;
-        });
-        html += '</div>';
-      });
-      html += '</div>';
-    });
-    container.innerHTML = html || '<p style="color:var(--text3);padding:20px">Немає записів</p>';
-  } catch(e) {
-    container.innerHTML = '<p style="color:var(--text3);padding:20px">Помилка завантаження</p>';
-  }
-}
+/* Replaced by calendar below */
 
 async function adminSync() {
   const btn = document.querySelector('.sync-btn');
@@ -1412,6 +1473,523 @@ async function adminSync() {
   }
 }
 
+
+/* ─────────────────────────────────────────────── CALENDAR ── */
+let calView = 'day';
+let calDate = new Date();
+let calAppointments = [];
+
+const CAL_MONTHS = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
+                    'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+const CAL_DOW = ['Нд','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+function _fmtDate(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function _getMonday(d) {
+  const r = new Date(d);
+  const day = r.getDay() || 7;
+  r.setDate(r.getDate() - day + 1);
+  return r;
+}
+
+function adminCalGo(view) {
+  calView = view;
+  document.querySelectorAll('.cal-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  loadCalendarData();
+}
+
+function calNavPrev() {
+  if (calView === 'day') calDate.setDate(calDate.getDate()-1);
+  else if (calView === 'week') calDate.setDate(calDate.getDate()-7);
+  else calDate.setMonth(calDate.getMonth()-1);
+  loadCalendarData();
+}
+function calNavNext() {
+  if (calView === 'day') calDate.setDate(calDate.getDate()+1);
+  else if (calView === 'week') calDate.setDate(calDate.getDate()+7);
+  else calDate.setMonth(calDate.getMonth()+1);
+  loadCalendarData();
+}
+function calGoToday() {
+  calDate = new Date();
+  loadCalendarData();
+}
+
+async function loadCalendarData() {
+  let from, to;
+  if (calView === 'day') {
+    from = to = _fmtDate(calDate);
+  } else if (calView === 'week') {
+    const mon = _getMonday(calDate);
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+    from = _fmtDate(mon); to = _fmtDate(sun);
+  } else {
+    const y = calDate.getFullYear(), m = calDate.getMonth();
+    from = _fmtDate(new Date(y,m,1));
+    to   = _fmtDate(new Date(y,m+1,0));
+  }
+  updateCalNavTitle();
+  try {
+    const res = await fetch('/api/admin/calendar/appointments?from='+from+'&to='+to,
+      {headers:{Authorization:'Bearer '+token}});
+    calAppointments = (await res.json()).appointments || [];
+  } catch(e) { calAppointments = []; }
+  renderCalendar();
+}
+
+function updateCalNavTitle() {
+  const el = document.getElementById('cal-nav-title');
+  if (!el) return;
+  if (calView === 'day') {
+    el.textContent = calDate.getDate() + ' ' + CAL_MONTHS[calDate.getMonth()];
+  } else if (calView === 'week') {
+    const mon = _getMonday(calDate);
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+    el.textContent = mon.getDate()+' '+CAL_MONTHS[mon.getMonth()]+' – '+sun.getDate()+' '+CAL_MONTHS[sun.getMonth()];
+  } else {
+    el.textContent = CAL_MONTHS[calDate.getMonth()] + ' ' + calDate.getFullYear();
+  }
+}
+
+function renderCalendar() {
+  if (calView === 'day') renderCalDay();
+  else if (calView === 'week') renderCalWeek();
+  else renderCalMonth();
+}
+
+function _statusLabel(s) {
+  return {CONFIRMED:'Підтверджено',DONE:'Виконано',NO_SHOW:'Не з\'явився',CANCELLED:'Скасовано'}[s]||s;
+}
+function _statusClass(s) {
+  return 'adm-badge-'+(s||'').toLowerCase();
+}
+function _specLabel(s) { return s==='victoria'?'В':'А'; }
+
+function renderCalDay() {
+  const ds = _fmtDate(calDate);
+  const appts = calAppointments.filter(a => a.date === ds)
+    .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const c = document.getElementById('adm-cal-container');
+  if (!appts.length) {
+    c.innerHTML = `<div class="adm-cal-empty">Немає записів<br><span style="font-size:13px;color:var(--text3)">Натисніть + щоб додати</span></div>`;
+    return;
+  }
+  c.innerHTML = appts.map(a => `
+    <div class="adm-appt-card" onclick="openApptAction(${a.id})">
+      <div class="adm-appt-time">${(a.time||'').slice(0,5)}</div>
+      <div class="adm-appt-body">
+        <div class="adm-appt-name">${a.client_name||a.client_phone||'—'}</div>
+        <div class="adm-appt-proc">${a.procedure_name||''}</div>
+        ${a.client_phone ? `<div class="adm-appt-phone">${(a.client_phone||'').replace(/^38/,'0')}</div>` : ''}
+      </div>
+      <div class="adm-appt-spec adm-spec-${a.specialist||''}">${_specLabel(a.specialist)}</div>
+    </div>
+  `).join('');
+}
+
+function renderCalWeek() {
+  const mon = _getMonday(calDate);
+  const todayStr = _fmtDate(new Date());
+  let html = '<div class="adm-week-grid">';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mon); d.setDate(mon.getDate()+i);
+    const ds = _fmtDate(d);
+    const isToday = ds === todayStr;
+    const dayAppts = calAppointments.filter(a => a.date === ds)
+      .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    html += `<div class="adm-week-day${isToday?' today':''}" onclick="calDate=new Date('${ds}');adminCalGo('day')">
+      <div class="adm-week-day-hdr">
+        <span class="adm-week-dow">${CAL_DOW[d.getDay()]}</span>
+        <span class="adm-week-num">${d.getDate()}</span>
+      </div>
+      <div class="adm-week-appts">
+        ${dayAppts.map(a=>`<div class="adm-week-appt adm-spec-${a.specialist||''}" onclick="event.stopPropagation();openApptAction(${a.id})">
+          <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}</div>
+          <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('adm-cal-container').innerHTML = html;
+}
+
+function renderCalMonth() {
+  const y = calDate.getFullYear(), m = calDate.getMonth();
+  const firstDay = new Date(y,m,1);
+  const lastDay  = new Date(y,m+1,0);
+  const todayStr = _fmtDate(new Date());
+  let startDow = firstDay.getDay() || 7; startDow -= 1;
+  let html = `<div class="adm-month-grid">
+    ${['Пн','Вт','Ср','Чт','Пт','Сб','Нд'].map(d=>`<div class="adm-month-dow">${d}</div>`).join('')}
+    ${'<div class="adm-month-cell empty"></div>'.repeat(startDow)}`;
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const ds = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const dayA = calAppointments.filter(a => a.date === ds);
+    const hasV = dayA.some(a => a.specialist==='victoria');
+    const hasA = dayA.some(a => a.specialist==='anastasia');
+    const isToday = ds === todayStr;
+    html += `<div class="adm-month-cell${isToday?' today':''}" onclick="calDate=new Date('${ds}');adminCalGo('day')">
+      <span class="adm-month-dnum">${d}</span>
+      <div class="adm-month-dots">
+        ${hasV?'<span class="adm-dot victoria"></span>':''}
+        ${hasA?'<span class="adm-dot anastasia"></span>':''}
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('adm-cal-container').innerHTML = html;
+}
+
+/* ─────────────────────────────────── APPT ACTION SHEET ── */
+let _actionApptId = null;
+function openApptAction(id) {
+  const a = calAppointments.find(x => x.id === id);
+  if (!a) return;
+  _actionApptId = id;
+  document.getElementById('adm-action-title').textContent = a.client_name || a.client_phone || '—';
+  document.getElementById('adm-action-sub').textContent =
+    (a.procedure_name||'') + (a.time ? ' · ' + a.time.slice(0,5) : '');
+  const btns = [];
+  if (a.status !== 'DONE')      btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'DONE')">✓ Виконано</button>`);
+  if (a.status !== 'NO_SHOW')   btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'NO_SHOW')">Не з'явився</button>`);
+  if (a.status !== 'CONFIRMED') btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'CONFIRMED')">↩ Підтвердити</button>`);
+  btns.push(`<button class="adm-action-btn danger" onclick="cancelAppt(${id})">✕ Скасувати</button>`);
+  document.getElementById('adm-action-btns').innerHTML = btns.join('');
+  document.getElementById('adm-appt-action').classList.add('show');
+}
+function closeApptAction() {
+  document.getElementById('adm-appt-action').classList.remove('show');
+}
+async function updateApptStatus(id, status) {
+  closeApptAction();
+  await fetch('/api/admin/calendar/appointments/'+id, {
+    method:'PUT', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body: JSON.stringify({status})
+  });
+  loadCalendarData();
+  showToast(status==='DONE'?'Позначено виконаним':'Оновлено');
+}
+async function cancelAppt(id) {
+  closeApptAction();
+  await fetch('/api/admin/calendar/appointments/'+id, {
+    method:'DELETE', headers:{Authorization:'Bearer '+token}
+  });
+  loadCalendarData();
+  showToast('Скасовано');
+}
+
+/* ─────────────────────────────── NEW APPOINTMENT FORM ── */
+let _apptClient = null;
+let _apptProc   = null;
+let _apptSpec   = 'victoria';
+
+function showNewApptForm(dateStr) {
+  const ov = document.getElementById('adm-new-appt-overlay');
+  ov.classList.add('show');
+  document.getElementById('appt-date').value = dateStr || _fmtDate(calDate);
+  document.getElementById('appt-time').value = '';
+  document.getElementById('appt-notes').value = '';
+  document.getElementById('appt-client-q').value = '';
+  document.getElementById('appt-proc-q').value = '';
+  document.getElementById('appt-client-dd').style.display='none';
+  document.getElementById('appt-proc-dd').style.display='none';
+  document.getElementById('appt-client-chip').style.display='none';
+  document.getElementById('appt-proc-chip').style.display='none';
+  _apptClient = null; _apptProc = null;
+  if (adminRole === 'specialist') {
+    _apptSpec = adminSpecialist;
+    document.getElementById('appt-specialist-row').style.display = 'none';
+  } else {
+    _apptSpec = 'victoria';
+    selectSpecialistAppt('victoria');
+    document.getElementById('appt-specialist-row').style.display = '';
+  }
+}
+function closeNewApptForm() {
+  document.getElementById('adm-new-appt-overlay').classList.remove('show');
+}
+function selectSpecialistAppt(s) {
+  _apptSpec = s;
+  document.getElementById('appt-spec-v').classList.toggle('active', s==='victoria');
+  document.getElementById('appt-spec-a').classList.toggle('active', s==='anastasia');
+}
+
+let _clientSearchT = null;
+let _clientsCache = [];
+async function searchClientsAppt(q) {
+  clearTimeout(_clientSearchT);
+  const dd = document.getElementById('appt-client-dd');
+  if (q.length < 2) { dd.style.display='none'; return; }
+  _clientSearchT = setTimeout(async () => {
+    if (!_clientsCache.length) {
+      try {
+        const r = await fetch('/api/admin/clients-list',{headers:{Authorization:'Bearer '+token}});
+        _clientsCache = (await r.json()).clients || [];
+      } catch(e) { return; }
+    }
+    const ql = q.toLowerCase();
+    const matches = _clientsCache.filter(c =>
+      (c.name||'').toLowerCase().includes(ql) || (c.phone||'').includes(q)
+    ).slice(0,6);
+    if (!matches.length) { dd.style.display='none'; return; }
+    dd.innerHTML = matches.map(c =>
+      `<div class="adm-dropdown-item" onclick="selectClientAppt('${c.phone}','${(c.name||'').replace(/'/g,"\\'")}')">
+        <div style="font-size:13px;color:var(--text)">${c.name||c.phone}</div>
+        <div style="font-size:11px;color:var(--text3)">${(c.phone||'').replace(/^38/,'0')}</div>
+      </div>`
+    ).join('');
+    dd.style.display='';
+  }, 250);
+}
+function selectClientAppt(phone, name) {
+  _apptClient = {phone, name};
+  document.getElementById('appt-client-q').value = '';
+  document.getElementById('appt-client-dd').style.display='none';
+  const chip = document.getElementById('appt-client-chip');
+  chip.style.display = '';
+  chip.innerHTML = `<span class="adm-chip">${name||phone} <button onclick="_apptClient=null;document.getElementById('appt-client-chip').style.display='none'">✕</button></span>`;
+}
+
+let _procSearchT = null;
+let _pricesCache = [];
+async function searchProcsAppt(q) {
+  clearTimeout(_procSearchT);
+  const dd = document.getElementById('appt-proc-dd');
+  if (q.length < 1) { dd.style.display='none'; return; }
+  _procSearchT = setTimeout(async () => {
+    if (!_pricesCache.length) {
+      try {
+        const r = await fetch('/api/prices',{headers:{Authorization:'Bearer '+token}});
+        _pricesCache = await r.json();
+      } catch(e) { return; }
+    }
+    const ql = q.toLowerCase();
+    const matches = [];
+    (_pricesCache||[]).forEach(cat => {
+      (cat.items||[]).forEach(it => {
+        if (!(it.name||'').toLowerCase().includes(ql)) return;
+        if (adminRole==='specialist' && it.specialists && it.specialists.length && !it.specialists.includes(adminSpecialist)) return;
+        matches.push(it);
+      });
+    });
+    if (!matches.length) { dd.style.display='none'; return; }
+    dd.innerHTML = matches.slice(0,8).map(p =>
+      `<div class="adm-dropdown-item" onclick="selectProcAppt('${p.name.replace(/'/g,"\\'")}','${(p.price||'').replace(/'/g,"\\'")}')">
+        <div style="font-size:13px;color:var(--text)">${p.name}</div>
+        <div style="font-size:11px;color:var(--gold)">${p.price||''}</div>
+      </div>`
+    ).join('');
+    dd.style.display='';
+  }, 200);
+}
+function selectProcAppt(name, price) {
+  _apptProc = {name, price};
+  document.getElementById('appt-proc-q').value = '';
+  document.getElementById('appt-proc-dd').style.display='none';
+  const chip = document.getElementById('appt-proc-chip');
+  chip.style.display = '';
+  chip.innerHTML = `<span class="adm-chip">${name}<span style="color:var(--gold);margin-left:6px">${price}</span> <button onclick="_apptProc=null;document.getElementById('appt-proc-chip').style.display='none'">✕</button></span>`;
+}
+
+async function submitNewAppt() {
+  const date  = document.getElementById('appt-date').value;
+  const time  = document.getElementById('appt-time').value;
+  const notes = document.getElementById('appt-notes').value.trim();
+  const procName = _apptProc ? _apptProc.name : document.getElementById('appt-proc-q').value.trim();
+  if (!procName || !date || !time) { showToast('Заповніть процедуру, дату і час'); return; }
+  const btn = document.getElementById('appt-submit-btn');
+  btn.disabled = true; btn.textContent = 'Збереження…';
+  try {
+    const r = await fetch('/api/admin/calendar/appointments', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
+      body: JSON.stringify({
+        client_phone: _apptClient ? _apptClient.phone : '',
+        client_name:  _apptClient ? _apptClient.name  : '',
+        procedure_name: procName,
+        specialist: _apptSpec,
+        date, time, notes
+      })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      closeNewApptForm();
+      window._calLoaded = false;
+      loadCalendarData();
+      showToast('Запис збережено');
+    } else { showToast('Помилка: '+(data.error||'')); }
+  } catch(e) { showToast('Помилка мережі'); }
+  btn.disabled = false; btn.textContent = 'Зберегти запис';
+}
+
+/* ───────────────────────────────────── CLIENTS ADMIN ── */
+let _admClientsFull = [];
+async function loadClientsAdmin() {
+  const list = document.getElementById('adm-clients-list');
+  if (list) list.innerHTML = '<p style="padding:20px;color:var(--text3);text-align:center">Завантаження…</p>';
+  try {
+    const r = await fetch('/api/admin/clients-list',{headers:{Authorization:'Bearer '+token}});
+    _admClientsFull = (await r.json()).clients || [];
+    _clientsCache = _admClientsFull;
+    renderClientsAdmin(_admClientsFull);
+  } catch(e) { if (list) list.innerHTML = '<p style="padding:20px;color:var(--text3)">Помилка завантаження</p>'; }
+}
+function filterClientsAdmin(q) {
+  if (!q) return renderClientsAdmin(_admClientsFull);
+  const ql = q.toLowerCase();
+  renderClientsAdmin(_admClientsFull.filter(c =>
+    (c.name||'').toLowerCase().includes(ql) || (c.phone||'').includes(q)
+  ));
+}
+function renderClientsAdmin(clients) {
+  const list = document.getElementById('adm-clients-list');
+  if (!list) return;
+  if (!clients.length) { list.innerHTML = '<p style="padding:20px;color:var(--text3);text-align:center">Не знайдено</p>'; return; }
+  list.innerHTML = clients.map(c => `
+    <div class="adm-client-row" onclick="showNewApptForm();searchClientsAppt('${(c.phone||'').replace(/^38/,'0')}')">
+      <div>
+        <div class="adm-client-name">${c.name||c.phone}</div>
+        <div class="adm-client-phone">${(c.phone||'').replace(/^38/,'0')}</div>
+      </div>
+      <div class="adm-client-meta">
+        <div class="adm-client-visits">${c.visits_count||0}</div>
+        <div class="adm-client-last">${(c.last_visit||'').slice(5).replace('-','.')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+function showAddClientModal() {
+  const m = document.getElementById('adm-add-client-modal');
+  m.classList.add('show');
+  ['add-client-fname','add-client-lname','add-client-phone'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+function closeAddClientModal() {
+  document.getElementById('adm-add-client-modal').classList.remove('show');
+}
+async function submitAddClient() {
+  const first_name = document.getElementById('add-client-fname').value.trim();
+  const last_name  = document.getElementById('add-client-lname').value.trim();
+  const phone      = document.getElementById('add-client-phone').value.trim();
+  if (!first_name || phone.length < 9) { showToast('Введіть ім\'я та телефон'); return; }
+  try {
+    const r = await fetch('/api/admin/clients/add', {
+      method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+      body: JSON.stringify({first_name, last_name, phone})
+    });
+    const data = await r.json();
+    if (data.ok) {
+      closeAddClientModal();
+      _admClientsFull = []; _clientsCache = [];
+      window._clientsLoaded = false;
+      loadClientsAdmin();
+      showToast(data.existing ? 'Клієнт вже є в базі' : 'Клієнта додано');
+    } else { showToast('Помилка: '+(data.error||'')); }
+  } catch(e) { showToast('Помилка мережі'); }
+}
+
+/* ──────────────────────────────────── PROCEDURES ADMIN ── */
+let _procData = [];
+async function loadProcedures() {
+  const c = document.getElementById('adm-proc-container');
+  if (c) c.innerHTML = '<p style="padding:20px;color:var(--text3);text-align:center">Завантаження…</p>';
+  const canEdit = adminRole !== 'specialist';
+  const saveBtn = document.getElementById('adm-proc-save-btn');
+  if (saveBtn) saveBtn.style.display = canEdit ? '' : 'none';
+  try {
+    const ep = canEdit ? '/api/admin/prices/edit' : '/api/prices';
+    const r = await fetch(ep, {headers:{Authorization:'Bearer '+token}});
+    _procData = await r.json();
+    renderProcedures(canEdit);
+  } catch(e) { if (c) c.innerHTML = '<p style="padding:20px;color:var(--text3)">Помилка завантаження</p>'; }
+}
+function renderProcedures(canEdit) {
+  const c = document.getElementById('adm-proc-container');
+  if (!c || !_procData || !_procData.length) { if(c) c.innerHTML='<p style="padding:20px;color:var(--text3)">Немає процедур</p>'; return; }
+  let html = '';
+  _procData.forEach((cat,ci) => {
+    html += `<div class="adm-proc-cat">
+      <div class="adm-proc-cat-hdr">
+        <span class="adm-proc-cat-name">${cat.cat||'Без категорії'}</span>
+        ${canEdit ? `<button class="adm-proc-add-btn" onclick="addProcItem(${ci})">+ Послуга</button>` : ''}
+      </div>`;
+    (cat.items||[]).forEach((item,ii) => {
+      const specs = item.specialists || [];
+      const hasV = specs.includes('victoria');
+      const hasA = specs.includes('anastasia');
+      if (canEdit) {
+        html += `<div class="adm-proc-item">
+          <div class="adm-proc-item-main">
+            <input class="adm-proc-name-inp" value="${(item.name||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].name=this.value" placeholder="Назва"/>
+            <input class="adm-proc-price-inp" value="${(item.price||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].price=this.value" placeholder="Ціна"/>
+            <button class="adm-proc-del" onclick="deleteProcItem(${ci},${ii})">✕</button>
+          </div>
+          <div class="adm-proc-specs">
+            <label class="adm-spec-check"><input type="checkbox" ${hasV?'checked':''} onchange="procSpecChanged(${ci},${ii},'victoria',this.checked)"><span>Вікторія</span></label>
+            <label class="adm-spec-check"><input type="checkbox" ${hasA?'checked':''} onchange="procSpecChanged(${ci},${ii},'anastasia',this.checked)"><span>Анастасія</span></label>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="adm-proc-item">
+          <div class="adm-proc-item-main">
+            <span class="adm-proc-name-ro">${item.name||''}</span>
+            <span class="adm-proc-price-ro">${item.price||''}</span>
+          </div>
+          ${specs.length ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${specs.map(s=>s==='victoria'?'Вікторія':'Анастасія').join(', ')}</div>` : ''}
+        </div>`;
+      }
+    });
+    html += '</div>';
+  });
+  if (canEdit) html += `<div style="padding:8px 20px 80px"><button class="adm-proc-add-cat-btn" onclick="addProcCat()">+ Додати категорію</button></div>`;
+  c.innerHTML = html;
+}
+function procSpecChanged(ci, ii, spec, checked) {
+  let s = _procData[ci].items[ii].specialists || [];
+  if (checked && !s.includes(spec)) s.push(spec);
+  if (!checked) s = s.filter(x=>x!==spec);
+  _procData[ci].items[ii].specialists = s;
+}
+function addProcItem(ci) {
+  _procData[ci].items.push({name:'',price:'',specialists:[]});
+  renderProcedures(true);
+}
+function deleteProcItem(ci, ii) {
+  _procData[ci].items.splice(ii,1);
+  renderProcedures(true);
+}
+function addProcCat() {
+  _procData.push({cat:'Нова категорія',items:[]});
+  renderProcedures(true);
+}
+async function saveProcedures() {
+  const btn = document.getElementById('adm-proc-save-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Збереження…'; }
+  try {
+    const r = await fetch('/api/admin/prices/edit', {
+      method:'PUT', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body: JSON.stringify(_procData)
+    });
+    const data = await r.json();
+    if (data.ok) { showToast('Збережено'); window._procLoaded = false; }
+    else showToast('Помилка: '+(data.error||''));
+  } catch(e) { showToast('Помилка мережі'); }
+  if (btn) { btn.disabled=false; btn.textContent='Зберегти'; }
+}
+
+/* ──────────────────────────────────────────── TOAST ── */
+let _toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('adm-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
 
 function logout() {
   token = null;
@@ -1437,7 +2015,8 @@ function afterLogin() {
   document.getElementById('screen-auth').style.display = 'none';
 
   if (user.is_admin) {
-    // Адмін-режим
+    adminRole = user.admin_role || null;
+    adminSpecialist = user.specialist || null;
     loadAdminStats();
     adminGo('admin-home');
     return;
@@ -2066,40 +2645,51 @@ if ('serviceWorker' in navigator) {
   </div>
   <nav class="admin-nav">
     <button class="nav-btn active" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label" style="color:var(--gold)">Головна</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Календар</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
   </nav>
 </div>
 
-<!-- ══ ADMIN APPOINTMENTS ══ -->
+<!-- ══ ADMIN CALENDAR ══ -->
 <div class="screen" id="screen-admin-appts">
-  <div class="screen-header" style="padding:16px 20px 12px;flex-shrink:0">
-    <h2 class="screen-title">Всі записи</h2>
+  <div class="admin-cal-header">
+    <div class="cal-nav-row">
+      <button class="cal-nav-btn" onclick="calNavPrev()">‹</button>
+      <span class="cal-nav-title" id="cal-nav-title">Календар</span>
+      <button class="cal-nav-btn" onclick="calNavNext()">›</button>
+      <button class="adm-cal-today-btn" onclick="calGoToday()">Сьогодні</button>
+    </div>
+    <div class="cal-tabs">
+      <button class="cal-tab active" data-view="day" onclick="adminCalGo('day')">День</button>
+      <button class="cal-tab" data-view="week" onclick="adminCalGo('week')">Тиждень</button>
+      <button class="cal-tab" data-view="month" onclick="adminCalGo('month')">Місяць</button>
+    </div>
   </div>
   <div class="screen-scroll" id="adm-cal-scroll">
-    <div id="adm-cal-container" style="padding:0 20px 80px"></div>
+    <div id="adm-cal-container"></div>
   </div>
+  <button class="adm-fab" onclick="showNewApptForm()">+</button>
   <nav class="admin-nav">
     <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
-    <button class="nav-btn active" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Календар</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
   </nav>
 </div>
 
-<!-- ══ ADMIN PRICE (re-uses regular price screen content) ══ -->
+<!-- ══ ADMIN PROCEDURES ══ -->
 <div class="screen" id="screen-admin-price">
-  <div class="screen-header" style="padding:16px 20px 0;flex-shrink:0">
-    <h2 class="screen-title">Прайс</h2>
-    <p class="screen-sub">Перегляд</p>
+  <div class="screen-header-row">
+    <h2>Процедури</h2>
+    <button id="adm-proc-save-btn" class="adm-header-btn" onclick="saveProcedures()" style="display:none">Зберегти</button>
   </div>
-  <div class="screen-scroll" id="adm-price-scroll" style="padding:0 0 80px"></div>
+  <div class="screen-scroll" id="adm-proc-container" style="padding-bottom:80px"></div>
   <nav class="admin-nav">
     <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
-    <button class="nav-btn active" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label" style="color:var(--gold)">Прайс</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Календар</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label" style="color:var(--gold)">Процедури</span></button>
   </nav>
 </div>
 
@@ -2138,11 +2728,99 @@ if ('serviceWorker' in navigator) {
   </div>
   <nav class="admin-nav">
     <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Записи</span></button>
-    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
-    <button class="nav-btn active" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label" style="color:var(--gold)">Чат</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Календар</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
   </nav>
 </div>
+
+<!-- ══ ADMIN CLIENTS ══ -->
+<div class="screen" id="screen-admin-clients">
+  <div class="screen-header-row">
+    <h2>Клієнти</h2>
+    <button class="adm-header-btn" onclick="showAddClientModal()">+ Новий</button>
+  </div>
+  <div class="adm-search-wrap">
+    <input class="adm-search-input" id="adm-client-search" placeholder="Ім'я або телефон…" oninput="filterClientsAdmin(this.value)" autocomplete="off"/>
+  </div>
+  <div class="screen-scroll" id="adm-clients-list"></div>
+  <nav class="admin-nav">
+    <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Календар</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label" style="color:var(--gold)">Клієнти</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
+  </nav>
+</div>
+
+<!-- ══ NEW APPOINTMENT OVERLAY ══ -->
+<div id="adm-new-appt-overlay">
+  <div class="adm-new-appt-sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <span style="font-family:var(--serif);font-size:18px;color:var(--gold-pale)">Новий запис</span>
+      <button onclick="closeNewApptForm()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:0;line-height:1">✕</button>
+    </div>
+    <label class="adm-form-label">Клієнт</label>
+    <input class="adm-form-input" id="appt-client-q" placeholder="Ім'я або телефон…" oninput="searchClientsAppt(this.value)" autocomplete="off"/>
+    <div class="adm-dropdown" id="appt-client-dd" style="display:none"></div>
+    <div id="appt-client-chip" style="display:none;margin-top:6px"></div>
+    <label class="adm-form-label">Процедура *</label>
+    <input class="adm-form-input" id="appt-proc-q" placeholder="Назва процедури…" oninput="searchProcsAppt(this.value)" autocomplete="off"/>
+    <div class="adm-dropdown" id="appt-proc-dd" style="display:none"></div>
+    <div id="appt-proc-chip" style="display:none;margin-top:6px"></div>
+    <div id="appt-specialist-row">
+      <label class="adm-form-label">Спеціаліст *</label>
+      <div class="adm-spec-row">
+        <button class="adm-spec-btn active" id="appt-spec-v" onclick="selectSpecialistAppt('victoria')">Вікторія</button>
+        <button class="adm-spec-btn" id="appt-spec-a" onclick="selectSpecialistAppt('anastasia')">Анастасія</button>
+      </div>
+    </div>
+    <div class="adm-date-row" style="margin-top:14px">
+      <div>
+        <label class="adm-form-label" style="margin-top:0">Дата *</label>
+        <input class="adm-form-input" type="date" id="appt-date"/>
+      </div>
+      <div>
+        <label class="adm-form-label" style="margin-top:0">Час *</label>
+        <input class="adm-form-input" type="time" id="appt-time" step="900"/>
+      </div>
+    </div>
+    <label class="adm-form-label">Нотатки</label>
+    <textarea class="adm-form-input" id="appt-notes" rows="2" style="resize:none"></textarea>
+    <button class="adm-save-btn" id="appt-submit-btn" onclick="submitNewAppt()">Зберегти запис</button>
+    <span class="adm-cancel-link" onclick="closeNewApptForm()">Скасувати</span>
+  </div>
+</div>
+
+<!-- ══ ADD CLIENT MODAL ══ -->
+<div id="adm-add-client-modal">
+  <div class="adm-new-appt-sheet" style="max-height:70vh">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <span style="font-family:var(--serif);font-size:18px;color:var(--gold-pale)">Новий клієнт</span>
+      <button onclick="closeAddClientModal()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:0;line-height:1">✕</button>
+    </div>
+    <label class="adm-form-label">Ім'я *</label>
+    <input class="adm-form-input" id="add-client-fname" placeholder="Ім'я" autocomplete="off"/>
+    <label class="adm-form-label">Прізвище</label>
+    <input class="adm-form-input" id="add-client-lname" placeholder="Прізвище" autocomplete="off"/>
+    <label class="adm-form-label">Телефон *</label>
+    <input class="adm-form-input" id="add-client-phone" placeholder="0XXXXXXXXX" type="tel" autocomplete="off"/>
+    <button class="adm-save-btn" onclick="submitAddClient()">Зберегти клієнта</button>
+    <span class="adm-cancel-link" onclick="closeAddClientModal()">Скасувати</span>
+  </div>
+</div>
+
+<!-- ══ APPT ACTION SHEET ══ -->
+<div id="adm-appt-action">
+  <div class="adm-action-sheet">
+    <div class="adm-action-title" id="adm-action-title">Запис</div>
+    <div class="adm-action-sub" id="adm-action-sub"></div>
+    <div class="adm-action-btns" id="adm-action-btns"></div>
+    <button class="adm-action-cancel" onclick="closeApptAction()">Закрити</button>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="adm-toast"></div>
 
 <script>
   (function(){

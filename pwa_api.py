@@ -96,6 +96,27 @@ def init_leads_db():
 
 init_leads_db()
 
+def init_appointments_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS manual_appointments (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_phone TEXT NOT NULL,
+        client_name  TEXT,
+        procedure_name TEXT NOT NULL,
+        specialist   TEXT NOT NULL,
+        date         TEXT NOT NULL,
+        time         TEXT NOT NULL,
+        status       TEXT DEFAULT 'CONFIRMED',
+        notes        TEXT,
+        wlaunch_id   TEXT,
+        created_at   TEXT DEFAULT (datetime('now')),
+        created_by   TEXT
+    )''')
+    conn.commit()
+    conn.close()
+
+init_appointments_db()
+
 def save_lead(phone: str, procedure: str, source: str = 'app'):
     """Зберігає потенційного клієнта якщо він ще не в clients."""
     if get_client(phone):
@@ -114,7 +135,22 @@ def save_lead(phone: str, procedure: str, source: str = 'app'):
 
 # ── HELPERS ──
 
-ADMIN_PHONE = '380733103110'
+# ── ADMIN ROLES ──
+ADMIN_ROLES = {
+    '380733103110': 'superadmin',
+    '380996093860': 'full',
+    '380685129121': 'specialist',
+}
+SPECIALIST_MAP = {
+    '380996093860': 'victoria',
+    '380685129121': 'anastasia',
+}
+ADMIN_PHONE = '380733103110'  # backward compat
+
+def get_admin_role(phone: str):
+    """Returns (role, specialist) or (None, None)."""
+    p = norm_phone(phone)
+    return ADMIN_ROLES.get(p), SPECIALIST_MAP.get(p)
 
 def norm_phone(phone: str) -> str:
     """Нормалізує до формату 380XXXXXXXXX"""
@@ -227,7 +263,7 @@ def send_otp():
         return jsonify({'error': 'invalid_phone'}), 400
 
     # Не клієнт → гостьовий режим (без OTP)
-    if not get_client(phone) and phone != ADMIN_PHONE:
+    if not get_client(phone) and phone not in ADMIN_ROLES:
         save_lead(phone, '', 'app_guest')
         logger.info(f"Guest mode (not a client): {phone}")
         return jsonify({'ok': True, 'guest': True})
@@ -320,16 +356,43 @@ def get_me():
 @app.route('/api/me/appointments', methods=['GET'])
 @require_auth
 def get_my_appointments():
-    """
-    Повертає список записів клієнта з services_json.
-    Кожен запис: { service, date, status }
-    """
-    client = get_client(request.user_phone)
-    if not client:
-        return jsonify({'appointments': []})
+    """Записи клієнта: WLaunch (services_json) + manual_appointments."""
+    phone = request.user_phone
+    client = get_client(phone)
+    appointments = parse_services(client) if client else []
 
-    appointments = parse_services(client)
-    return jsonify({'appointments': appointments})
+    # Додаємо manual appointments
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        normalized = norm_phone(phone)
+        rows = conn.execute(
+            '''SELECT procedure_name, date, time, status, id
+               FROM manual_appointments
+               WHERE client_phone=? AND status != 'CANCELLED'
+               ORDER BY date DESC''',
+            (normalized,)
+        ).fetchall()
+        conn.close()
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        for r in rows:
+            appt_status = 'upcoming' if r['date'] >= today_str else 'done'
+            appointments.append({
+                'service': r['procedure_name'],
+                'date':    r['date'],
+                'time':    r['time'] or '',
+                'appt_id': 'manual_{}'.format(r['id']),
+                'status':  appt_status,
+            })
+    except Exception as e:
+        logger.warning('manual_appointments merge error: {}'.format(e))
+
+    # Пересортовуємо: upcoming вперед
+    upcoming = [x for x in appointments if x.get('status') == 'upcoming']
+    done     = [x for x in appointments if x.get('status') != 'upcoming']
+    upcoming.sort(key=lambda x: x['date'])
+    done.sort(key=lambda x: x['date'], reverse=True)
+    return jsonify({'appointments': upcoming + done})
 
 # ── PRICES ──
 
@@ -447,8 +510,11 @@ def _client_payload(client: Optional[dict], phone: str) -> dict:
             'last_service': '',
             'last_visit':   '',
             'visits_count': 0,
-        'is_admin':     norm_phone(phone) == ADMIN_PHONE,
+        'is_admin':     norm_phone(phone) in ADMIN_ROLES,
+        'admin_role':   ADMIN_ROLES.get(norm_phone(phone)),
+        'specialist':   SPECIALIST_MAP.get(norm_phone(phone)),
         }
+    p = norm_phone(phone)
     return {
         'name':         client.get('first_name') or 'Клієнт',
         'last_name':    client.get('last_name') or '',
@@ -457,7 +523,9 @@ def _client_payload(client: Optional[dict], phone: str) -> dict:
         'last_service': client.get('last_service') or '',
         'last_visit':   client.get('last_visit') or '',
         'visits_count': client.get('visits_count') or 0,
-        'is_admin':     (client.get('phone') or phone) == ADMIN_PHONE or norm_phone(phone) == ADMIN_PHONE,
+        'is_admin':     p in ADMIN_ROLES,
+        'admin_role':   ADMIN_ROLES.get(p),
+        'specialist':   SPECIALIST_MAP.get(p),
     }
 
 
@@ -465,22 +533,44 @@ def _client_payload(client: Optional[dict], phone: str) -> dict:
 
 # ── ADMIN ──────────────────────────────────────────────────────────────────
 
+def _get_session_phone(token: str):
+    """Returns phone from token or None."""
+    conn = sqlite3.connect(OTP_DB)
+    c = conn.cursor()
+    c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?', (token, int(time.time())))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else None
+
 def require_admin(f):
-    """Декоратор: тільки для адміна"""
-    from functools import wraps
+    """Декоратор: superadmin, full і specialist."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.headers.get('Authorization', '')
-        token = auth.replace('Bearer ', '').strip()
+        token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
         if not token:
             return jsonify({'error': 'unauthorized'}), 401
-        conn = sqlite3.connect(OTP_DB)
-        c = conn.cursor()
-        c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?', (token, int(time.time())))
-        row = c.fetchone()
-        conn.close()
-        if not row or norm_phone(row[0]) != ADMIN_PHONE:
+        phone = _get_session_phone(token)
+        if not phone or norm_phone(phone) not in ADMIN_ROLES:
             return jsonify({'error': 'forbidden'}), 403
+        request.admin_phone = norm_phone(phone)
+        request.admin_role, request.admin_specialist = get_admin_role(phone)
+        return f(*args, **kwargs)
+    return decorated
+
+def require_full_admin(f):
+    """Декоратор: тільки superadmin і full (редагування цін/процедур)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+        if not token:
+            return jsonify({'error': 'unauthorized'}), 401
+        phone = _get_session_phone(token)
+        role = ADMIN_ROLES.get(norm_phone(phone or ''))
+        if role not in ('superadmin', 'full'):
+            return jsonify({'error': 'forbidden'}), 403
+        request.admin_phone = norm_phone(phone)
+        request.admin_role = role
+        request.admin_specialist = SPECIALIST_MAP.get(norm_phone(phone))
         return f(*args, **kwargs)
     return decorated
 
@@ -737,6 +827,203 @@ def admin_sync():
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── ADMIN NEW ENDPOINTS ──────────────────────────────────────────────────────
+
+@app.route('/api/admin/role', methods=['GET'])
+@require_admin
+def admin_role():
+    return jsonify({'role': request.admin_role, 'specialist': request.admin_specialist})
+
+@app.route('/api/admin/calendar/appointments', methods=['GET'])
+@require_admin
+def admin_cal_get():
+    """Список записів з фільтром по даті. Specialist бачить тільки свої."""
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    query = 'SELECT * FROM manual_appointments WHERE 1=1'
+    params = []
+    if from_date:
+        query += ' AND date >= ?'
+        params.append(from_date)
+    if to_date:
+        query += ' AND date <= ?'
+        params.append(to_date)
+    if request.admin_role == 'specialist':
+        query += ' AND specialist = ?'
+        params.append(request.admin_specialist)
+    query += ' ORDER BY date ASC, time ASC'
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return jsonify({'appointments': [dict(r) for r in rows]})
+
+@app.route('/api/admin/calendar/appointments', methods=['POST'])
+@require_admin
+def admin_cal_create():
+    """Створити новий запис."""
+    d = request.get_json() or {}
+    client_phone   = norm_phone(d.get('client_phone', ''))
+    client_name    = (d.get('client_name', '') or '').strip()
+    procedure_name = (d.get('procedure_name', '') or '').strip()
+    specialist     = (d.get('specialist', '') or '').strip()
+    date           = (d.get('date', '') or '').strip()
+    appt_time      = (d.get('time', '') or '').strip()
+    notes          = (d.get('notes', '') or '').strip()
+
+    if not procedure_name or not specialist or not date or not appt_time:
+        return jsonify({'error': 'missing_fields'}), 400
+    # Specialist може записувати тільки до себе
+    if request.admin_role == 'specialist' and specialist != request.admin_specialist:
+        return jsonify({'error': 'forbidden'}), 403
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        '''INSERT INTO manual_appointments
+           (client_phone, client_name, procedure_name, specialist, date, time, notes, created_by)
+           VALUES (?,?,?,?,?,?,?,?)''',
+        (client_phone, client_name, procedure_name, specialist, date, appt_time, notes, request.admin_phone)
+    )
+    new_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'id': new_id})
+
+@app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['PUT'])
+@require_admin
+def admin_cal_update(appt_id):
+    d = request.get_json() or {}
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute('SELECT * FROM manual_appointments WHERE id=?', (appt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'not_found'}), 404
+    if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
+        conn.close()
+        return jsonify({'error': 'forbidden'}), 403
+    fields = ['procedure_name', 'specialist', 'date', 'time', 'status', 'notes', 'client_name', 'client_phone']
+    updates, params = [], []
+    for f in fields:
+        if f in d:
+            updates.append('{} = ?'.format(f))
+            params.append(d[f])
+    if not updates:
+        conn.close()
+        return jsonify({'ok': True})
+    params.append(appt_id)
+    conn.execute('UPDATE manual_appointments SET {} WHERE id=?'.format(', '.join(updates)), params)
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['DELETE'])
+@require_admin
+def admin_cal_delete(appt_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute('SELECT * FROM manual_appointments WHERE id=?', (appt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'not_found'}), 404
+    if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
+        conn.close()
+        return jsonify({'error': 'forbidden'}), 403
+    conn.execute("UPDATE manual_appointments SET status='CANCELLED' WHERE id=?", (appt_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/clients/add', methods=['POST'])
+@require_admin
+def admin_client_add():
+    """Додати нового клієнта вручну."""
+    d = request.get_json() or {}
+    first_name = (d.get('first_name', '') or '').strip()
+    last_name  = (d.get('last_name', '') or '').strip()
+    phone      = norm_phone(d.get('phone', ''))
+    if not first_name or len(phone) < 11:
+        return jsonify({'error': 'missing_fields'}), 400
+    existing = get_client(phone)
+    if existing:
+        return jsonify({'ok': True, 'existing': True, 'client': {
+            'phone': existing['phone'],
+            'name': ((existing.get('first_name') or '') + ' ' + (existing.get('last_name') or '')).strip()
+        }})
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            '''INSERT OR IGNORE INTO clients
+               (id, first_name, last_name, phone, last_service, last_visit, visits_count, services_json)
+               VALUES (?,?,?,?,?,?,?,?)''',
+            (phone, first_name, last_name, phone, '', '', 0, '[]')
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+    conn.close()
+    return jsonify({'ok': True, 'existing': False})
+
+@app.route('/api/admin/prices/edit', methods=['GET'])
+@require_full_admin
+def admin_prices_get():
+    """Повертає prices.json у нормалізованому вигляді для редактора."""
+    try:
+        with open(PRICES_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            raw = []
+            for k in sorted(data.keys(), key=lambda x: int(x) if x.isdigit() else 0):
+                val = data[k]
+                if isinstance(val, list):
+                    raw.extend(val)
+                else:
+                    raw.append(val)
+            data = raw
+        result = []
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            cat_name = entry.get('title') or entry.get('cat') or entry.get('name') or ''
+            rows = entry.get('rows') or entry.get('items') or entry.get('services') or []
+            items = []
+            for row in rows:
+                if isinstance(row, list):
+                    items.append({'name': row[0] if len(row) > 0 else '', 'price': row[2] if len(row) > 2 else '', 'specialists': []})
+                elif isinstance(row, dict):
+                    items.append({
+                        'name':        row.get('name') or row.get('service') or '',
+                        'price':       row.get('price') or row.get('cost') or '',
+                        'specialists': row.get('specialists', []),
+                    })
+            if items:
+                result.append({'cat': cat_name, 'items': items})
+        return jsonify(result)
+    except FileNotFoundError:
+        return jsonify([])
+    except json.JSONDecodeError:
+        return jsonify({'error': 'invalid_json'}), 500
+
+@app.route('/api/admin/prices/edit', methods=['PUT'])
+@require_full_admin
+def admin_prices_put():
+    """Зберігає відредагований prices.json."""
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({'error': 'invalid_format'}), 400
+    # Validate basic structure
+    for cat in data:
+        if not isinstance(cat, dict) or 'cat' not in cat or 'items' not in cat:
+            return jsonify({'error': 'invalid_format'}), 400
+    try:
+        with open(PRICES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ── PUSH NOTIFICATIONS ──
 
