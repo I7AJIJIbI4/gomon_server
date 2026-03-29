@@ -472,6 +472,21 @@
     messages.forEach(function (m) { renderBubble(m.role, m.content, messagesEl); });
   }
 
+  // ── RATE LIMIT (10 запитів/день, localStorage) ────────────────
+  function _gwRlData() {
+    var today = new Date().toISOString().slice(0, 10);
+    try {
+      var d = JSON.parse(localStorage.getItem('gw_rl') || 'null');
+      if (!d || d.date !== today) return { date: today, count: 0 };
+      return d;
+    } catch (e) { return { date: new Date().toISOString().slice(0, 10), count: 0 }; }
+  }
+  function gwIsRateLimited() { return _gwRlData().count >= 10; }
+  function gwRateLimitBump() {
+    var d = _gwRlData(); d.count++;
+    try { localStorage.setItem('gw_rl', JSON.stringify(d)); } catch (e) {}
+  }
+
   // ── API ───────────────────────────────────────────────────────
   function sendToAPI(messages, callback) {
     var xhr = new XMLHttpRequest();
@@ -499,6 +514,24 @@
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.send(payload);
     }
+  }
+
+  function renderConsultCard(messagesEl) {
+    var card = document.createElement('div');
+    card.className = 'gw-procedure-card';
+    card.innerHTML =
+      '<p class="gw-proc-label">&#x1F469;&#x200D;&#x2695;&#xFE0F; \u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0456\u044f</p>' +
+      '<p style="font-size:13px;color:var(--text3,#8a8278);line-height:1.5;margin:4px 0 12px">' +
+        '\u0417\u0432\u0430\u0436\u0430\u044e\u0447\u0438 \u043d\u0430 \u0441\u043a\u043b\u0430\u0434\u043d\u0456\u0441\u0442\u044c \u0432\u0430\u0448\u043e\u0433\u043e \u0437\u0430\u043f\u0438\u0442\u0443, \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u044e \u0437\u0432\u0435\u0440\u043d\u0443\u0442\u0438\u0441\u044c \u0434\u043e \u043b\u0456\u043a\u0430\u0440\u044f \u043d\u0430 \u043e\u0441\u043e\u0431\u0438\u0441\u0442\u0443 \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044e.' +
+      '</p>' +
+      '<div class="gw-proc-row"><span class="gw-proc-name">\u041a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044f \u043b\u0456\u043a\u0430\u0440\u044f</span></div>' +
+      '<a class="gw-proc-ig" href="https://ig.me/m/dr.gomon" target="_blank" rel="noopener noreferrer">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/></svg>' +
+        '\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u0438\u0441\u044c \u043d\u0430 \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044e' +
+      '</a>' +
+      '<p class="gw-proc-hint">\u041d\u0430\u043f\u0438\u0448\u0456\u0442\u044c \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Direct \u2014 \u0432\u0430\u043c \u043f\u0456\u0434\u0431\u0435\u0440\u0443\u0442\u044c \u0437\u0440\u0443\u0447\u043d\u0438\u0439 \u0447\u0430\u0441</p>';
+    messagesEl.appendChild(card);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   function renderProcedureCard(procedure, messagesEl) {
@@ -647,6 +680,11 @@
       messages.push({ role: 'user', content: text });
       saveMessages(messages);
       renderBubble('user', text, els.messagesEl);
+      if (gwIsRateLimited()) {
+        renderConsultCard(els.messagesEl);
+        return;
+      }
+      gwRateLimitBump();
       setDisabled(true);
       processReply(showTyping(els.messagesEl));
     }
@@ -661,6 +699,11 @@
       messages.push({ role: 'user', content: text });
       saveMessages(messages);
       openModal(); // renders all messages including the just-added user msg
+      if (gwIsRateLimited()) {
+        renderConsultCard(els.messagesEl);
+        return;
+      }
+      gwRateLimitBump();
       setDisabled(true);
       processReply(showTyping(els.messagesEl));
     }
