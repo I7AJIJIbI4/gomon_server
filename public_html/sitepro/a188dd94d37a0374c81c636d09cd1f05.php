@@ -296,11 +296,20 @@
 
   /* ── ABOUT ── */
   .about-section { padding: clamp(28px, 5vw, 80px) 24px; background: rgba(247,243,238,0.02); border-top: 1px solid rgba(184,149,90,0.1); border-bottom: 1px solid rgba(184,149,90,0.1); }
-  .about-inner { max-width: 960px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
-  @media (max-width: 700px) { .about-inner { grid-template-columns: 1fr; gap: 36px; } }
-  .about-text p { font-size: 16px; font-weight: 300; color: var(--text-light); line-height: 1.9; margin-bottom: 20px; }
-  .about-text p strong { color: var(--cream); font-weight: 400; }
-  .about-quote { font-family: 'Cormorant Garamond', serif; font-size: clamp(22px, 3.5vw, 32px); font-style: italic; font-weight: 300; color: var(--gold-pale); line-height: 1.5; padding-left: 24px; border-left: 2px solid var(--gold); }
+  .about-inner { max-width: 640px; margin: 0 auto; }
+  .about-persons { display: flex; flex-direction: column; gap: 0; }
+  .about-person { padding: 28px 0; border-top: 1px solid rgba(184,149,90,0.2); }
+  .about-person:last-child { border-bottom: 1px solid rgba(184,149,90,0.2); }
+  .about-person-header { display: grid; grid-template-columns: 16px 1fr; grid-template-rows: auto auto; column-gap: 12px; margin-bottom: 12px; }
+  .about-person-icon { grid-row: 1 / 3; color: var(--gold); font-size: 0.7rem; padding-top: 4px; }
+  .about-person-name { font-size: 1rem; font-weight: 500; letter-spacing: 0.05em; color: var(--cream); }
+  .about-person-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
+  .about-person p { color: var(--text-light); line-height: 1.8; padding-left: 28px; font-weight: 300; }
+  .about-pullquote { margin: 8px 0; padding: 24px 28px; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.1rem; color: var(--gold-pale); line-height: 1.6; text-align: center; letter-spacing: 0.02em; }
+  .about-pullquote::before, .about-pullquote::after { content: ''; display: block; width: 40px; height: 1px; background: var(--gold); margin: 0 auto; opacity: 0.4; }
+  .about-pullquote::before { margin-bottom: 16px; }
+  .about-pullquote::after { margin-top: 16px; }
+  .about-note { margin-top: 28px; color: var(--text-light); font-size: 0.9rem; line-height: 1.7; font-weight: 300; }
 
   /* ── CTA BOTTOM ── */
   .cta-section { padding: 40px 24px clamp(44px, 6vw, 80px); text-align: center; position: relative; overflow: hidden; }
@@ -607,16 +616,28 @@
 
 <!-- ABOUT -->
 <section class="about-section" id="about">
-  <div class="about-inner">
-    <div class="about-text reveal">
-      <p class="section-label">Про нас</p>
-      <p><strong>Вікторія Гомон-Павловська</strong> — лікар-косметолог з 7+ роками досвіду та засновниця клініки. Амбасадор природніх ін'єкцій: завжди відмовить від зайвої процедури і підбере те, що дійсно потрібно вашій шкірі.</p>
-      <p><strong>Анастасія Цвіткова</strong> — сертифікований реабілітолог і майстер апаратного DrumRoll-масажу. Спеціалізується на ударно-імпульсній вакуумній термотерапії, пресотерапії та корекції фігури.</p>
-      <p>Приймаємо лише за попереднім записом — щоб приділити максимум уваги кожному клієнту. Без вихідних, у центрі Черкас.</p>
+  <div class="about-inner reveal">
+    <p class="section-label">Про нас</p>
+    <div class="about-persons">
+      <div class="about-person">
+        <div class="about-person-header">
+          <span class="about-person-icon">✦</span>
+          <h3 class="about-person-name">Вікторія Гомон-Павловська</h3>
+          <span class="about-person-title">Лікар-косметолог · 7+ років</span>
+        </div>
+        <p>Засновниця клініки та амбасадор природніх ін'єкцій. Завжди відмовить від зайвої процедури і підбере те, що дійсно потрібно вашій шкірі.</p>
+      </div>
+      <blockquote class="about-pullquote">Краса — коли відчуваєш себе собою.</blockquote>
+      <div class="about-person">
+        <div class="about-person-header">
+          <span class="about-person-icon">✦</span>
+          <h3 class="about-person-name">Анастасія Цвіткова</h3>
+          <span class="about-person-title">Реабілітолог · Майстер DrumRoll</span>
+        </div>
+        <p>Сертифікований реабілітолог і майстер апаратного DrumRoll-масажу. Спеціалізується на ударно-імпульсній вакуумній термотерапії, пресотерапії та корекції фігури.</p>
+      </div>
     </div>
-    <div class="reveal">
-      <blockquote class="about-quote">"Краса - коли відчуваєш себе собою."</blockquote>
-    </div>
+    <p class="about-note">Приймаємо лише за попереднім записом — щоб приділити максимум уваги кожному клієнту. Без вихідних, у центрі Черкас.</p>
   </div>
 </section>
 
