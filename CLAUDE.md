@@ -287,6 +287,59 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ---
 
+## Міграція на новий сервер
+
+### Що потрібно від нового сервера (надати перед початком)
+- ОС (Ubuntu/Debian/CentOS)
+- IP-адреса
+- SSH доступ (порт, user, ключ або пароль)
+- Чи є root/sudo
+- Веб-сервер (nginx/apache або чистий сервер)
+- Реєстратор домену + доступ до DNS-панелі
+
+### Що переносимо
+| Що | Звідки | Примітка |
+|----|--------|----------|
+| Код | `git clone` з GitHub | Автоматично |
+| `users.db` | `/home/gomoncli/zadarma/` | Клієнти, бот-юзери, push |
+| `otp_sessions.db` | `/home/gomoncli/zadarma/` | PWA сесії |
+| `feed.db` | `/home/gomoncli/zadarma/` | Telegram feed |
+| `config.py` | `/home/gomoncli/zadarma/` | **НЕ в git** — вручну |
+| `vapid_private.key` | `/home/gomoncli/zadarma/` | **Критично** — push підписки прив'язані |
+| `vapid_public.txt` | `/home/gomoncli/zadarma/` | |
+| `prices.json` | `/home/gomoncli/private_data/` | |
+| `public_html/` | весь каталог | Сайт + PWA + фото |
+
+### Порядок переїзду
+```
+За 1-2 дні до:
+1. Знизити TTL DNS до 300 сек
+2. Новий сервер: встановити Python 3.9+, nginx, certbot
+3. git clone + перенести БД і конфіг
+4. Налаштувати nginx reverse proxy + SSL (certbot)
+5. Налаштувати cron і systemd-сервіси
+6. Перевірити все на тест-домені або прямо по IP
+
+День переїзду:
+1. Зупинити cron на старому сервері
+2. Фінальний rsync БД (кілька секунд downtime)
+3. Перемкнути DNS A-запис → новий IP
+4. Перевірити SSL і всі ендпоінти
+
+Після:
+└── Тримати старий сервер ще 2-3 дні як backup
+```
+
+### Що я підготую (після отримання даних про сервер)
+- `setup.sh` — встановлення всіх залежностей
+- `gomonclinic.service` — systemd unit для Flask (замість watchdog-скриптів)
+- `nginx.conf` — reverse proxy + SSL конфіг
+- `migrate.sh` — rsync БД зі старого на новий
+- Команди certbot під конкретну ОС
+- Команди DNS під конкретний реєстратор
+
+---
+
 ## Відомі особливості
 
 - **Python 3.6** на сервері — f-strings підтримуються, але деякі сучасні синтаксис-конструкції ні
