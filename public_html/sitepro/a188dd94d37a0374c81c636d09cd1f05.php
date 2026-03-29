@@ -317,8 +317,12 @@
   footer p { font-size: 13px; color: var(--text-light); letter-spacing: 1px; }
   footer span { color: var(--gold); }
   .footer-payments { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; opacity: 0.45; }
-  .footer-payments svg { height: 34px; width: auto; transition: opacity 0.2s; }
-  .footer-payments svg:hover { opacity: 0.75; }
+  .pay-item { position: relative; cursor: pointer; display: inline-flex; }
+  .pay-item svg { height: 34px; width: auto; transition: opacity 0.2s; }
+  .pay-item:hover svg { opacity: 0.75; }
+  .pay-item::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1a1612; border: 1px solid rgba(184,149,90,0.35); color: #e8d5b0; font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.5px; white-space: nowrap; padding: 6px 12px; border-radius: 3px; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 10; }
+  .pay-item:hover::after, .pay-item.tip-on::after { opacity: 1; }
+  .footer-logo-btn { background: none; border: none; cursor: pointer; padding: 0; display: block; margin: 0 auto 10px; }
 
   /* ── BURGER NAV ── */
   .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; transition: background 0.4s ease, box-shadow 0.4s ease; }
@@ -722,15 +726,30 @@
 
 <!-- FOOTER -->
 <footer>
-  <picture><source srcset="logo-80.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon" width="80" height="80" style="width:80px; filter:invert(1) sepia(1) saturate(0.4) brightness(0.7); margin-bottom:10px; display:block; margin-left:auto; margin-right:auto; opacity:0.5;"></picture>
+  <button class="footer-logo-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Вгору">
+    <picture><source srcset="logo-80.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon" width="80" height="80" style="width:80px; filter:invert(1) sepia(1) saturate(0.4) brightness(0.7); opacity:0.5;"></picture>
+  </button>
   <p>© 2026 <span>Dr. Gómon Cosmetology</span> · Черкаси · Тільки за попереднім записом</p>
   <p style="margin-top:6px;"><a href="tel:+380733103110" style="color:var(--text-light); text-decoration:none; font-size:13px; letter-spacing:1px; transition:color 0.3s;">073-310-31-10</a></p>
   <div class="footer-payments" aria-label="Способи оплати">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Visa"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><text x="50%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.5" fill="#B8955A">VISA</text></svg>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Mastercard"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><circle cx="24" cy="19" r="10" fill="rgba(184,149,90,0.55)"/><circle cx="36" cy="19" r="10" fill="rgba(184,149,90,0.35)"/><path d="M30 12.2a10 10 0 0 1 0 13.6A10 10 0 0 1 30 12.2z" fill="rgba(184,149,90,0.45)"/></svg>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="LiqPay"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><text x="50%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" fill="#B8955A">LiqPay</text></svg>
+    <span class="pay-item" data-tip="Розрахунок по терміналу"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Visa"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><text x="50%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.5" fill="#B8955A">VISA</text></svg></span>
+    <span class="pay-item" data-tip="Приймаємо безконтактну оплату"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Mastercard"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><circle cx="24" cy="19" r="10" fill="rgba(184,149,90,0.55)"/><circle cx="36" cy="19" r="10" fill="rgba(184,149,90,0.35)"/><path d="M30 12.2a10 10 0 0 1 0 13.6A10 10 0 0 1 30 12.2z" fill="rgba(184,149,90,0.45)"/></svg></span>
+    <span class="pay-item" data-tip="Можлива оплата онлайн"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="LiqPay"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><text x="50%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" fill="#B8955A">LiqPay</text></svg></span>
   </div>
 </footer>
+<script>
+  document.querySelectorAll('.pay-item').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      var isOn = el.classList.contains('tip-on');
+      document.querySelectorAll('.pay-item').forEach(function(x){ x.classList.remove('tip-on'); });
+      if (!isOn) el.classList.add('tip-on');
+      e.stopPropagation();
+    });
+  });
+  document.addEventListener('click', function() {
+    document.querySelectorAll('.pay-item').forEach(function(x){ x.classList.remove('tip-on'); });
+  });
+</script>
 
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
