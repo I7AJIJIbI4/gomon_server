@@ -761,19 +761,17 @@ def admin_sync():
     try:
         r1 = subprocess.run(
             ['python3', '/home/gomoncli/zadarma/sync_clients.py'],
-            capture_output=True, text=True, timeout=60,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60,
             cwd='/home/gomoncli/zadarma'
         )
         r2 = subprocess.run(
             ['python3', '/home/gomoncli/zadarma/sync_appointments.py'],
-            capture_output=True, text=True, timeout=120,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120,
             cwd='/home/gomoncli/zadarma'
         )
-        return jsonify({
-            'ok':     True,
-            'stdout': (r1.stdout + r2.stdout)[-800:],
-            'stderr': (r1.stderr + r2.stderr)[-300:],
-        })
+        stdout = (r1.stdout.decode('utf-8', errors='replace') + r2.stdout.decode('utf-8', errors='replace'))[-800:]
+        stderr = (r1.stderr.decode('utf-8', errors='replace') + r2.stderr.decode('utf-8', errors='replace'))[-300:]
+        return jsonify({'ok': True, 'stdout': stdout, 'stderr': stderr})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
