@@ -652,6 +652,21 @@
       </a>
       <p class="gc-procedure-hint">\u041d\u0430\u043f\u0438\u0448\u0456\u0442\u044c \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Direct \u2014 \u0432\u0430\u043c \u043f\u0456\u0434\u0431\u0435\u0440\u0443\u0442\u044c \u0437\u0440\u0443\u0447\u043d\u0438\u0439 \u0447\u0430\u0441 \u0434\u043b\u044f \u0437\u0443\u0441\u0442\u0440\u0456\u0447\u0456</p>
     `;
+    const igBtn = card.querySelector('.gc-ig-btn');
+    if (igBtn) igBtn.addEventListener('click', function () {
+      const payload = JSON.stringify({
+        procedure: 'Консультація лікаря',
+        action: 'instagram',
+        source: 'app',
+        user_name: CONFIG.userName || (CONFIG.userPhone ? CONFIG.userPhone : 'Гість додатку'),
+        user_phone: CONFIG.userPhone || '',
+      });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/app/notify_procedure.php', new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch('/app/notify_procedure.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
+      }
+    }, { once: true });
     elMessages.insertBefore(card, elTyping);
     scrollBottom();
   }

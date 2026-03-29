@@ -510,7 +510,7 @@
   }
 
   function notifyProcedure(procedure, action) {
-    var payload = JSON.stringify({ procedure: procedure, action: action, user_name: 'Відвідувач сайту', user_phone: '' });
+    var payload = JSON.stringify({ procedure: procedure, action: action, user_name: 'Відвідувач сайту', user_phone: '', source: 'site' });
     if (navigator.sendBeacon) {
       navigator.sendBeacon(NOTIFY_URL, new Blob([payload], { type: 'application/json' }));
     } else {
@@ -535,6 +535,10 @@
         '\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u0438\u0441\u044c \u043d\u0430 \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044e' +
       '</a>' +
       '<p class="gw-proc-hint">\u041d\u0430\u043f\u0438\u0448\u0456\u0442\u044c \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Direct \u2014 \u0432\u0430\u043c \u043f\u0456\u0434\u0431\u0435\u0440\u0443\u0442\u044c \u0437\u0440\u0443\u0447\u043d\u0438\u0439 \u0447\u0430\u0441</p>';
+    var igBtn = card.querySelector('.gw-proc-ig');
+    if (igBtn) igBtn.addEventListener('click', function () {
+      notifyProcedure('Консультація лікаря', 'instagram');
+    }, { once: true });
     messagesEl.appendChild(card);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
