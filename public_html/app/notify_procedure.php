@@ -28,6 +28,7 @@ $procedure  = trim($data['procedure']);
 $user_name  = trim($data['user_name']  ?? '');
 $user_phone = trim($data['user_phone'] ?? '');
 $action     = trim($data['action']     ?? ''); // 'copy' | 'instagram'
+$source     = trim($data['source']     ?? ''); // 'site' | 'app'
 
 // ── ХЕЛПЕРИ ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,12 @@ if ($phone_str)  $lines[] = "📱 <b>Телефон:</b> " . $phone_str . $tg_li
 $lines[] = "";
 $lines[] = "💆 <b>Процедура:</b> " . htmlspecialchars($procedure, ENT_XML1);
 $lines[] = "";
-$lines[] = "<i>Підібрано AI-асистентом клініки</i>";
+$source_label = match($source) {
+    'site' => ' · з сайту',
+    'app'  => ' · з додатку',
+    default => '',
+};
+$lines[] = "<i>Підібрано AI-асистентом клініки" . $source_label . "</i>";
 
 $payload = [
     'chat_id'    => DR_GOMON_CHAT_ID,
