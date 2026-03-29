@@ -316,7 +316,7 @@
   footer { padding: 28px 24px; border-top: 1px solid rgba(184,149,90,0.15); text-align: center; }
   footer p { font-size: 13px; color: var(--text-light); letter-spacing: 1px; }
   footer span { color: var(--gold); }
-  .footer-payments { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; opacity: 0.45; }
+  .footer-payments { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 48px; opacity: 0.45; }
   .pay-item { position: relative; cursor: pointer; display: inline-flex; }
   .pay-item svg { height: 34px; width: auto; transition: opacity 0.2s; }
   .pay-item:hover svg { opacity: 0.75; }
