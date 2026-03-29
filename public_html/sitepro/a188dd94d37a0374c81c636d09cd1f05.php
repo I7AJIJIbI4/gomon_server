@@ -466,7 +466,7 @@
     <p class="hero-eyebrow">Лікар-косметолог · Черкаси<span class="mob-br"></span> · 7+ років досвіду</p>
     <picture><source srcset="logo-340.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon Cosmetology" class="hero-logo" width="340" height="340" fetchpriority="high"></picture>
     <div class="hero-divider"></div>
-    <p class="hero-desc">Лікар із 7+ років досвіду та амбасадор природніх ін'єкцій.<br>Відмовимо від зайвого — підберемо лише те, що потрібне.<br>Обличчя та тіло — повний догляд в центрі Черкас.</p>
+    <p class="hero-desc">Лікар із 7+ років досвіду та амбасадор природніх ін'єкцій.<br>Відмовимо від зайвого — підберемо лише те, що потрібне.<br>Голова, обличчя та тіло — повний догляд в центрі Черкас.</p>
     <div class="cta-group">
       <a href="//ig.me/m/dr.gomon" target="_blank" rel="noopener" class="btn btn-primary">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
