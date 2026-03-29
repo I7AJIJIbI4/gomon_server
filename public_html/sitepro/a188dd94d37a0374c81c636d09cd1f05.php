@@ -303,7 +303,7 @@
   .about-quote { font-family: 'Cormorant Garamond', serif; font-size: clamp(22px, 3.5vw, 32px); font-style: italic; font-weight: 300; color: var(--gold-pale); line-height: 1.5; padding-left: 24px; border-left: 2px solid var(--gold); }
 
   /* ── CTA BOTTOM ── */
-  .cta-section { padding: clamp(50px, 10vw, 140px) 24px; text-align: center; position: relative; overflow: hidden; }
+  .cta-section { padding: 60px 24px clamp(60px, 8vw, 120px); text-align: center; position: relative; overflow: hidden; }
   .cta-section::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(184,149,90,0.08) 0%, transparent 70%); pointer-events: none; }
   .cta-inner { position: relative; max-width: 600px; margin: 0 auto; }
   .cta-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(40px, 7vw, 70px); font-weight: 300; line-height: 1.05; color: var(--cream); margin-bottom: 20px; }
@@ -418,7 +418,7 @@
 
   /* AI SECTION */
   .ai-section { padding: 100px 20px; background: linear-gradient(180deg, var(--bg) 0%, rgba(184,149,90,0.04) 50%, var(--bg) 100%); border-top: 1px solid rgba(184,149,90,0.12); }
-  .ai-section-inner { max-width: 640px; margin: 0 auto; }
+  .ai-section-inner { max-width: 640px; margin: 0 auto; text-align: center; }
   .ai-section-sub { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
   .ai-section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 7vw, 64px); font-weight: 300; color: var(--cream); line-height: 1.1; margin-bottom: 24px; }
   .ai-section-title em { font-style: italic; color: var(--gold-light); }
