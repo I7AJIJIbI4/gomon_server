@@ -307,7 +307,7 @@
   .about-person-name { font-size: 1rem; font-weight: 500; letter-spacing: 0.05em; color: var(--cream); }
   .about-person-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
   .about-person p { color: var(--text-light); line-height: 1.8; padding-left: 28px; font-weight: 300; }
-  .about-pullquote { grid-column: 2; grid-row: 2; align-self: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: clamp(2rem, 3.5vw, 2.8rem); color: var(--gold-light); line-height: 1.5; letter-spacing: 0.02em; border-left: 1px solid rgba(184,149,90,0.3); padding-left: 40px; margin: 0; }
+  .about-pullquote { grid-column: 2; grid-row: 2; align-self: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: clamp(1.5rem, 2.5vw, 2rem); color: var(--gold-light); line-height: 1.5; letter-spacing: 0.02em; border-left: 1px solid rgba(184,149,90,0.3); padding-left: 40px; margin: 0; }
   .about-note { grid-column: 1; grid-row: 3; margin-top: 28px; color: var(--text-light); font-size: 0.9rem; line-height: 1.7; font-weight: 300; }
   @media (max-width: 768px) { .about-inner { grid-template-columns: 1fr; } .about-pullquote { grid-column: 1; grid-row: auto; border-left: none; border-top: 1px solid rgba(184,149,90,0.3); padding-left: 0; padding-top: 24px; font-size: 1.1rem; } .about-note { grid-column: 1; grid-row: auto; } }
 
