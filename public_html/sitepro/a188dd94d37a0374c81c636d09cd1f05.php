@@ -191,6 +191,7 @@
   .hero-ornament { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(600px, 90vw); height: min(600px, 90vw); border-radius: 50%; border: 1px solid rgba(184,149,90,0.08); pointer-events: none; }
   .hero-ornament::before { content: ''; position: absolute; inset: 30px; border-radius: 50%; border: 1px solid rgba(184,149,90,0.05); }
   .hero-content { position: relative; z-index: 1; max-width: 700px; }
+  .hero-tagline { font-family: 'Cormorant Garamond', serif; font-size: clamp(15px, 2.5vw, 18px); font-style: italic; font-weight: 300; color: var(--gold-pale); letter-spacing: 0.03em; margin-bottom: 20px; opacity: 0; animation: fadeUp 0.8s 0.1s ease forwards; }
   .hero-eyebrow { font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 28px; opacity: 0; animation: fadeUp 0.8s 0.2s ease forwards; }
   @media (max-width: 480px) { .hero-eyebrow .mob-br { display: block; } }
   .hero-eyebrow .mob-br { display: none; }
@@ -472,6 +473,7 @@
   <div class="hero-line-top"></div>
   <div class="hero-ornament"></div>
   <div class="hero-content">
+    <p class="hero-tagline">Краса — коли відчуваєш себе собою.</p>
     <p class="hero-eyebrow">Лікар-косметолог · Черкаси<span class="mob-br"></span> · 7+ років досвіду</p>
     <picture><source srcset="logo-340.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon Cosmetology" class="hero-logo" width="340" height="340" fetchpriority="high"></picture>
     <div class="hero-divider"></div>
