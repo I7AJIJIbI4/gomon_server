@@ -196,7 +196,7 @@
   .hero-eyebrow .mob-br { display: none; }
   .hero-logo { width: clamp(200px, 50vw, 340px); height: auto; margin: 0 auto 0; display: block; filter: invert(1) sepia(1) saturate(0.6) hue-rotate(5deg) brightness(1.1); opacity: 0; animation: fadeUp 0.8s 0.4s ease forwards; }
   .hero-divider { width: 60px; height: 1px; background: var(--gold); margin: -60px auto 24px; opacity: 0; animation: fadeUp 0.8s 0.7s ease forwards; }
-  .hero-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 24px; max-width: 420px; margin-left: auto; margin-right: auto; text-align: left; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
+  .hero-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 24px; max-width: 460px; margin-left: auto; margin-right: auto; text-align: center; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
   .cta-group { display: flex; flex-direction: column; gap: 14px; align-items: center; opacity: 0; animation: fadeUp 0.8s 1s ease forwards; }
   .btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 36px; border-radius: 2px; font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; transition: all 0.3s ease; justify-content: center; width: 300px; max-width: 90vw; }
   .btn-primary { background: var(--gold); color: var(--dark); border: 1px solid var(--gold); }
