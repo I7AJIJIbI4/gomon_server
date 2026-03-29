@@ -184,7 +184,7 @@
 
   /* ── HERO ── */
   .hero { min-height: 100svh; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 80px 24px 60px; overflow: hidden; }
-  @media (max-width: 480px) { .hero { min-height: 90svh; padding: 60px 20px 40px; } }
+  @media (max-width: 480px) { .hero { min-height: 90svh; padding: 48px 20px 32px; } .hero-eyebrow { margin-bottom: 16px; } }
   .hero-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(184,149,90,0.12) 0%, transparent 60%), radial-gradient(ellipse 50% 80% at 10% 90%, rgba(184,149,90,0.06) 0%, transparent 50%), linear-gradient(165deg, #1A1612 0%, #0F0D0A 60%, #1A1612 100%); }
   .hero-grain { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); opacity: 0.4; }
   .hero-line-top { position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.6; }
@@ -205,7 +205,7 @@
   .btn-outline:hover { background: rgba(184,149,90,0.1); border-color: var(--gold-light); transform: translateY(-2px); }
   .btn svg { flex-shrink: 0; }
   .location-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-bottom: 60px; opacity: 0; animation: fadeUp 0.8s 1.2s ease forwards; }
-  @media (max-width: 480px) { .hero-desc { margin-bottom: 20px; } .hero-divider { margin-bottom: 20px; } .location-tag { margin-bottom: 28px; } }
+  @media (max-width: 480px) { .hero-desc { margin-bottom: 20px; font-size: 15px; } .hero-divider { margin: -35px auto 20px; width: 44px; } .location-tag { margin-bottom: 24px; } }
   .location-tag::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
 
   /* ── TRUST BAR ── */
@@ -427,6 +427,7 @@
   .ai-section-title em { font-style: italic; color: var(--gold-light); }
   .ai-section-desc { color: var(--text-light); font-size: 16px; line-height: 1.7; margin-bottom: 32px; }
   .ai-section-btn { font-size: 13px; letter-spacing: 2px; padding: 16px 40px; display: inline-flex; align-items: center; gap: 10px; }
+  @media (max-width: 480px) { .ai-section { padding: 44px 16px 28px; } .ai-section-badge { font-size: 11px; padding: 6px 14px 6px 10px; margin-bottom: 16px; } .ai-section-sub { margin-bottom: 12px; } .ai-section-desc { font-size: 14px; margin-bottom: 24px; } }
 </style>
 <script src="https://static.elfsight.com/platform/platform.js" defer></script>
 </head>
