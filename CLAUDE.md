@@ -350,3 +350,25 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **OTP доставка**: Viber (відправник `PROMO`, TTL 5хв) → SMS-фолбек. Керується через `SMS_FLY_VIBER_SENDER` в config.py
 - **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот (69 осіб). Реальні PWA-юзери = `otp_sessions.db::sessions`
 - **Фото локації**: `location-aerial.jpg`, `location-entrance.jpg` лежать у `/home/gomoncli/public_html/sitepro/`
+- **AI Rate Limiting**: клієнтський, через localStorage. Сайт: `gw_rl` → 10 запитів/день. PWA: `gc_rl_guest` (гість) → 10, `gc_rl_{phone}` (авторизований) → 20. При ліміті — картка "Консультація лікаря" з кнопкою Instagram Direct. Адмін = авторизований → 20.
+
+---
+
+## AI Chat Rate Limiting
+
+### Як працює
+
+| Місце | localStorage ключ | Ліміт |
+|-------|------------------|-------|
+| Сайт (`gomon-widget.js`) | `gw_rl` | 10/день |
+| PWA гість (не залогінений) | `gc_rl_guest` | 10/день |
+| PWA авторизований | `gc_rl_{phone}` | 20/день |
+
+Структура запису: `{"date":"2026-03-29","count":5}` — скидається автоматично наступного дня.
+
+### Що показується при ліміті
+Замість виклику AI API: повідомлення-картка з текстом "Зважаючи на складність вашого запиту, рекомендую звернутись до лікаря на особисту консультацію." + кнопка "Записатись на консультацію" (Instagram Direct `https://ig.me/m/dr.gomon`).
+
+### Де реалізовано
+- `gomon-widget.js`: `gwIsRateLimited()`, `gwRateLimitBump()`, `renderConsultCard()` — перевірка в `doSendModal()` та `doSendInline()`
+- `gomon-chat.js`: `gcIsRateLimited()`, `gcRateLimitBump()`, `addConsultCard()` — перевірка в `sendMessage()` після `addMessage('user', ...)`
