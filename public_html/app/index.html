@@ -539,12 +539,22 @@ nav{
 .adm-month-date{font-size:12px;color:var(--text3);margin-top:2px}
 .adm-month-price{font-size:14px;color:var(--gold-pale);font-weight:600;flex-shrink:0;white-space:nowrap}
 .adm-month-total{
-  padding:16px 20px;
+  padding:14px 20px;
   display:flex;justify-content:space-between;align-items:center;
-  border-top:1px solid var(--border-gold);flex-shrink:0;
+  border-bottom:1px solid var(--border-gold);flex-shrink:0;
 }
 .adm-month-total-label{font-size:13px;color:var(--text3)}
 .adm-month-total-val{font-size:20px;color:var(--gold);font-family:var(--serif);font-weight:300}
+.adm-filter-bar{padding:10px 16px 8px;background:var(--bg2,#141312);border-bottom:1px solid var(--border);flex-shrink:0}
+.adm-filter-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+.adm-filter-row:last-child{margin-bottom:0}
+.adm-filter-input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none}
+.adm-filter-input:focus{border-color:var(--border-gold)}
+.adm-filter-input::placeholder{color:var(--text3)}
+.adm-filter-select{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 8px;color:var(--text2);font-size:12px;font-family:var(--sans);flex-shrink:0;max-width:130px}
+.adm-filter-apply{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--gold);font-size:14px;cursor:pointer;flex-shrink:0;transition:opacity .15s}
+.adm-filter-apply:active{opacity:.6}
+.adm-filter-count{font-size:11px;color:var(--text3);padding:4px 16px 0;letter-spacing:.3px}
 .stat-card{cursor:pointer;transition:opacity .15s}
 .stat-card:active{opacity:.7}
 #push-modal{
@@ -705,6 +715,21 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
       <span class="adm-sheet-title" id="adm-list-title">Клієнти</span>
       <button class="adm-sheet-close" onclick="_admListClose()">×</button>
     </div>
+    <div class="adm-filter-bar" id="adm-list-filter-bar" style="display:none">
+      <div class="adm-filter-row">
+        <input type="text" id="adm-lf-search" class="adm-filter-input" placeholder="Ім'я, прізвище або телефон…" oninput="_admListFilter()">
+      </div>
+      <div class="adm-filter-row">
+        <input type="text" id="adm-lf-service" class="adm-filter-input" placeholder="Послуга або категорія…" oninput="_admListFilter()">
+        <select id="adm-lf-sort" class="adm-filter-select" onchange="_admListFilter()">
+          <option value="date-desc">Дата ↓</option>
+          <option value="date-asc">Дата ↑</option>
+          <option value="name">За іменем</option>
+          <option value="visits-desc">Відвідувань ↓</option>
+        </select>
+      </div>
+    </div>
+    <div class="adm-filter-count" id="adm-list-count"></div>
     <div class="adm-sheet-body" id="adm-list-body"></div>
   </div>
 </div>
@@ -724,14 +749,33 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
 <div id="adm-month-modal" onclick="if(event.target===this)_admMonthClose()">
   <div class="adm-sheet" style="max-height:92vh">
     <div class="adm-sheet-head">
-      <span class="adm-sheet-title" id="adm-month-title">Записи за місяць</span>
+      <span class="adm-sheet-title" id="adm-month-title">Записи</span>
       <button class="adm-sheet-close" onclick="_admMonthClose()">×</button>
     </div>
-    <div class="adm-sheet-body" id="adm-month-body" style="flex:1;overflow-y:auto"></div>
     <div class="adm-month-total" id="adm-month-total-row" style="display:none">
-      <span class="adm-month-total-label">Загальна сума</span>
+      <span class="adm-month-total-label" id="adm-month-total-label">Загальна сума</span>
       <span class="adm-month-total-val" id="adm-month-total-val">—</span>
     </div>
+    <div class="adm-filter-bar">
+      <div class="adm-filter-row">
+        <input type="date" id="adm-mf-from" class="adm-filter-input" style="flex:1">
+        <span style="color:var(--text3);flex-shrink:0">—</span>
+        <input type="date" id="adm-mf-to" class="adm-filter-input" style="flex:1">
+        <button class="adm-filter-apply" onclick="_admMonthLoad()">↺</button>
+      </div>
+      <div class="adm-filter-row">
+        <input type="text" id="adm-mf-service" class="adm-filter-input" placeholder="Послуга або категорія…" oninput="_admMonthFilter()">
+        <select id="adm-mf-sort" class="adm-filter-select" onchange="_admMonthFilter()">
+          <option value="date-desc">Дата ↓</option>
+          <option value="date-asc">Дата ↑</option>
+          <option value="price-desc">Ціна ↓</option>
+          <option value="price-asc">Ціна ↑</option>
+          <option value="name-asc">Ім'я</option>
+        </select>
+      </div>
+    </div>
+    <div class="adm-filter-count" id="adm-month-count"></div>
+    <div class="adm-sheet-body" id="adm-month-body" style="flex:1;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -2001,7 +2045,7 @@ if ('serviceWorker' in navigator) {
       </div>
       <div class="stat-card" onclick="_admStatClick('users')">
         <div class="stat-num" id="adm-stat-users">—</div>
-        <div class="stat-label">Юзерів PWA</div>
+        <div class="stat-label">Клієнтів в додатку</div>
       </div>
       <div class="stat-card" onclick="_admStatClick('push')">
         <div class="stat-num" id="adm-stat-push">—</div>
@@ -2302,85 +2346,179 @@ function _admShowClientAppts(name, appts) {
   document.getElementById('adm-client-modal').classList.add('show');
 }
 
-function _admShowList(title, clients) {
-  document.getElementById('adm-list-title').textContent = title;
+/* ── CLIENTS LIST ───────────────────────────────────────── */
+let _admListData = [];
+let _admListTitle = '';
+
+function _admRenderList(clients) {
   const body = document.getElementById('adm-list-body');
+  const countEl = document.getElementById('adm-list-count');
+  countEl.textContent = clients.length ? clients.length + ' клієнтів' : '';
   if (!clients.length) {
-    body.innerHTML = '<div style="padding:24px 20px;color:var(--text3);text-align:center">Порожньо</div>';
-  } else {
-    body.innerHTML = clients.map((cl,i) => {
-      const sub = [
-        cl.visits_count != null ? cl.visits_count + ' відвідувань' : '',
-        cl.last_visit ? _fmtDate(cl.last_visit) : '',
-        cl.last_service || '',
-      ].filter(Boolean).join(' · ');
-      const apptJson = JSON.stringify(cl.appointments || []).replace(/"/g,'&quot;');
-      return `<div class="adm-client-row" onclick="_admShowClientAppts('${cl.name.replace(/'/g,"\'")}', JSON.parse(this.dataset.appts))" data-appts="${apptJson}">
-        <div>
-          <div class="adm-client-name">${cl.name}</div>
-          ${sub ? '<div class="adm-client-sub">' + sub + '</div>' : ''}
-        </div>
-        <span class="adm-client-arrow">›</span>
-      </div>`;
-    }).join('');
+    body.innerHTML = '<div style="padding:24px 20px;color:var(--text3);text-align:center">Нічого не знайдено</div>';
+    return;
   }
-  document.getElementById('adm-list-modal').classList.add('show');
+  body.innerHTML = clients.map(cl => {
+    const sub = [
+      cl.visits_count != null ? cl.visits_count + ' відвід.' : '',
+      cl.last_visit ? _fmtDate(cl.last_visit) : '',
+      cl.last_service || '',
+    ].filter(Boolean).join(' · ');
+    const phone = cl.phone ? '<div class="adm-client-sub" style="font-size:11px">' + (cl.phone+'').replace(/^38/,'0') + '</div>' : '';
+    const apptJson = JSON.stringify(cl.appointments || []).replace(/"/g,'&quot;');
+    return `<div class="adm-client-row" onclick="_admShowClientAppts('${cl.name.replace(/'/g,"\\'")}', JSON.parse(this.dataset.appts))" data-appts="${apptJson}">
+      <div style="min-width:0">
+        <div class="adm-client-name">${cl.name}</div>
+        ${sub ? '<div class="adm-client-sub">' + sub + '</div>' : ''}
+        ${phone}
+      </div>
+      <span class="adm-client-arrow">›</span>
+    </div>`;
+  }).join('');
+}
+
+function _admListFilter() {
+  const searchQ = (document.getElementById('adm-lf-search').value || '').trim().toLowerCase();
+  const serviceQ = (document.getElementById('adm-lf-service').value || '').trim().toLowerCase();
+  const sort = document.getElementById('adm-lf-sort').value;
+  let filtered = _admListData;
+  if (searchQ) {
+    filtered = filtered.filter(cl => {
+      const phone = (cl.phone || '').replace(/^38/,'0');
+      return (cl.name || '').toLowerCase().includes(searchQ) || phone.includes(searchQ);
+    });
+  }
+  if (serviceQ) {
+    filtered = filtered.filter(cl => {
+      if ((cl.last_service || '').toLowerCase().includes(serviceQ)) return true;
+      return (cl.appointments || []).some(a => (a.service || '').toLowerCase().includes(serviceQ));
+    });
+  }
+  filtered = [...filtered];
+  if (sort === 'name')        filtered.sort((a,b) => (a.name||'').localeCompare(b.name||'','uk'));
+  else if (sort === 'visits-desc') filtered.sort((a,b) => (b.visits_count||0) - (a.visits_count||0));
+  else if (sort === 'date-desc')   filtered.sort((a,b) => (b.last_visit||'').localeCompare(a.last_visit||''));
+  else if (sort === 'date-asc')    filtered.sort((a,b) => (a.last_visit||'').localeCompare(b.last_visit||''));
+  _admRenderList(filtered);
 }
 
 async function _admStatClick(type) {
   let url, title;
   if (type === 'clients') { url = '/api/admin/clients-list'; title = 'Всі клієнти'; }
-  else if (type === 'users') { url = '/api/admin/users-list'; title = 'Юзери PWA'; }
+  else if (type === 'users') { url = '/api/admin/users-list'; title = 'Клієнти в додатку'; }
   else if (type === 'push')  { url = '/api/admin/push-list';  title = 'Push підписки'; }
-  else if (type === 'month') {
-    await _admShowMonth();
-    return;
+  else if (type === 'month') { await _admShowMonth(); return; }
+
+  const filterBar = document.getElementById('adm-list-filter-bar');
+  const showFilter = (type === 'clients' || type === 'users');
+  filterBar.style.display = showFilter ? '' : 'none';
+  if (showFilter) {
+    document.getElementById('adm-lf-search').value = '';
+    document.getElementById('adm-lf-service').value = '';
+    document.getElementById('adm-lf-sort').value = 'date-desc';
   }
+  document.getElementById('adm-list-count').textContent = '';
+
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
     const data = await res.json();
-    _admShowList(title, data.clients || []);
+    _admListData = data.clients || [];
+    _admListTitle = title;
+    document.getElementById('adm-list-title').textContent = title;
+    if (showFilter) _admListFilter();
+    else _admRenderList(_admListData);
+    document.getElementById('adm-list-modal').classList.add('show');
   } catch(e) {
     alert('Помилка: ' + e.message);
   }
 }
 
-async function _admShowMonth() {
-  try {
-    const res = await fetch('/api/admin/month-visits', { headers: { Authorization: 'Bearer ' + token } });
-    const data = await res.json();
-    const visits = data.visits || [];
-    const body = document.getElementById('adm-month-body');
-    const now = new Date();
-    const monthName = now.toLocaleString('uk-UA', {month:'long', year:'numeric'});
-    document.getElementById('adm-month-title').textContent = 'Записи · ' + monthName;
+/* ── MONTH VISITS ───────────────────────────────────────── */
+let _admMonthData = [];
 
-    if (!visits.length) {
-      body.innerHTML = '<div style="padding:24px 20px;color:var(--text3);text-align:center">Записів немає</div>';
-      document.getElementById('adm-month-total-row').style.display = 'none';
-    } else {
-      let total = 0;
-      body.innerHTML = visits.map(v => {
-        const h = v.hour != null ? ' · ' + String(v.hour).padStart(2,'0') + ':00' : '';
-        const priceNum = v.price ? parseInt(v.price.replace(/[^0-9]/g,'')) || 0 : 0;
-        if (priceNum) total += priceNum;
-        return `<div class="adm-month-row">
-          <div class="adm-month-info">
-            <div class="adm-month-client">${v.client}</div>
-            <div class="adm-month-service">${v.service || '—'}</div>
-            <div class="adm-month-date">${_fmtDate(v.date)}${h}</div>
-          </div>
-          <div class="adm-month-price">${v.price || '—'}</div>
-        </div>`;
-      }).join('');
-      const totalRow = document.getElementById('adm-month-total-row');
-      totalRow.style.display = 'flex';
-      document.getElementById('adm-month-total-val').textContent = total ? '₴ ' + total.toLocaleString('uk-UA') : '—';
-    }
-    document.getElementById('adm-month-modal').classList.add('show');
-  } catch(e) {
-    alert('Помилка: ' + e.message);
+function _priceNum(p) {
+  return p ? parseInt((p + '').replace(/[^0-9]/g,'')) || 0 : 0;
+}
+
+function _admMonthRender(visits) {
+  const body = document.getElementById('adm-month-body');
+  const countEl = document.getElementById('adm-month-count');
+  const totalRow = document.getElementById('adm-month-total-row');
+  if (!visits.length) {
+    body.innerHTML = '<div style="padding:24px 20px;color:var(--text3);text-align:center">Записів немає</div>';
+    totalRow.style.display = 'none';
+    countEl.textContent = '';
+    return;
   }
+  let total = 0;
+  body.innerHTML = visits.map(v => {
+    const h = v.hour != null ? ' · ' + String(v.hour).padStart(2,'0') + ':00' : '';
+    const pn = _priceNum(v.price);
+    if (pn) total += pn;
+    return `<div class="adm-month-row">
+      <div class="adm-month-info">
+        <div class="adm-month-client">${v.client}</div>
+        <div class="adm-month-service">${v.service || '—'}</div>
+        <div class="adm-month-date">${_fmtDate(v.date)}${h}</div>
+      </div>
+      <div class="adm-month-price">${v.price || '—'}</div>
+    </div>`;
+  }).join('');
+  totalRow.style.display = 'flex';
+  document.getElementById('adm-month-total-val').textContent = total ? '₴ ' + total.toLocaleString('uk-UA') : '—';
+  const fromV = document.getElementById('adm-mf-from').value;
+  const toV   = document.getElementById('adm-mf-to').value;
+  const label = (fromV && toV && fromV !== toV)
+    ? _fmtDate(fromV) + ' — ' + _fmtDate(toV)
+    : fromV ? _fmtDate(fromV) + ' — сьогодні' : 'Загальна сума';
+  document.getElementById('adm-month-total-label').textContent = label;
+  countEl.textContent = visits.length + ' записів';
+}
+
+function _admMonthFilter() {
+  const serviceQ = (document.getElementById('adm-mf-service').value || '').trim().toLowerCase();
+  const sort = document.getElementById('adm-mf-sort').value;
+  let filtered = _admMonthData;
+  if (serviceQ) filtered = filtered.filter(v => (v.service || '').toLowerCase().includes(serviceQ));
+  filtered = [...filtered];
+  if (sort === 'date-asc')    filtered.sort((a,b) => a.date.localeCompare(b.date));
+  else if (sort === 'date-desc')  filtered.sort((a,b) => b.date.localeCompare(a.date));
+  else if (sort === 'price-desc') filtered.sort((a,b) => _priceNum(b.price) - _priceNum(a.price));
+  else if (sort === 'price-asc')  filtered.sort((a,b) => _priceNum(a.price) - _priceNum(b.price));
+  else if (sort === 'name-asc')   filtered.sort((a,b) => (a.client||'').localeCompare(b.client||'','uk'));
+  _admMonthRender(filtered);
+}
+
+async function _admMonthLoad() {
+  const fromEl = document.getElementById('adm-mf-from');
+  const toEl   = document.getElementById('adm-mf-to');
+  const body = document.getElementById('adm-month-body');
+  body.innerHTML = '<div style="padding:24px;color:var(--text3);text-align:center">Завантаження…</div>';
+  document.getElementById('adm-month-total-row').style.display = 'none';
+  document.getElementById('adm-month-count').textContent = '';
+  try {
+    const params = new URLSearchParams();
+    if (fromEl.value) params.set('from', fromEl.value);
+    if (toEl.value)   params.set('to',   toEl.value);
+    const res = await fetch('/api/admin/month-visits?' + params, { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    _admMonthData = data.visits || [];
+    _admMonthFilter();
+  } catch(e) {
+    body.innerHTML = '<div style="padding:24px;color:var(--text3)">Помилка завантаження</div>';
+  }
+}
+
+async function _admShowMonth() {
+  const now = new Date();
+  const fromEl = document.getElementById('adm-mf-from');
+  const toEl   = document.getElementById('adm-mf-to');
+  if (!fromEl.value) fromEl.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+  if (!toEl.value)   toEl.value   = now.toISOString().slice(0,10);
+  document.getElementById('adm-mf-service').value = '';
+  document.getElementById('adm-mf-sort').value = 'date-desc';
+  document.getElementById('adm-month-modal').classList.add('show');
+  await _admMonthLoad();
 }
 /* ── END ADMIN STAT MODALS ─────────────────────────────── */
 
