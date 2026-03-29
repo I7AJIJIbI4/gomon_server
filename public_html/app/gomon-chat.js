@@ -62,6 +62,28 @@
   // Зберігаємо історію для контексту Claude
   const history = []; // { role, content }
 
+  // ── RATE LIMIT ────────────────────────────────────────────────────────────
+  // Гість: 10 запитів/день; авторизований: 20 запитів/день
+  function _gcRlKey() {
+    return CONFIG.userPhone ? ('gc_rl_' + CONFIG.userPhone) : 'gc_rl_guest';
+  }
+  function _gcRlData() {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const d = JSON.parse(localStorage.getItem(_gcRlKey()) || 'null');
+      if (!d || d.date !== today) return { date: today, count: 0 };
+      return d;
+    } catch (e) { return { date: new Date().toISOString().slice(0, 10), count: 0 }; }
+  }
+  function gcIsRateLimited() {
+    const limit = CONFIG.userPhone ? 20 : 10;
+    return _gcRlData().count >= limit;
+  }
+  function gcRateLimitBump() {
+    const d = _gcRlData(); d.count++;
+    try { localStorage.setItem(_gcRlKey(), JSON.stringify(d)); } catch (e) {}
+  }
+
   // ── ШРИФТ ─────────────────────────────────────────────────────────────────
 
   const fontLink = document.createElement('link');
@@ -611,6 +633,28 @@
     scrollBottom();
   }
 
+  function addConsultCard() {
+    const card = document.createElement('div');
+    card.className = 'gc-procedure-card';
+    card.innerHTML = `
+      <strong>&#x1F469;&#x200D;&#x2695;&#xFE0F; \u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0456\u044f</strong>
+      <p style="font-size:13px;color:var(--gc-text2,#a09890);line-height:1.5;margin:6px 0 12px">\u0417\u0432\u0430\u0436\u0430\u044e\u0447\u0438 \u043d\u0430 \u0441\u043a\u043b\u0430\u0434\u043d\u0456\u0441\u0442\u044c \u0432\u0430\u0448\u043e\u0433\u043e \u0437\u0430\u043f\u0438\u0442\u0443, \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u044e \u0437\u0432\u0435\u0440\u043d\u0443\u0442\u0438\u0441\u044c \u0434\u043e \u043b\u0456\u043a\u0430\u0440\u044f \u043d\u0430 \u043e\u0441\u043e\u0431\u0438\u0441\u0442\u0443 \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044e.</p>
+      <div class="gc-procedure-name-row">
+        <span class="gc-procedure-name">\u041a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044f \u043b\u0456\u043a\u0430\u0440\u044f</span>
+      </div>
+      <a class="gc-ig-btn" href="https://ig.me/m/dr.gomon" target="_blank" rel="noopener noreferrer" aria-label="\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u0438\u0441\u044c \u0432 Instagram Direct">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+          <circle cx="12" cy="12" r="4"/>
+          <circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/>
+        </svg>
+        \u0417\u0430\u043f\u0438\u0441\u0430\u0442\u0438\u0441\u044c \u043d\u0430 \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044e
+      </a>
+      <p class="gc-procedure-hint">\u041d\u0430\u043f\u0438\u0448\u0456\u0442\u044c \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Direct \u2014 \u0432\u0430\u043c \u043f\u0456\u0434\u0431\u0435\u0440\u0443\u0442\u044c \u0437\u0440\u0443\u0447\u043d\u0438\u0439 \u0447\u0430\u0441 \u0434\u043b\u044f \u0437\u0443\u0441\u0442\u0440\u0456\u0447\u0456</p>
+    `;
+    elMessages.insertBefore(card, elTyping);
+    scrollBottom();
+  }
 
   function parseMarkdown(text) {
     return text
@@ -788,6 +832,16 @@
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
+
+    // Rate limit check
+    if (gcIsRateLimited()) {
+      isLoading = false;
+      elSend.disabled = false;
+      addConsultCard();
+      elInput.focus();
+      return;
+    }
+    gcRateLimitBump();
 
     startTyping();
 
