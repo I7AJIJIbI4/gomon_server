@@ -11,6 +11,23 @@ from user_db import add_or_update_client
 logger = logging.getLogger("wlaunch_api")
 
 WLAUNCH_API_URL = "https://api.wlaunch.net/v1"
+
+RESOURCE_SPECIALIST_MAP = {
+    '380996093860': 'victoria',
+    '380685129121': 'anastasia',
+}
+
+def get_specialist(resources):
+    for r in (resources or []):
+        phone = ''.join(filter(str.isdigit, r.get('phone', '') or ''))
+        if phone in RESOURCE_SPECIALIST_MAP:
+            return RESOURCE_SPECIALIST_MAP[phone]
+        name = (r.get('name') or '').lower()
+        if 'вікторі' in name or 'viktor' in name:
+            return 'victoria'
+        if 'анастасі' in name or 'anasta' in name:
+            return 'anastasia'
+    return None
 WLAUNCH_API_BEARER = "Bearer {}".format(WLAUNCH_API_KEY)
 
 HEADERS = {
@@ -117,6 +134,10 @@ def fetch_all_clients():
 
             # Статус апоінтменту з wlaunch (CONFIRMED, DONE, CANCELLED, NO_SHOW тощо)
             appt_status = (appt.get("status") or "").upper()
+            specialist = get_specialist(appt.get("resources", []))
+
+            entry = {"appt_id": appt.get("id",""), "date": visit_date, "hour": visit_hour,
+                     "service": service_name, "status": appt_status, "specialist": specialist}
 
             # Оновлюємо або додаємо
             if phone_norm not in clients_map:
@@ -128,7 +149,7 @@ def fetch_all_clients():
                     "last_service": service_name,
                     "last_visit": visit_date,
                     "visits_count": 1,
-                    "services_history": [{"appt_id": appt.get("id",""), "date": visit_date, "hour": visit_hour, "service": service_name, "status": appt_status}] if service_name and visit_date else []
+                    "services_history": [entry] if service_name and visit_date else []
                 }
             else:
                 clients_map[phone_norm]["visits_count"] += 1
@@ -137,12 +158,11 @@ def fetch_all_clients():
                 if not clients_map[phone_norm]["last_name"] and last_name:
                     clients_map[phone_norm]["last_name"] = last_name
                 if service_name and visit_date and len(clients_map[phone_norm]["services_history"]) < 5:
-                    entry = {"appt_id": appt.get("id",""), "date": visit_date, "hour": visit_hour, "service": service_name, "status": appt_status}
-                    # Дедублікація по (date, service) — оновлюємо status якщо запис вже є
                     updated = False
                     for existing in clients_map[phone_norm]["services_history"]:
                         if existing.get("date") == visit_date and existing.get("service") == service_name:
-                            existing["status"] = appt_status  # статус міг змінитись (напр. → CANCELLED)
+                            existing["status"] = appt_status
+                            existing["specialist"] = specialist
                             updated = True
                             break
                     if not updated:

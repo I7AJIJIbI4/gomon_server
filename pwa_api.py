@@ -862,42 +862,46 @@ def admin_cal_get():
     for r in conn.execute(query, params).fetchall():
         result.append(dict(r))
 
-    # 2. WLaunch appointments from services_json (не для specialist ролі)
-    if request.admin_role != 'specialist':
-        rows = conn.execute(
-            'SELECT phone, first_name, last_name, services_json FROM clients'
-        ).fetchall()
-        for row in rows:
-            try:
-                items = json.loads(row['services_json'] or '[]')
-            except Exception:
-                items = []
-            for it in items:
-                d = it.get('date', '')
-                if not d:
+    # 2. WLaunch appointments from services_json
+    rows = conn.execute(
+        'SELECT phone, first_name, last_name, services_json FROM clients'
+    ).fetchall()
+    for row in rows:
+        try:
+            items = json.loads(row['services_json'] or '[]')
+        except Exception:
+            items = []
+        for it in items:
+            d = it.get('date', '')
+            if not d:
+                continue
+            status = (it.get('status') or '').upper()
+            if status == 'CANCELLED':
+                continue
+            if from_date and d < from_date:
+                continue
+            if to_date and d > to_date:
+                continue
+            specialist = it.get('specialist')
+            # Фільтр для specialist ролі
+            if request.admin_role == 'specialist':
+                if specialist != request.admin_specialist:
                     continue
-                status = (it.get('status') or '').upper()
-                if status == 'CANCELLED':
-                    continue
-                if from_date and d < from_date:
-                    continue
-                if to_date and d > to_date:
-                    continue
-                hour = it.get('hour')
-                time_str = '{:02d}:00'.format(hour) if hour is not None else ''
-                name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
-                result.append({
-                    'id': 'wl_{}'.format(it.get('appt_id', '')),
-                    'client_phone': row['phone'],
-                    'client_name':  name or row['phone'],
-                    'procedure_name': it.get('service', ''),
-                    'specialist': None,
-                    'date': d,
-                    'time': time_str,
-                    'status': status or 'CONFIRMED',
-                    'notes': '',
-                    'source': 'wlaunch',
-                })
+            hour = it.get('hour')
+            time_str = '{:02d}:00'.format(hour) if hour is not None else ''
+            name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            result.append({
+                'id': 'wl_{}'.format(it.get('appt_id', '')),
+                'client_phone': row['phone'],
+                'client_name':  name or row['phone'],
+                'procedure_name': it.get('service', ''),
+                'specialist': specialist,
+                'date': d,
+                'time': time_str,
+                'status': status or 'CONFIRMED',
+                'notes': '',
+                'source': 'wlaunch',
+            })
 
     conn.close()
     result.sort(key=lambda x: (x['date'], x['time'] or ''))

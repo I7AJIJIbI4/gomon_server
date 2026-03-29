@@ -25,6 +25,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 WLAUNCH_API_URL = 'https://api.wlaunch.net/v1'
+
+# Маппінг телефону ресурсу → ім'я спеціаліста
+RESOURCE_SPECIALIST_MAP = {
+    '380996093860': 'victoria',
+    '380685129121': 'anastasia',
+}
+
+def get_specialist(resources):
+    """Витягує ім'я спеціаліста з поля resources апоінтменту."""
+    for r in (resources or []):
+        phone = ''.join(filter(str.isdigit, r.get('phone', '') or ''))
+        if phone in RESOURCE_SPECIALIST_MAP:
+            return RESOURCE_SPECIALIST_MAP[phone]
+        name = (r.get('name') or '').lower()
+        if 'вікторі' in name or 'viktor' in name:
+            return 'victoria'
+        if 'анастасі' in name or 'anasta' in name:
+            return 'anastasia'
+    return None
 HEADERS = {
     'Authorization': f'Bearer {WLAUNCH_API_KEY}',
     'Accept': 'application/json'
@@ -130,6 +149,16 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                     pass
 
             appt_status = (appt.get('status') or '').upper()
+            specialist = get_specialist(appt.get('resources', []))
+
+            entry = {
+                'appt_id': appt.get('id', ''),
+                'date': visit_date,
+                'hour': visit_hour,
+                'service': service_name,
+                'status': appt_status,
+                'specialist': specialist,
+            }
 
             # Оновлюємо або додаємо
             if phone_norm not in clients_map:
@@ -141,7 +170,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                     'last_service': service_name,
                     'last_visit': visit_date,
                     'visits_count': 1,
-                    'services_history': [{'appt_id': appt.get('id',''), 'date': visit_date, 'hour': visit_hour, 'service': service_name, 'status': appt_status}] if service_name and visit_date else []
+                    'services_history': [entry] if service_name and visit_date else []
                 }
             else:
                 clients_map[phone_norm]['visits_count'] += 1
@@ -150,7 +179,6 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 if not clients_map[phone_norm]['last_name'] and last_name:
                     clients_map[phone_norm]['last_name'] = last_name
                 if service_name and visit_date and len(clients_map[phone_norm]['services_history']) < 10:
-                    entry = {'appt_id': appt.get('id',''), 'date': visit_date, 'hour': visit_hour, 'service': service_name, 'status': appt_status}
                     clients_map[phone_norm]['services_history'].append(entry)
 
                 # Оновлюємо last_visit якщо цей запис новіший
