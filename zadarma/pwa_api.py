@@ -721,7 +721,10 @@ def admin_push_list():
 @require_admin
 def admin_month_visits():
     from datetime import datetime
-    since = datetime.now().strftime('%Y-%m') + '-01'
+    default_from = datetime.now().strftime('%Y-%m') + '-01'
+    default_to   = datetime.now().strftime('%Y-%m-%d')
+    date_from = request.args.get('from', default_from)
+    date_to   = request.args.get('to',   default_to)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -739,7 +742,7 @@ def admin_month_visits():
             items = []
         for it in items:
             date = it.get('date', '')
-            if date >= since:
+            if date_from <= date <= date_to:
                 service = it.get('service', '')
                 price = price_lookup.get(service.lower(), '')
                 visits.append({
