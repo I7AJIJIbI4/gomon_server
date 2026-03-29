@@ -297,8 +297,9 @@
 
   /* ── ABOUT ── */
   .about-section { padding: clamp(28px, 5vw, 80px) 24px; background: rgba(247,243,238,0.02); border-top: 1px solid rgba(184,149,90,0.1); border-bottom: 1px solid rgba(184,149,90,0.1); }
-  .about-inner { max-width: 640px; margin: 0 auto; }
-  .about-persons { display: flex; flex-direction: column; gap: 0; }
+  .about-inner { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 0 60px; max-width: 900px; margin: 0 auto; }
+  .about-inner .section-label { grid-column: 1 / -1; }
+  .about-persons { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 0; }
   .about-person { padding: 28px 0; border-top: 1px solid rgba(184,149,90,0.2); }
   .about-person:last-child { border-bottom: 1px solid rgba(184,149,90,0.2); }
   .about-person-header { display: grid; grid-template-columns: 16px 1fr; grid-template-rows: auto auto; column-gap: 12px; margin-bottom: 12px; }
@@ -306,11 +307,9 @@
   .about-person-name { font-size: 1rem; font-weight: 500; letter-spacing: 0.05em; color: var(--cream); }
   .about-person-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
   .about-person p { color: var(--text-light); line-height: 1.8; padding-left: 28px; font-weight: 300; }
-  .about-pullquote { margin: 8px 0; padding: 24px 28px; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.1rem; color: var(--gold-pale); line-height: 1.6; text-align: center; letter-spacing: 0.02em; }
-  .about-pullquote::before, .about-pullquote::after { content: ''; display: block; width: 40px; height: 1px; background: var(--gold); margin: 0 auto; opacity: 0.4; }
-  .about-pullquote::before { margin-bottom: 16px; }
-  .about-pullquote::after { margin-top: 16px; }
-  .about-note { margin-top: 28px; color: var(--text-light); font-size: 0.9rem; line-height: 1.7; font-weight: 300; }
+  .about-pullquote { grid-column: 2; grid-row: 2; display: flex; align-items: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.25rem; color: var(--gold-light); line-height: 1.7; letter-spacing: 0.02em; border-left: 1px solid rgba(184,149,90,0.3); padding-left: 40px; margin: 0; }
+  .about-note { grid-column: 1; grid-row: 3; margin-top: 28px; color: var(--text-light); font-size: 0.9rem; line-height: 1.7; font-weight: 300; }
+  @media (max-width: 768px) { .about-inner { grid-template-columns: 1fr; } .about-pullquote { grid-column: 1; grid-row: auto; border-left: none; border-top: 1px solid rgba(184,149,90,0.3); padding-left: 0; padding-top: 24px; font-size: 1.1rem; } .about-note { grid-column: 1; grid-row: auto; } }
 
   /* ── CTA BOTTOM ── */
   .cta-section { padding: 40px 24px clamp(44px, 6vw, 80px); text-align: center; position: relative; overflow: hidden; }
@@ -629,7 +628,6 @@
         </div>
         <p>Засновниця клініки та амбасадор природніх ін'єкцій. Завжди відмовить від зайвої процедури і підбере те, що дійсно потрібно вашій шкірі.</p>
       </div>
-      <blockquote class="about-pullquote">Краса — коли відчуваєш себе собою.</blockquote>
       <div class="about-person">
         <div class="about-person-header">
           <span class="about-person-icon">✦</span>
@@ -639,6 +637,7 @@
         <p>Сертифікований реабілітолог і майстер апаратного DrumRoll-масажу. Спеціалізується на ударно-імпульсній вакуумній термотерапії, пресотерапії та корекції фігури.</p>
       </div>
     </div>
+    <blockquote class="about-pullquote">Краса — коли відчуваєш себе собою.</blockquote>
     <p class="about-note">Приймаємо лише за попереднім записом — щоб приділити максимум уваги кожному клієнту. Без вихідних, у центрі Черкас.</p>
   </div>
 </section>
