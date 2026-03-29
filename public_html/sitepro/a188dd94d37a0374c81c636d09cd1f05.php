@@ -320,7 +320,7 @@
   .pay-item { position: relative; cursor: pointer; display: inline-flex; }
   .pay-item svg { height: 34px; width: auto; transition: opacity 0.2s; }
   .pay-item:hover svg { opacity: 0.75; }
-  .pay-item::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #0f0d0a; border: 1px solid rgba(184,149,90,0.5); color: #e8d5b0; font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.5px; white-space: nowrap; padding: 6px 12px; border-radius: 3px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
+  .pay-item::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1a1410; border: 1px solid rgba(184,149,90,0.7); color: #f0ece4; box-shadow: 0 4px 16px rgba(0,0,0,0.8); font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.5px; white-space: nowrap; padding: 6px 12px; border-radius: 3px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
   .pay-item:hover::after, .pay-item.tip-on::after { opacity: 1; }
   .footer-logo-btn { background: none; border: none; cursor: pointer; padding: 0; display: block; margin: 0 auto 10px; }
 
