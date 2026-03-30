@@ -79,8 +79,10 @@ def start_command(bot, update):
                 f"🎉 Вітаємо, {first_name}!\n\n"
                 "✅ Ви авторизовані в системі Dr. Gomon Cosmetology\n\n"
                 "🔓 Доступні дії:\n"
+                "📱 /app - Особистий кабінет (PWA)\n"
                 "📞 /call - Зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - Подивитись розташування на мапі\n"
+                "🗺️ /map - Розташування на мапі\n"
+                "🧭 /scheme - Схема проїзду (фото)\n"
                 "📢 /channel - Наш Telegram-канал\n"
                 "❓ /help - Довідка по командах\n\n"
                 "💡 Швидкий доступ: Меню ☰ зліва внизу"
@@ -172,8 +174,10 @@ def contact_handler(bot, update):
                 f"🎉 Вітаємо, {first_name}!\n\n"
                 "✅ Ви авторизовані в системі і маєте доступ до всіх функцій Dr. Gomon Concierge\n\n"
                 "🔓 Доступні дії:\n"
+                "📱 /app - Особистий кабінет (PWA)\n"
                 "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - показати розташування косметології на мапі\n"
+                "🗺️ /map - розташування на мапі\n"
+                "🧭 /scheme - схема проїзду (фото)\n"
                 "❓ /help - довідка по командах\n\n"
                 "💡 Підказка: для швидкого доступу до команд\n"
                 "   натисніть кнопку \"Меню\" ☰ зліва внизу"
@@ -188,8 +192,10 @@ def contact_handler(bot, update):
                 "📱 +380733103110 - телефонуйте\n"
                 "💬 <a href=\"https://instagram.com/dr.gomon\">Instagram</a> - пишіть в Direct\n\n"
                 "🔓 Доступні функції:\n"
+                "📱 /app - Особистий кабінет\n"
                 "📞 /call - Зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - Подивитись розташування на мапі\n"
+                "🗺️ /map - Розташування на мапі\n"
+                "🧭 /scheme - Схема проїзду (фото)\n"
             )
             
             bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode='HTML')
@@ -243,38 +249,61 @@ def map_command(bot, update):
 def scheme_command(bot, update):
     user_id = update.effective_user.id
     logger.info(f"🧭 /scheme викликано користувачем: {user_id}")
-    
+
+    AERIAL   = '/home/gomoncli/public_html/sitepro/location-aerial.jpg'
+    ENTRANCE = '/home/gomoncli/public_html/sitepro/location-entrance.jpg'
+
     try:
-        scheme_message = (
-            "📋 Схема розташування в ЖК Графський\n\n"
-            "🏠 Пройдіть другі ворота/хвіртку та поверніть ліворуч"
-        )
-        
-        try:
-            with open('/home/gomoncli/zadarma/enter-min.png', 'rb') as photo:
-                bot.send_photo(
-                    chat_id=update.message.chat_id, 
-                    photo=photo,
-                    caption=scheme_message,
-                    parse_mode=None
-                )
-                logger.info(f"🧭 Схема з фото відправлена користувачу {user_id}")
-        except FileNotFoundError:
-            scheme_message_fallback = (
-                "📋 Схема розташування в ЖК Графський\n\n"
-                "🏠 Пройдіть другі ворота/хвіртку та поверніть ліворуч\n\n"
-                "⚠️ Схема зображення тимчасово недоступна"
+        from telegram import InputMediaPhoto
+        media = []
+        for path in (AERIAL, ENTRANCE):
+            try:
+                media.append(open(path, 'rb'))
+            except FileNotFoundError:
+                pass
+
+        if len(media) == 2:
+            bot.send_media_group(
+                chat_id=update.message.chat_id,
+                media=[
+                    InputMediaPhoto(media[0], caption="📍 ЖК Графський — вигляд зверху"),
+                    InputMediaPhoto(media[1], caption="🏠 Вхід: другі ворота/хвіртка, ліворуч"),
+                ]
             )
-            bot.send_message(
-                chat_id=update.message.chat_id, 
-                text=scheme_message_fallback,
+        elif len(media) == 1:
+            bot.send_photo(
+                chat_id=update.message.chat_id,
+                photo=media[0],
+                caption="📍 Схема проїзду до Dr. Gómon\nЖК Графський — другі ворота/хвіртка, ліворуч",
                 parse_mode=None
             )
-            logger.warning(f"⚠️ Файл схеми не знайдено, відправлено тільки текст користувачу {user_id}")
-        
+        else:
+            bot.send_message(
+                chat_id=update.message.chat_id,
+                text="📍 ЖК Графський, другі ворота/хвіртка, ліворуч\n🗺️ /map — посилання на карту",
+                parse_mode=None
+            )
+
+        for f in media:
+            f.close()
+        logger.info(f"🧭 Схема ({len(media)} фото) відправлена користувачу {user_id}")
+
     except Exception as e:
         logger.exception(f"❌ Помилка в scheme_command: {e}")
         bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання схеми", parse_mode=None)
+
+
+def app_command(bot, update):
+    user_id = update.effective_user.id
+    logger.info(f"📱 /app викликано користувачем: {user_id}")
+    try:
+        bot.send_message(
+            chat_id=update.message.chat_id,
+            text="📱 Особистий кабінет Dr. Gómon\n\nhttps://www.gomonclinic.com/app/",
+            parse_mode=None
+        )
+    except Exception as e:
+        logger.exception(f"❌ Помилка в app_command: {e}")
 
 
 def channel_command(bot, update):
@@ -420,8 +449,10 @@ def help_command(bot, update):
             help_message = (
                 "🤖 ДОВІДКА ДЛЯ АДМІНІСТРАТОРА\n\n"
                 "👥 КОРИСТУВАЦЬКІ КОМАНДИ:\n"
+                "📱 /app - Особистий кабінет (PWA)\n"
                 "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - подивитись розташування на мапі\n"
+                "🗺️ /map - розташування на мапі\n"
+                "🧭 /scheme - схема проїзду (фото)\n"
                 "📢 /channel - Telegram-канал з новинами\n"
                 "🧪 /test - Тест роботи бота\n"
                 "📊 /status - Статус користувача\n\n"
@@ -445,8 +476,10 @@ def help_command(bot, update):
             help_message = (
                 "🤖 ДОВІДКА ПО КОМАНДАХ\n\n"
                 "🔓 ДОСТУПНІ ДІЇ:\n"
+                "📱 /app - Особистий кабінет (PWA)\n"
                 "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - подивитись розташування на мапі\n"
+                "🗺️ /map - розташування на мапі\n"
+                "🧭 /scheme - схема проїзду (фото)\n"
                 "📢 /channel - Telegram-канал з новинами\n"
                 "ℹ️ ІНФОРМАЦІЙНІ:\n"
                 "🧪 /test - Перевірити роботу бота\n"
@@ -465,8 +498,10 @@ def help_command(bot, update):
                 "2. Поділіться номером телефону\n"
                 "3. Дочекайтеся підтвердження доступу\n\n"
                 "🔓 ДОСТУПНІ КОМАНДИ:\n"
+                "📱 /app - Особистий кабінет (PWA)\n"
                 "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - подивитись розташування на мапі\n"
+                "🗺️ /map - розташування на мапі\n"
+                "🧭 /scheme - схема проїзду (фото)\n"
                 "📢 /channel - Telegram-канал з новинами\n"
                 "❓ /help - Ця довідка\n\n"
                 "📞 ДЛЯ РЕЄСТРАЦІЇ ЗВЕРНІТЬСЯ:\n"
@@ -976,6 +1011,7 @@ def main():
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start_command))
+    dp.add_handler(CommandHandler("app", app_command))
     dp.add_handler(MessageHandler(Filters.contact, contact_handler))
     dp.add_handler(CommandHandler("call", call_command))
     dp.add_handler(CommandHandler("map", map_command))
