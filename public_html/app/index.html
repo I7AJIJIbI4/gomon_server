@@ -562,6 +562,24 @@ nav{
 .adm-action-btn{width:100%;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;font-family:var(--sans);font-size:16px;color:var(--text);cursor:pointer;text-align:center}
 .adm-action-btn.danger{border-color:#5a2a2a;color:#d96d6d;background:#2e1e1e}
 .adm-action-cancel{width:100%;padding:10px;background:transparent;border:none;font-family:var(--sans);font-size:15px;color:var(--text3);cursor:pointer;margin-top:2px}
+/* Admin AI assistant */
+.adm-ai-input-row{display:flex;gap:6px;margin-bottom:6px}
+.adm-ai-text{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none}
+.adm-ai-text:focus{border-color:var(--gold)}
+.adm-ai-mic-btn{width:42px;height:42px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.adm-ai-mic-btn.listening{border-color:var(--gold);background:#2a1e08}
+.adm-ai-send-btn{width:42px;height:42px;border-radius:10px;background:var(--gold);border:none;cursor:pointer;font-size:20px;color:#1a1209;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600}
+.adm-ai-card{background:var(--bg3);border:1px solid var(--border-gold);border-radius:14px;padding:14px 16px;margin-top:4px}
+.adm-ai-reply{font-size:15px;color:var(--gold-pale);margin-bottom:10px;line-height:1.5}
+.adm-ai-preview{background:var(--bg2);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.adm-ai-preview-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+.adm-ai-preview-row:last-child{border-bottom:none}
+.adm-ai-preview-label{font-size:13px;color:var(--text3)}
+.adm-ai-preview-val{font-size:14px;color:var(--text);text-align:right;max-width:60%}
+.adm-ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.adm-ai-confirm-btn{flex:1;padding:10px;background:var(--gold);border:none;border-radius:10px;font-family:var(--sans);font-size:15px;color:#1a1209;cursor:pointer;font-weight:500}
+.adm-ai-edit-btn{flex:1;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:15px;color:var(--text2);cursor:pointer}
+.adm-ai-cancel-btn{padding:10px 14px;background:none;border:none;font-family:var(--sans);font-size:14px;color:var(--text3);cursor:pointer}
 /* Toast */
 #adm-toast{position:fixed;bottom:calc(70px + var(--safe-bottom));left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:8px 18px;font-size:15px;color:var(--gold-pale);z-index:10500;opacity:0;transition:opacity .3s;white-space:nowrap;pointer-events:none}
 #adm-toast.show{opacity:1}
@@ -1759,6 +1777,159 @@ function closeNewApptForm() {
   _editApptId = null;
   document.getElementById('adm-new-appt-overlay').classList.remove('show');
 }
+
+// ── Admin AI assistant ──
+let _admAiRecog = null;
+let _admAiResult = null;
+
+function admAiSend() {
+  const inp = document.getElementById('adm-ai-input');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  admAiRequest(text);
+}
+
+async function admAiRequest(text) {
+  const card = document.getElementById('adm-ai-card');
+  card.style.display = '';
+  card.innerHTML = '<div style="color:var(--text3);font-size:14px;padding:8px 0">Аналізую…</div>';
+  try {
+    const r = await fetch('/api/admin/ai-intent', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
+      body: JSON.stringify({text})
+    });
+    const d = await r.json();
+    if (d.error) {
+      card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Помилка: ' + (d.error||'') + '</div></div>';
+      return;
+    }
+    _admAiResult = d;
+    admAiRenderCard(d);
+  } catch(e) {
+    card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Мережева помилка</div></div>';
+  }
+}
+
+function admAiRenderCard(d) {
+  const card = document.getElementById('adm-ai-card');
+  const isAppt = d.action === 'create' || d.action === 'edit';
+  let html = '<div class="adm-ai-card">';
+  html += '<div class="adm-ai-reply">' + (d.reply || '') + '</div>';
+  if (isAppt && (d.client || d.client_options && d.client_options.length || d.procedure || d.date || d.time)) {
+    html += '<div class="adm-ai-preview">';
+    if (d.client_options && d.client_options.length > 1) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span>';
+      html += '<select id="adm-ai-client-sel" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:2px 4px;max-width:180px">';
+      d.client_options.forEach(function(c,i){ html += '<option value="'+i+'">'+c.name+'</option>'; });
+      html += '</select></div>';
+    } else if (d.client) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val">'+d.client.name+'</span></div>';
+    }
+    if (d.procedure_options && d.procedure_options.length > 1) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span>';
+      html += '<select id="adm-ai-proc-sel" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:2px 4px;max-width:180px">';
+      d.procedure_options.forEach(function(p,i){ html += '<option value="'+i+'">'+p.name+'</option>'; });
+      html += '</select></div>';
+    } else if (d.procedure) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val">'+d.procedure.name+'</span></div>';
+    }
+    if (d.date) {
+      var dp = d.date.split('-');
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Дата</span><span class="adm-ai-preview-val">'+(dp.length===3?dp[2]+'.'+dp[1]+'.'+dp[0]:d.date)+'</span></div>';
+    }
+    if (d.time) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Час</span><span class="adm-ai-preview-val">'+d.time+'</span></div>';
+    }
+    if (d.specialist) {
+      var spLabel = d.specialist==='victoria'?'Вікторія':d.specialist==='anastasia'?'Анастасія':d.specialist;
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Спеціаліст</span><span class="adm-ai-preview-val">'+spLabel+'</span></div>';
+    }
+    if (d.notes) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Нотатки</span><span class="adm-ai-preview-val">'+d.notes+'</span></div>';
+    }
+    html += '</div>';
+    html += '<div class="adm-ai-actions">';
+    html += '<button class="adm-ai-confirm-btn" onclick="admAiConfirm()">✓ Підтвердити</button>';
+    html += '<button class="adm-ai-edit-btn" onclick="admAiEdit()">✎ Редагувати</button>';
+    html += '<button class="adm-ai-cancel-btn" onclick="admAiClose()">Закрити</button>';
+    html += '</div>';
+  } else {
+    html += '<div style="text-align:right"><button class="adm-ai-cancel-btn" onclick="admAiClose()">Закрити</button></div>';
+  }
+  html += '</div>';
+  card.innerHTML = html;
+}
+
+function admAiClose() {
+  document.getElementById('adm-ai-card').style.display = 'none';
+  document.getElementById('adm-ai-input').value = '';
+  _admAiResult = null;
+}
+
+function _admAiGetSelected() {
+  const d = _admAiResult;
+  if (!d) return {client: null, procedure: null};
+  let client = d.client;
+  const cSel = document.getElementById('adm-ai-client-sel');
+  if (cSel && d.client_options) client = d.client_options[parseInt(cSel.value,10)] || client;
+  let procedure = d.procedure;
+  const pSel = document.getElementById('adm-ai-proc-sel');
+  if (pSel && d.procedure_options) procedure = d.procedure_options[parseInt(pSel.value,10)] || procedure;
+  return {client, procedure};
+}
+
+function admAiFill() {
+  const d = _admAiResult;
+  if (!d) return;
+  const sel = _admAiGetSelected();
+  showNewApptForm(d.date || null);
+  if (sel.client) selectClientAppt(sel.client.phone || '', sel.client.name || '');
+  if (sel.procedure) selectProcAppt(sel.procedure.name, sel.procedure.price || '');
+  if (d.specialist) selectSpecialistAppt(d.specialist);
+  if (d.time) document.getElementById('appt-time').value = d.time;
+  if (d.notes) document.getElementById('appt-notes').value = d.notes;
+}
+
+function admAiConfirm() {
+  admAiFill();
+  admAiClose();
+}
+
+function admAiEdit() {
+  admAiFill();
+  admAiClose();
+}
+
+function admAiToggleMic() {
+  const btn = document.getElementById('adm-ai-mic');
+  if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+    showToast('Голосовий ввід не підтримується цим браузером');
+    return;
+  }
+  if (_admAiRecog) {
+    _admAiRecog.stop();
+    _admAiRecog = null;
+    btn.classList.remove('listening');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recog = new SR();
+  recog.lang = 'uk-UA';
+  recog.interimResults = false;
+  recog.maxAlternatives = 1;
+  recog.onresult = function(e) {
+    const t = e.results[0][0].transcript;
+    document.getElementById('adm-ai-input').value = t;
+    admAiRequest(t);
+  };
+  recog.onerror = function() { btn.classList.remove('listening'); _admAiRecog = null; };
+  recog.onend   = function() { btn.classList.remove('listening'); _admAiRecog = null; };
+  recog.start();
+  _admAiRecog = recog;
+  btn.classList.add('listening');
+}
+
 function selectSpecialistAppt(s) {
   _apptSpec = s;
   document.getElementById('appt-spec-v').classList.toggle('active', s==='victoria');
@@ -2687,6 +2858,18 @@ if ('serviceWorker' in navigator) {
         <div class="stat-num" id="adm-stat-month">—</div>
         <div class="stat-label">Записів за місяць</div>
       </div>
+    </div>
+    <div class="admin-section">
+      <div class="admin-section-title">AI-асистент</div>
+      <div class="adm-ai-input-row">
+        <input type="text" id="adm-ai-input" class="adm-ai-text"
+          placeholder="Запишіть Катю на ботокс на п'ятницю о 14:00…"
+          autocomplete="off"
+          onkeydown="if(event.key==='Enter')admAiSend()">
+        <button id="adm-ai-mic" class="adm-ai-mic-btn" onclick="admAiToggleMic()" title="Голосовий ввід">🎤</button>
+        <button class="adm-ai-send-btn" onclick="admAiSend()">›</button>
+      </div>
+      <div id="adm-ai-card" style="display:none"></div>
     </div>
     <div class="admin-section">
       <div class="admin-section-title">

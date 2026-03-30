@@ -1126,6 +1126,138 @@ def admin_prices_put():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/ai-intent', methods=['POST'])
+@require_admin
+def admin_ai_intent():
+    """Розбирає NLP-запит адміністратора через claude-sonnet-4-6."""
+    import urllib.request as _urlreq
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()
+    if not text:
+        return jsonify({'error': 'empty_text'}), 400
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    wd_names = ['понеділок','вівторок','середа','четвер','п\'ятниця','субота','неділя']
+    today_wd = wd_names[datetime.now().weekday()]
+
+    system_prompt = (
+        'Ти — асистент адміністратора косметологічної клініки Dr. Gómon.\n'
+        'Сьогодні: {} ({}).\n\n'
+        'Проаналізуй запит і поверни ТІЛЬКИ JSON (без markdown, без пояснень):\n'
+        '{{\n'
+        '  "action": "create|find|edit|delete|list|unknown",\n'
+        '  "client_name": "ім\'я або null",\n'
+        '  "procedure": "назва процедури або null",\n'
+        '  "date": "YYYY-MM-DD або null",\n'
+        '  "time": "HH:MM або null",\n'
+        '  "specialist": "victoria|anastasia|null",\n'
+        '  "notes": "нотатки або null",\n'
+        '  "reply": "коротке підтвердження українською 1-2 речення"\n'
+        '}}\n\n'
+        'Правила:\n'
+        '- action=create: записати/додати запис\n'
+        '- action=find: знайти/переглянути запис або клієнта\n'
+        '- action=edit: змінити/перенести запис\n'
+        '- action=delete: скасувати/видалити запис\n'
+        '- action=list: список записів на дату/тиждень\n'
+        '- Дати "завтра","наступна середа" тощо — конвертуй відносно {}\n'
+        '- "наступна X" = найближчий такий день тижня після сьогодні\n'
+        '- Вікторія/Вика → "victoria"; Настя/Анастасія → "anastasia"; не вказано → null\n'
+        '- reply: "Записую [ім\'я] на [процедуру], [дата] о [час] до [спеціаліст]." або уточнення'
+    ).format(today, today_wd, today)
+
+    ANTHROPIC_KEY = 'ANTHROPIC_KEY_REMOVED'
+    payload = json.dumps({
+        'model': 'claude-sonnet-4-6',
+        'max_tokens': 512,
+        'system': system_prompt,
+        'messages': [{'role': 'user', 'content': text}]
+    }).encode('utf-8')
+    req = _urlreq.Request(
+        'https://api.anthropic.com/v1/messages',
+        data=payload,
+        headers={
+            'x-api-key': ANTHROPIC_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+        }
+    )
+    try:
+        with _urlreq.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+        ai_text = result['content'][0]['text'].strip()
+        # Strip markdown code blocks if present
+        if ai_text.startswith('```'):
+            lines = ai_text.split('\n')
+            ai_text = '\n'.join(lines[1:])
+            if ai_text.endswith('```'):
+                ai_text = ai_text[:-3].strip()
+        intent = json.loads(ai_text)
+    except Exception as e:
+        logger.error('ai_intent error: {}'.format(e))
+        return jsonify({'error': 'ai_error', 'detail': str(e)}), 500
+
+    # Enrich: client lookup
+    client = None
+    client_options = []
+    if intent.get('client_name'):
+        name_q = intent['client_name'].lower()
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            "SELECT phone, first_name, last_name FROM clients "
+            "WHERE lower(first_name||' '||last_name) LIKE ? OR lower(first_name) LIKE ? LIMIT 6",
+            ('%{}%'.format(name_q), '%{}%'.format(name_q))
+        )
+        for row in c.fetchall():
+            full = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            client_options.append({'phone': row['phone'], 'name': full})
+        conn.close()
+        if len(client_options) == 1:
+            client = client_options[0]
+
+    # Enrich: procedure lookup
+    procedure = None
+    procedure_options = []
+    if intent.get('procedure'):
+        proc_q = intent['procedure'].lower()
+        try:
+            with open(PRICES_PATH, 'r', encoding='utf-8') as f:
+                prices = json.load(f)
+            # Exact/substring match first
+            for cat in prices:
+                for item in cat.get('items', []):
+                    iname = (item.get('name') or '').lower()
+                    if proc_q in iname or iname in proc_q:
+                        procedure_options.append({'name': item['name'], 'price': item.get('price', '')})
+            # Word-level fallback
+            if not procedure_options:
+                words = [w for w in proc_q.split() if len(w) > 3]
+                for cat in prices:
+                    for item in cat.get('items', []):
+                        iname = (item.get('name') or '').lower()
+                        if words and any(w in iname for w in words):
+                            procedure_options.append({'name': item['name'], 'price': item.get('price', '')})
+            if len(procedure_options) == 1:
+                procedure = procedure_options[0]
+        except Exception as _pe:
+            logger.warning('procedure lookup error: {}'.format(_pe))
+
+    return jsonify({
+        'action':            intent.get('action', 'unknown'),
+        'client':            client,
+        'client_options':    client_options,
+        'procedure':         procedure,
+        'procedure_options': procedure_options,
+        'date':              intent.get('date'),
+        'time':              intent.get('time'),
+        'specialist':        intent.get('specialist'),
+        'notes':             intent.get('notes'),
+        'reply':             intent.get('reply', ''),
+    })
+
+
 # ── PUSH NOTIFICATIONS ──
 
 try:
