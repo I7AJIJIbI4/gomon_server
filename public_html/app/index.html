@@ -945,7 +945,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
         <div class="phone-input-wrap">
           <span class="phone-prefix">+38</span>
           <input class="phone-input" id="phone-input" type="tel" inputmode="numeric"
-            placeholder="(0XX) XXX-XX-XX" maxlength="13"
+            placeholder="(0XX) XXX-XX-XX" maxlength="15"
             oninput="formatPhone(this)" onkeydown="if(event.key==='Enter')sendOtp()">
         </div>
         <p class="auth-hint">Для клієнтів — вхід в кабінет. Для нових — AI-підбір процедури</p>
@@ -1292,7 +1292,8 @@ function formatPhone(el) {
   let v = el.value.replace(/\D/g, '');
   if (v.startsWith('380')) v = v.slice(2);
   if (v.startsWith('38'))  v = v.slice(2);
-  el.value = v.slice(0, 10);
+  // UA: max 10 digits; international (starts with non-0, ≥11): keep up to 15
+  el.value = (v.length > 10 && !v.startsWith('0')) ? v.slice(0, 15) : v.slice(0, 10);
 }
 
 async function sendOtp() {
@@ -1301,7 +1302,10 @@ async function sendOtp() {
   const btn = document.getElementById('phone-btn');
   btn.disabled = true; btn.textContent = 'Надсилаємо...';
 
-  _currentPhone = '380' + ph.replace(/^0/, '');
+  // International number: ≥11 digits and doesn't start with 0 → use as-is
+  _currentPhone = (ph.length >= 11 && !ph.startsWith('0'))
+    ? ph
+    : '380' + ph.replace(/^0/, '');
 
   try {
     const res = await api('/auth/send-otp', {
