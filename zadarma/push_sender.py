@@ -60,6 +60,15 @@ def save_subscription(phone, subscription_json_str):
             '(phone, endpoint, subscription, created_at, active) VALUES (?,?,?,?,1)',
             (phone, endpoint, subscription_json_str, datetime.now().isoformat())
         )
+        # Залишаємо не більше 2 активних підписок на телефон (найновіші)
+        conn.execute("""
+            UPDATE push_subscriptions SET active=0
+            WHERE phone=? AND active=1 AND endpoint NOT IN (
+                SELECT endpoint FROM push_subscriptions
+                WHERE phone=? AND active=1
+                ORDER BY created_at DESC LIMIT 2
+            )
+        """, (phone, phone))
         conn.commit()
         logger.info('Push subscription saved: {}'.format(phone))
         return True
