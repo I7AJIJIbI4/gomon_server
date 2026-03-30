@@ -1234,7 +1234,7 @@ def admin_ai_intent():
                 for item in cat.get('items', []):
                     iname = (item.get('name') or '').lower()
                     if proc_q in iname or iname in proc_q:
-                        procedure_options.append({'name': item['name'], 'price': item.get('price', '')})
+                        procedure_options.append({'name': item['name'], 'price': item.get('price', ''), 'specialists': item.get('specialists', [])})
             # Word-level fallback
             if not procedure_options:
                 words = [w for w in proc_q.split() if len(w) > 3]
@@ -1242,9 +1242,12 @@ def admin_ai_intent():
                     for item in cat.get('items', []):
                         iname = (item.get('name') or '').lower()
                         if words and any(w in iname for w in words):
-                            procedure_options.append({'name': item['name'], 'price': item.get('price', '')})
+                            procedure_options.append({'name': item['name'], 'price': item.get('price', ''), 'specialists': item.get('specialists', [])})
             if len(procedure_options) == 1:
                 procedure = procedure_options[0]
+                # Auto-fill specialist if procedure has exactly one assigned specialist
+                if not intent.get('specialist') and len(procedure.get('specialists', [])) == 1:
+                    intent['specialist'] = procedure['specialists'][0]
         except Exception as _pe:
             logger.warning('procedure lookup error: {}'.format(_pe))
 
@@ -1252,8 +1255,10 @@ def admin_ai_intent():
         'action':            intent.get('action', 'unknown'),
         'client':            client,
         'client_options':    client_options,
+        'client_name':       intent.get('client_name'),   # raw name from LLM (fallback)
         'procedure':         procedure,
         'procedure_options': procedure_options,
+        'procedure_raw':     intent.get('procedure'),     # raw procedure name from LLM (fallback)
         'date':              intent.get('date'),
         'time':              intent.get('time'),
         'specialist':        intent.get('specialist'),

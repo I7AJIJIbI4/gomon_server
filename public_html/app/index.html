@@ -1292,8 +1292,8 @@ function formatPhone(el) {
   let v = el.value.replace(/\D/g, '');
   if (v.startsWith('380')) v = v.slice(2);
   if (v.startsWith('38'))  v = v.slice(2);
-  // UA: max 10 digits; international (starts with non-0, ≥11): keep up to 15
-  el.value = (v.length > 10 && !v.startsWith('0')) ? v.slice(0, 15) : v.slice(0, 10);
+  // UA (0...): max 10 digits; international (non-0 first digit): allow up to 15
+  el.value = v.startsWith('0') ? v.slice(0, 10) : v.slice(0, 15);
 }
 
 async function sendOtp() {
@@ -1820,7 +1820,7 @@ function admAiRenderCard(d) {
   const isAppt = d.action === 'create' || d.action === 'edit';
   let html = '<div class="adm-ai-card">';
   html += '<div class="adm-ai-reply">' + (d.reply || '') + '</div>';
-  if (isAppt && (d.client || d.client_options && d.client_options.length || d.procedure || d.date || d.time)) {
+  if (isAppt && (d.client || d.client_name || d.client_options && d.client_options.length || d.procedure || d.procedure_raw || d.date || d.time)) {
     html += '<div class="adm-ai-preview">';
     if (d.client_options && d.client_options.length > 1) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span>';
@@ -1829,6 +1829,8 @@ function admAiRenderCard(d) {
       html += '</select></div>';
     } else if (d.client) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val">'+d.client.name+'</span></div>';
+    } else if (d.client_name) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val" style="color:var(--text3)">'+d.client_name+'?</span></div>';
     }
     if (d.procedure_options && d.procedure_options.length > 1) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span>';
@@ -1837,6 +1839,8 @@ function admAiRenderCard(d) {
       html += '</select></div>';
     } else if (d.procedure) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val">'+d.procedure.name+'</span></div>';
+    } else if (d.procedure_raw) {
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val" style="color:var(--text3)">'+d.procedure_raw+'?</span></div>';
     }
     if (d.date) {
       var dp = d.date.split('-');
@@ -1888,8 +1892,18 @@ function admAiFill() {
   if (!d) return;
   const sel = _admAiGetSelected();
   showNewApptForm(d.date || null);
-  if (sel.client) selectClientAppt(sel.client.phone || '', sel.client.name || '');
-  if (sel.procedure) selectProcAppt(sel.procedure.name, sel.procedure.price || '');
+  if (sel.client) {
+    selectClientAppt(sel.client.phone || '', sel.client.name || '');
+  } else if (d.client_name) {
+    // No DB match — put raw name in search field so admin can pick manually
+    document.getElementById('appt-client-q').value = d.client_name;
+  }
+  if (sel.procedure) {
+    selectProcAppt(sel.procedure.name, sel.procedure.price || '');
+  } else if (d.procedure_raw) {
+    // No DB match — put raw procedure name in search field
+    document.getElementById('appt-proc-q').value = d.procedure_raw;
+  }
   if (d.specialist) selectSpecialistAppt(d.specialist);
   if (d.time) document.getElementById('appt-time').value = d.time;
   if (d.notes) document.getElementById('appt-notes').value = d.notes;
