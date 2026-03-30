@@ -462,7 +462,8 @@ nav{
 .adm-appt-status-badge{font-size:12px;padding:2px 6px;border-radius:8px;margin-top:2px;display:inline-block}
 .adm-badge-confirmed{background:#1e2e1e;color:#6db56d}.adm-badge-done{background:#1e1e1e;color:var(--text3)}.adm-badge-no_show{background:#2e1e1e;color:#b56d6d}.adm-badge-cancelled{background:#2e1e1e;color:#b56d6d}
 /* Week view */
-.adm-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:6px 8px 80px}
+.adm-week-grid{display:grid;gap:3px;padding:6px 8px 0}
+.adm-week-grid:last-child{padding-bottom:80px}
 .adm-week-day{padding:6px 3px;border:1px solid var(--border);border-radius:8px;cursor:pointer;min-height:70px}
 .adm-week-day.today{border-color:var(--gold);background:var(--bg3)}
 .adm-week-day-hdr{text-align:center;margin-bottom:3px}
@@ -1633,35 +1634,53 @@ function renderCalDay() {
 function renderCalWeek() {
   const mon = _getMonday(calDate);
   const todayStr = _fmtDate(new Date());
-  let html = '<div class="adm-week-grid">';
+
+  // Build day objects
+  const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon); d.setDate(mon.getDate()+i);
     const ds = _fmtDate(d);
-    const isToday = ds === todayStr;
-    const dayAppts = calAppointments.filter(a => a.date === ds)
+    const appts = calAppointments.filter(a => a.date === ds)
       .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-    html += `<div class="adm-week-day${isToday?' today':''}" onclick="calDate=new Date('${ds}');adminCalGo('day')">
-      <div class="adm-week-day-hdr">
-        <span class="adm-week-dow">${CAL_DOW[d.getDay()]}</span>
-        <span class="adm-week-num">${d.getDate()}</span>
-      </div>
-      <div class="adm-week-appts">
-        ${dayAppts.map(a=>{
-          const isWl = a.source==='wlaunch';
-          const click = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
-          const specClass = a.specialist ? `adm-spec-${a.specialist}` : '';
-          const proc = (a.procedure_name||'').replace(/\s+/g,' ').trim();
-          return `<div class="adm-week-appt ${specClass}" style="${isWl?'opacity:.7':''}" ${click}>
-            <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}${isWl?' WL':''}</div>
-            <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
-            ${proc?`<div class="adm-week-appt-proc">${proc}</div>`:''}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+    days.push({d, ds, appts});
   }
-  html += '</div>';
-  document.getElementById('adm-cal-container').innerHTML = html;
+
+  // Split into 3+4 or 4+3 — pick whichever gives closest avg appointments/day between rows
+  const avg = (arr) => arr.reduce((s,x)=>s+x.appts.length,0) / arr.length;
+  const bestK = Math.abs(avg(days.slice(0,3)) - avg(days.slice(3))) <=
+                Math.abs(avg(days.slice(0,4)) - avg(days.slice(4))) ? 3 : 4;
+
+  function renderRow(rowDays) {
+    const n = rowDays.length;
+    let h = `<div class="adm-week-grid" style="grid-template-columns:repeat(${n},1fr)">`;
+    for (const {d, ds, appts} of rowDays) {
+      const isToday = ds === todayStr;
+      h += `<div class="adm-week-day${isToday?' today':''}" onclick="calDate=new Date('${ds}');adminCalGo('day')">
+        <div class="adm-week-day-hdr">
+          <span class="adm-week-dow">${CAL_DOW[d.getDay()]}</span>
+          <span class="adm-week-num">${d.getDate()}</span>
+        </div>
+        <div class="adm-week-appts">
+          ${appts.map(a=>{
+            const isWl = a.source==='wlaunch';
+            const click = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
+            const specClass = a.specialist ? `adm-spec-${a.specialist}` : '';
+            const proc = (a.procedure_name||'').replace(/\s+/g,' ').trim();
+            return `<div class="adm-week-appt ${specClass}" style="${isWl?'opacity:.7':''}" ${click}>
+              <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}${isWl?' WL':''}</div>
+              <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
+              ${proc?`<div class="adm-week-appt-proc">${proc}</div>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+    h += '</div>';
+    return h;
+  }
+
+  document.getElementById('adm-cal-container').innerHTML =
+    renderRow(days.slice(0, bestK)) + renderRow(days.slice(bestK));
 }
 
 function renderCalMonth() {
@@ -1830,9 +1849,12 @@ function admAiRenderCard(d) {
     } else if (d.client) {
       var phoneShort = (d.client.phone||'').replace(/^380/,'0');
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val">'+d.client.name+'<br><span style="font-size:12px;color:var(--text3)">'+phoneShort+'</span></span></div>';
-    } else if (d.client_name) {
-      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val"><span>'+d.client_name+'</span><br><span style="font-size:12px;color:#e09060">Новий клієнт</span></span></div>';
-      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Тел. клієнта</span><input id="adm-ai-new-phone" type="tel" placeholder="+380XXXXXXXXX" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:4px 8px;width:155px;font-family:var(--sans)"></div>';
+    } else {
+      // No client found — show new-client form (pre-fill name if AI extracted one)
+      var prefillName = d.client_name || '';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val" style="color:#e09060;font-size:12px">Новий клієнт</span></div>';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Ім\'я</span><input id="adm-ai-new-name" type="text" value="'+prefillName+'" placeholder="Ім\'я Прізвище" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:4px 8px;width:155px;font-family:var(--sans)"></div>';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Телефон</span><input id="adm-ai-new-phone" type="tel" placeholder="0XXXXXXXXX" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:4px 8px;width:155px;font-family:var(--sans)"></div>';
     }
     if (d.procedure_options && d.procedure_options.length > 1) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span>';
@@ -1916,28 +1938,28 @@ function admAiFill() {
 
 async function admAiConfirm() {
   const d = _admAiResult;
-  const isNewClient = d && !d.client && !(d.client_options && d.client_options.length) && d.client_name;
+  const isNewClient = d && !d.client && !(d.client_options && d.client_options.length);
   if (isNewClient) {
+    const nameInp  = document.getElementById('adm-ai-new-name');
     const phoneInp = document.getElementById('adm-ai-new-phone');
+    const fullName = nameInp ? (nameInp.value || '').trim() : (d.client_name || '').trim();
     const rawPhone = phoneInp ? (phoneInp.value || '').replace(/\D/g, '') : '';
-    if (!rawPhone || rawPhone.length < 10) {
-      showToast('Введіть номер телефону нового клієнта');
-      return;
-    }
+    if (!fullName) { showToast('Введіть ім\'я клієнта'); return; }
+    if (!rawPhone || rawPhone.length < 10) { showToast('Введіть номер телефону'); return; }
     const normPhone = rawPhone.startsWith('0') ? '380' + rawPhone.slice(1) :
                       rawPhone.startsWith('38') && rawPhone.length === 12 ? rawPhone : rawPhone;
-    const nameParts = (d.client_name || '').trim().split(/\s+/);
-    const firstName = nameParts[0] || d.client_name;
-    const lastName = nameParts.slice(1).join(' ') || '';
+    const nameParts = fullName.split(/\s+/);
+    const firstName = nameParts[0];
+    const lastName  = nameParts.slice(1).join(' ') || '';
     try {
       const r = await fetch('/api/admin/clients/add', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
         body: JSON.stringify({first_name: firstName, last_name: lastName, phone: normPhone})
       });
       const res = await r.json();
       if (res.ok || res.existing) {
-        _admAiResult.client = res.client || {phone: normPhone, name: d.client_name};
+        _admAiResult.client = res.client || {phone: normPhone, name: fullName};
       } else {
         showToast('Помилка: ' + (res.error || 'не вдалося зберегти клієнта'));
         return;
