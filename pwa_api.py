@@ -1189,10 +1189,14 @@ def admin_ai_intent():
         # Strip markdown code blocks if present
         if ai_text.startswith('```'):
             lines = ai_text.split('\n')
-            ai_text = '\n'.join(lines[1:])
+            ai_text = '\n'.join(lines[1:]).strip()
             if ai_text.endswith('```'):
                 ai_text = ai_text[:-3].strip()
         intent = json.loads(ai_text)
+        # Normalize "null" strings from model to actual None
+        for k in ('client_name', 'procedure', 'date', 'time', 'specialist', 'notes'):
+            if intent.get(k) == 'null':
+                intent[k] = None
     except Exception as e:
         logger.error('ai_intent error: {}'.format(e))
         return jsonify({'error': 'ai_error', 'detail': str(e)}), 500

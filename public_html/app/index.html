@@ -1792,7 +1792,7 @@ function admAiSend() {
 async function admAiRequest(text) {
   const card = document.getElementById('adm-ai-card');
   card.style.display = '';
-  card.innerHTML = '<div style="color:var(--text3);font-size:14px;padding:8px 0">Аналізую…</div>';
+  card.innerHTML = '<div class="adm-ai-card"><div style="color:var(--text3);font-size:14px">Аналізую…</div></div>';
   try {
     const r = await fetch('/api/admin/ai-intent', {
       method: 'POST',

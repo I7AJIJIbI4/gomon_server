@@ -148,6 +148,15 @@ loadClientsAdmin()   // GET /api/admin/clients-list
 loadProcedures()     // GET /api/admin/prices/edit або /api/prices
 saveProcedures()     // PUT /api/admin/prices/edit
 adminSync()          // POST /api/admin/sync → скидає _calLoaded, _clientsLoaded
+// AI assistant (admin-home screen):
+admAiSend()          // читає input → admAiRequest()
+admAiRequest(text)   // POST /api/admin/ai-intent → admAiRenderCard()
+admAiRenderCard(d)   // рендерить картку з превʼю запису та кнопками
+admAiConfirm()       // admAiFill() + admAiClose()
+admAiEdit()          // admAiFill() + admAiClose() (відкриває форму для ручного редагування)
+admAiFill()          // заповнює showNewApptForm() з даних AI-результату
+admAiClose()         // ховає картку, очищує input
+admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після розпізнавання
 ```
 
 ### Важливо: дві функції `_fmtDate`
@@ -200,6 +209,7 @@ adminSync()          // POST /api/admin/sync → скидає _calLoaded, _clien
 | `/api/admin/push-list` | GET | Push-підписники |
 | `/api/admin/month-visits` | GET | Записи за місяць з цінами |
 | `/api/admin/sync` | POST | Запускає sync_clients.py + sync_appointments.py |
+| `/api/admin/ai-intent` | POST | NLP → структурований JSON запису через claude-sonnet-4-6 |
 
 ### Адмін (`require_full_admin` — тільки superadmin + full)
 | Endpoint | Метод | Опис |
@@ -430,6 +440,9 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот. Реальні PWA-юзери = `otp_sessions.db::sessions`
 - **Specialist detection**: `sync_appointments.py` + `wlaunch_api.py` визначають спеціаліста через `resources[].phone` → маппінг у `RESOURCE_SPECIALIST_MAP`
 - **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)
+- **PIN_AUTH**: словник `{phone: pin}` у pwa_api.py для bypass SMS OTP. Наразі: `16452040153` (тестовий аккаунт Анастасії, PIN `0375`)
+- **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються.
+- **Push dedup**: `push_sender.py::save_subscription()` лімітує до 2 активних підписок на телефон (найновіші), щоб уникнути дублікатів push.
 
 ---
 
