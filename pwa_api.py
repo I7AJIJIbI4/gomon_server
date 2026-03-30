@@ -1206,15 +1206,28 @@ def admin_ai_intent():
     client_options = []
     if intent.get('client_name'):
         name_q = intent['client_name'].lower()
+        name_words = [w for w in name_q.split() if len(w) > 2]
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
+        # Search by full name, then by individual words (first/last name separately)
+        conditions = ["lower(first_name||' '||last_name) LIKE ?"]
+        params = ['%{}%'.format(name_q)]
+        for w in name_words:
+            conditions.append("lower(first_name) LIKE ?")
+            conditions.append("lower(last_name) LIKE ?")
+            params.extend(['%{}%'.format(w), '%{}%'.format(w)])
         c.execute(
-            "SELECT phone, first_name, last_name FROM clients "
-            "WHERE lower(first_name||' '||last_name) LIKE ? OR lower(first_name) LIKE ? LIMIT 6",
-            ('%{}%'.format(name_q), '%{}%'.format(name_q))
+            "SELECT DISTINCT phone, first_name, last_name FROM clients WHERE ({}) LIMIT 6".format(
+                ' OR '.join(conditions)
+            ),
+            params
         )
+        seen = set()
         for row in c.fetchall():
+            if row['phone'] in seen:
+                continue
+            seen.add(row['phone'])
             full = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
             client_options.append({'phone': row['phone'], 'name': full})
         conn.close()
