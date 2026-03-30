@@ -1937,15 +1937,31 @@ function admAiToggleMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recog = new SR();
   recog.lang = 'uk-UA';
-  recog.interimResults = false;
+  recog.interimResults = true;   // live preview while speaking
   recog.maxAlternatives = 1;
+  const inp = document.getElementById('adm-ai-input');
+  inp.placeholder = 'Слухаю…';
+  let _finalText = '';
   recog.onresult = function(e) {
-    const t = e.results[0][0].transcript;
-    document.getElementById('adm-ai-input').value = t;
-    admAiRequest(t);
+    let interim = '';
+    _finalText = '';
+    for (let i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) _finalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    inp.value = _finalText || interim;
   };
-  recog.onerror = function() { btn.classList.remove('listening'); _admAiRecog = null; };
-  recog.onend   = function() { btn.classList.remove('listening'); _admAiRecog = null; };
+  recog.onend = function() {
+    btn.classList.remove('listening');
+    _admAiRecog = null;
+    inp.placeholder = 'ПІБ, процедура, дата час';
+    if (_finalText) admAiRequest(_finalText);
+  };
+  recog.onerror = function() {
+    btn.classList.remove('listening');
+    _admAiRecog = null;
+    inp.placeholder = 'ПІБ, процедура, дата час';
+  };
   recog.start();
   _admAiRecog = recog;
   btn.classList.add('listening');
