@@ -140,10 +140,16 @@ ADMIN_ROLES = {
     '380733103110': 'superadmin',
     '380996093860': 'full',
     '380685129121': 'specialist',
+    '16452040153':  'specialist',   # test account (Anastasia role, no appointments)
 }
 SPECIALIST_MAP = {
     '380996093860': 'victoria',
     '380685129121': 'anastasia',
+    '16452040153':  'anastasia',    # test account mirrors Anastasia
+}
+# Phones that authenticate via fixed PIN instead of SMS OTP
+PIN_AUTH = {
+    '16452040153': '0375',
 }
 ADMIN_PHONE = '380733103110'  # backward compat
 
@@ -268,6 +274,10 @@ def send_otp():
         logger.info(f"Guest mode (not a client): {phone}")
         return jsonify({'ok': True, 'guest': True})
 
+    # PIN-авторизація — не надсилаємо SMS, просто підтверджуємо що код прийнятий
+    if phone in PIN_AUTH:
+        return jsonify({'ok': True})
+
     code    = ''.join(random.choices(string.digits, k=4))
     expires = int(time.time()) + OTP_TTL
 
@@ -297,6 +307,21 @@ def verify_otp():
     data  = request.get_json() or {}
     phone = norm_phone(data.get('phone', ''))
     code  = str(data.get('code', '')).strip()
+
+    # PIN bypass — перевіряємо фіксований PIN замість OTP
+    if phone in PIN_AUTH:
+        if code != PIN_AUTH[phone]:
+            return jsonify({'error': 'wrong_code'}), 400
+        token = gen_token()
+        now   = int(time.time())
+        conn  = sqlite3.connect(OTP_DB)
+        conn.execute('INSERT INTO sessions VALUES (?,?,?,?)',
+                     (token, phone, now, now + SESSION_TTL))
+        conn.commit()
+        conn.close()
+        client = get_client(phone)
+        logger.info(f"PIN login: {phone}")
+        return jsonify({'ok': True, 'token': token, 'client': _client_payload(client, phone)})
 
     conn = sqlite3.connect(OTP_DB)
     c    = conn.cursor()
