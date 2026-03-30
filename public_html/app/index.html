@@ -490,6 +490,13 @@ nav{
 .adm-month-chip.victoria{background:#1e3020;color:#5a9a5a}
 .adm-month-chip.anastasia{background:#20203a;color:#5a5aaa}
 .adm-month-chip.other{background:var(--bg3);color:var(--text2)}
+/* Calendar fill mode (week/month) */
+#adm-cal-scroll.adm-cal-fill{overflow:hidden;padding:0}
+#adm-cal-scroll.adm-cal-fill #adm-cal-container{height:100%;display:flex;flex-direction:column}
+.adm-cal-fill .adm-week-grid{flex:1;height:0;align-items:stretch;padding-bottom:0}
+.adm-cal-fill .adm-week-day{overflow-y:auto;min-height:0}
+.adm-cal-fill .adm-month-grid{flex:1;height:0;grid-template-rows:22px;grid-auto-rows:1fr;padding-bottom:0}
+.adm-week-appt-proc{color:var(--text3);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;opacity:.85}
 /* FAB */
 .adm-fab{position:fixed;right:20px;bottom:calc(56px + var(--safe-bottom) + 16px);width:52px;height:52px;border-radius:26px;background:var(--gold);border:none;font-size:26px;color:#1a1209;cursor:pointer;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-weight:300;line-height:1}
 /* New appt overlay */
@@ -1558,6 +1565,7 @@ function updateCalNavTitle() {
 }
 
 function renderCalendar() {
+  document.getElementById('adm-cal-scroll').classList.toggle('adm-cal-fill', calView !== 'day');
   if (calView === 'day') renderCalDay();
   else if (calView === 'week') renderCalWeek();
   else renderCalMonth();
@@ -1620,9 +1628,11 @@ function renderCalWeek() {
           const isWl = a.source==='wlaunch';
           const click = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
           const specClass = a.specialist ? `adm-spec-${a.specialist}` : '';
+          const proc = (a.procedure_name||'').replace(/\s+/g,' ').trim();
           return `<div class="adm-week-appt ${specClass}" style="${isWl?'opacity:.7':''}" ${click}>
             <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}${isWl?' WL':''}</div>
             <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
+            ${proc?`<div class="adm-week-appt-proc">${proc}</div>`:''}
           </div>`;
         }).join('')}
       </div>
