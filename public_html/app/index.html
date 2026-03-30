@@ -469,23 +469,27 @@ nav{
 .adm-week-dow{font-size:10px;color:var(--text3);display:block;text-transform:uppercase;letter-spacing:.3px}
 .adm-week-num{font-family:var(--serif);font-size:14px;color:var(--text);display:block}
 .adm-week-day.today .adm-week-num{color:var(--gold)}
-.adm-week-appt{border-radius:3px;padding:2px 3px;margin-bottom:2px;cursor:pointer;overflow:hidden}
-.adm-week-appt.adm-spec-victoria{background:#1e2e1e}
-.adm-week-appt.adm-spec-anastasia{background:#1e1e2e}
-.adm-week-appt-time{color:var(--text3);font-size:9px;line-height:1.2}
+.adm-week-appt{border-radius:3px;padding:2px 3px 2px 5px;margin-bottom:2px;cursor:pointer;overflow:hidden;border-left:3px solid var(--border)}
+.adm-week-appt.adm-spec-victoria{background:#1e3020;border-left-color:#5a9a5a}
+.adm-week-appt.adm-spec-anastasia{background:#20203a;border-left-color:#5a5aaa}
+.adm-week-appt-time{font-size:9px;line-height:1.2}
+.adm-week-appt.adm-spec-victoria .adm-week-appt-time{color:#5a9a5a}
+.adm-week-appt.adm-spec-anastasia .adm-week-appt-time{color:#5a5aaa}
+.adm-week-appt:not(.adm-spec-victoria):not(.adm-spec-anastasia) .adm-week-appt-time{color:var(--text3)}
 .adm-week-appt-name{color:var(--text);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
 /* Month view */
 .adm-month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:4px 8px 80px}
 .adm-month-dow{text-align:center;font-size:10px;color:var(--text3);text-transform:uppercase;padding:4px 0;letter-spacing:.3px}
-.adm-month-cell{border:1px solid var(--border);border-radius:6px;padding:4px;min-height:42px;cursor:pointer;display:flex;flex-direction:column}
+.adm-month-cell{border:1px solid var(--border);border-radius:6px;padding:4px;min-height:56px;cursor:pointer;display:flex;flex-direction:column}
 .adm-month-cell.today{border-color:var(--gold)}
 .adm-month-cell.empty{border-color:transparent;background:transparent;cursor:default}
 .adm-month-dnum{font-size:12px;color:var(--text2);line-height:1.4}
 .adm-month-cell.today .adm-month-dnum{color:var(--gold);font-weight:600}
-.adm-month-dots{display:flex;gap:2px;flex-wrap:wrap;margin-top:2px}
-.adm-dot{width:6px;height:6px;border-radius:3px;flex-shrink:0}
-.adm-dot.victoria{background:#4a8a4a}
-.adm-dot.anastasia{background:#4a4a8a}
+.adm-month-chips{display:flex;flex-direction:column;gap:2px;margin-top:3px}
+.adm-month-chip{font-size:10px;line-height:1.4;border-radius:3px;padding:1px 4px;white-space:nowrap;overflow:hidden}
+.adm-month-chip.victoria{background:#1e3020;color:#5a9a5a}
+.adm-month-chip.anastasia{background:#20203a;color:#5a5aaa}
+.adm-month-chip.other{background:var(--bg3);color:var(--text2)}
 /* FAB */
 .adm-fab{position:fixed;right:20px;bottom:calc(56px + var(--safe-bottom) + 16px);width:52px;height:52px;border-radius:26px;background:var(--gold);border:none;font-size:26px;color:#1a1209;cursor:pointer;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-weight:300;line-height:1}
 /* New appt overlay */
@@ -1615,8 +1619,9 @@ function renderCalWeek() {
         ${dayAppts.map(a=>{
           const isWl = a.source==='wlaunch';
           const click = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
-          return `<div class="adm-week-appt adm-spec-${a.specialist||''}" style="${isWl?'background:#2a2a1e;opacity:.8':''}" ${click}>
-            <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}</div>
+          const specClass = a.specialist ? `adm-spec-${a.specialist}` : '';
+          return `<div class="adm-week-appt ${specClass}" style="${isWl?'opacity:.7':''}" ${click}>
+            <div class="adm-week-appt-time">${(a.time||'').slice(0,5)}${isWl?' WL':''}</div>
             <div class="adm-week-appt-name">${(a.client_name||'—').split(' ')[0]}</div>
           </div>`;
         }).join('')}
@@ -1639,14 +1644,16 @@ function renderCalMonth() {
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const ds = y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const dayA = calAppointments.filter(a => a.date === ds);
-    const hasV = dayA.some(a => a.specialist==='victoria');
-    const hasA = dayA.some(a => a.specialist==='anastasia');
+    const vCount = dayA.filter(a => a.specialist==='victoria').length;
+    const aCount = dayA.filter(a => a.specialist==='anastasia').length;
+    const oCount = dayA.filter(a => a.specialist && a.specialist!=='victoria' && a.specialist!=='anastasia').length;
     const isToday = ds === todayStr;
     html += `<div class="adm-month-cell${isToday?' today':''}" onclick="calDate=new Date('${ds}');adminCalGo('day')">
       <span class="adm-month-dnum">${d}</span>
-      <div class="adm-month-dots">
-        ${hasV?'<span class="adm-dot victoria"></span>':''}
-        ${hasA?'<span class="adm-dot anastasia"></span>':''}
+      <div class="adm-month-chips">
+        ${vCount?`<div class="adm-month-chip victoria">Вік · ${vCount}</div>`:''}
+        ${aCount?`<div class="adm-month-chip anastasia">Нас · ${aCount}</div>`:''}
+        ${oCount?`<div class="adm-month-chip other">${oCount}</div>`:''}
       </div>
     </div>`;
   }
