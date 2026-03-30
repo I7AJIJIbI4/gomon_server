@@ -95,7 +95,7 @@
                 }
             });
         }
-    </script><!-- Подключаем Google Maps JavaScript API с вашим ключом --><script src="https://maps.googleapis.com/maps/api/key=GOOGLE_MAPS_KEY_REMOVED&amp;callback=initMap" async defer>
+    </script><!-- Google Maps API key loaded from server config --><?php @include_once __DIR__.'/google_keys.php'; ?><script src="https://maps.googleapis.com/maps/api/key=<?php echo defined('GOOGLE_MAPS_KEY') ? htmlspecialchars(GOOGLE_MAPS_KEY, ENT_QUOTES) : ''; ?>&amp;callback=initMap" async defer>
     </script><div id="wb_header_a188dd94d37a0216abe559d46333c78e" class="wb_element wb-sticky wb-layout-element" data-plugin="LayoutElement" data-h-align="center" data-v-align="top"><div class="wb_content wb-layout-horizontal"><div id="a188dd94be463a75dba900fbd0353b25" class="wb_element wb-layout-element" data-plugin="LayoutElement"><div class="wb_content wb-layout-horizontal"><div id="a18ead322d680080628d287d243cee71" class="wb_element wb-layout-element wb-layout-has-link" data-plugin="LayoutElement"><a class="wb-layout-link" href="{{base_url}}"></a><div class="wb_content wb-layout-horizontal"><div id="a18ead322d6b001e1977180c2349f733" class="wb_element wb_text_element" data-plugin="TextArea" style=" line-height: normal;"><h2 class="wb-stl-custom8" style="text-align: center;"><span style="font-size:22px;"><strong><span style="color:#00274b;">Dr. Gomon</span></strong></span></h2>
 
 <h1 class="wb-stl-custom6" style="text-align: center;"><span style="font-size:22px;"><span style="">Cosmetology</span></span></h1>
