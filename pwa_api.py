@@ -1126,6 +1126,47 @@ def admin_prices_put():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ── AI intent helpers ──
+_ai_clients_cache = []
+_ai_clients_cache_ts = 0.0
+
+def _load_clients_for_ai():
+    """Returns list of {phone, name} for all clients, cached 5 min."""
+    global _ai_clients_cache, _ai_clients_cache_ts
+    if time.time() - _ai_clients_cache_ts < 300 and _ai_clients_cache:
+        return _ai_clients_cache
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT phone, first_name, last_name FROM clients ORDER BY last_visit DESC NULLS LAST")
+    result = []
+    for row in c.fetchall():
+        name = ((row[1] or '') + ' ' + (row[2] or '')).strip()
+        if name:
+            result.append({'phone': row[0], 'name': name})
+    conn.close()
+    _ai_clients_cache = result
+    _ai_clients_cache_ts = time.time()
+    return result
+
+def _load_procs_for_ai():
+    """Returns list of {name, price, specialists} from prices.json."""
+    try:
+        with open(PRICES_PATH, 'r', encoding='utf-8') as f:
+            prices = json.load(f)
+        result = []
+        for cat in prices:
+            for item in cat.get('items', []):
+                if item.get('name'):
+                    result.append({
+                        'name':        item['name'],
+                        'price':       item.get('price', ''),
+                        'specialists': item.get('specialists', []),
+                    })
+        return result
+    except Exception:
+        return []
+
+
 @app.route('/api/admin/ai-intent', methods=['POST'])
 @require_admin
 def admin_ai_intent():
@@ -1140,31 +1181,44 @@ def admin_ai_intent():
     wd_names = ['понеділок','вівторок','середа','четвер','п\'ятниця','субота','неділя']
     today_wd = wd_names[datetime.now().weekday()]
 
+    all_clients = _load_clients_for_ai()
+    all_procs   = _load_procs_for_ai()
+
+    clients_block = '\n'.join(
+        '{} [{}]'.format(c['name'], c['phone']) for c in all_clients
+    )
+    procs_block = '\n'.join(
+        '- ' + p['name'] for p in all_procs
+    )
+
     system_prompt = (
         'Ти — асистент адміністратора косметологічної клініки Dr. Gómon.\n'
-        'Сьогодні: {} ({}).\n\n'
-        'Проаналізуй запит і поверни ТІЛЬКИ JSON (без markdown, без пояснень):\n'
+        'Сьогодні: {today} ({wd}).\n\n'
+        '== КЛІЄНТИ КЛІНІКИ ==\n'
+        'Формат: Ім\'я Прізвище [телефон]\n'
+        '{clients}\n\n'
+        '== ПРОЦЕДУРИ КЛІНІКИ ==\n'
+        '{procs}\n\n'
+        'Проаналізуй запит і поверни ТІЛЬКИ JSON (без markdown):\n'
         '{{\n'
         '  "action": "create|find|edit|delete|list|unknown",\n'
-        '  "client_name": "ім\'я або null",\n'
-        '  "procedure": "назва процедури або null",\n'
+        '  "client_name": "Ім\'я Прізвище ТОЧНО як у списку, або null",\n'
+        '  "client_phone": "телефон ТОЧНО як у списку, або null",\n'
+        '  "procedure": "назва ТОЧНО як у списку процедур, або null",\n'
         '  "date": "YYYY-MM-DD або null",\n'
         '  "time": "HH:MM або null",\n'
         '  "specialist": "victoria|anastasia|null",\n'
         '  "notes": "нотатки або null",\n'
-        '  "reply": "коротке підтвердження українською 1-2 речення"\n'
+        '  "reply": "підтвердження українською 1-2 речення"\n'
         '}}\n\n'
         'Правила:\n'
-        '- action=create: записати/додати запис\n'
-        '- action=find: знайти/переглянути запис або клієнта\n'
-        '- action=edit: змінити/перенести запис\n'
-        '- action=delete: скасувати/видалити запис\n'
-        '- action=list: список записів на дату/тиждень\n'
-        '- Дати "завтра","наступна середа" тощо — конвертуй відносно {}\n'
+        '- Якщо клієнт згаданий — знайди його у списку клієнтів і повертай ТОЧНЕ ім\'я і телефон\n'
+        '- Якщо процедура згадана — знайди у списку процедур і повертай ТОЧНУ назву\n'
+        '- Дати "завтра","наступна середа" — конвертуй відносно {today}\n'
         '- "наступна X" = найближчий такий день тижня після сьогодні\n'
         '- Вікторія/Вика → "victoria"; Настя/Анастасія → "anastasia"; не вказано → null\n'
-        '- reply: "Записую [ім\'я] на [процедуру], [дата] о [час] до [спеціаліст]." або уточнення'
-    ).format(today, today_wd, today)
+        '- reply: "Записую [ім\'я] на [процедуру], [дата] о [час]." або уточнення'
+    ).format(today=today, wd=today_wd, clients=clients_block, procs=procs_block)
 
     ANTHROPIC_KEY = 'ANTHROPIC_KEY_REMOVED'
     payload = json.dumps({
@@ -1186,92 +1240,81 @@ def admin_ai_intent():
         with _urlreq.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read().decode('utf-8'))
         ai_text = result['content'][0]['text'].strip()
-        # Strip markdown code blocks if present
         if ai_text.startswith('```'):
             lines = ai_text.split('\n')
             ai_text = '\n'.join(lines[1:]).strip()
             if ai_text.endswith('```'):
                 ai_text = ai_text[:-3].strip()
         intent = json.loads(ai_text)
-        # Normalize "null" strings from model to actual None
-        for k in ('client_name', 'procedure', 'date', 'time', 'specialist', 'notes'):
+        for k in ('client_name', 'client_phone', 'procedure', 'date', 'time', 'specialist', 'notes'):
             if intent.get(k) == 'null':
                 intent[k] = None
     except Exception as e:
         logger.error('ai_intent error: {}'.format(e))
         return jsonify({'error': 'ai_error', 'detail': str(e)}), 500
 
-    # Enrich: client lookup
+    # Enrich client: exact phone lookup (Claude matched from our list)
     client = None
     client_options = []
-    if intent.get('client_name'):
-        name_q = intent['client_name'].lower()
-        name_words = [w for w in name_q.split() if len(w) > 2]
+    if intent.get('client_phone'):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        # Search by full name, then by individual words (first/last name separately)
-        conditions = ["lower(first_name||' '||last_name) LIKE ?"]
-        params = ['%{}%'.format(name_q)]
-        for w in name_words:
-            conditions.append("lower(first_name) LIKE ?")
-            conditions.append("lower(last_name) LIKE ?")
-            params.extend(['%{}%'.format(w), '%{}%'.format(w)])
-        c.execute(
-            "SELECT DISTINCT phone, first_name, last_name FROM clients WHERE ({}) LIMIT 6".format(
-                ' OR '.join(conditions)
-            ),
-            params
-        )
-        seen = set()
-        for row in c.fetchall():
-            if row['phone'] in seen:
-                continue
-            seen.add(row['phone'])
+        row = conn.execute(
+            'SELECT phone, first_name, last_name FROM clients WHERE phone=?',
+            (intent['client_phone'],)
+        ).fetchone()
+        conn.close()
+        if row:
+            full = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            client = {'phone': row['phone'], 'name': full}
+            client_options = [client]
+    elif intent.get('client_name'):
+        # Fallback: name-based search if phone not returned
+        name_q = intent['client_name'].lower()
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT phone, first_name, last_name FROM clients "
+            "WHERE lower(first_name||' '||last_name)=? LIMIT 4",
+            (name_q,)
+        ).fetchall()
+        conn.close()
+        for row in rows:
             full = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
             client_options.append({'phone': row['phone'], 'name': full})
-        conn.close()
         if len(client_options) == 1:
             client = client_options[0]
 
-    # Enrich: procedure lookup
+    # Enrich procedure: exact name lookup (Claude matched from our list)
     procedure = None
     procedure_options = []
     if intent.get('procedure'):
-        proc_q = intent['procedure'].lower()
-        try:
-            with open(PRICES_PATH, 'r', encoding='utf-8') as f:
-                prices = json.load(f)
-            # Exact/substring match first
-            for cat in prices:
-                for item in cat.get('items', []):
-                    iname = (item.get('name') or '').lower()
-                    if proc_q in iname or iname in proc_q:
-                        procedure_options.append({'name': item['name'], 'price': item.get('price', ''), 'specialists': item.get('specialists', [])})
-            # Word-level fallback
-            if not procedure_options:
-                words = [w for w in proc_q.split() if len(w) > 3]
-                for cat in prices:
-                    for item in cat.get('items', []):
-                        iname = (item.get('name') or '').lower()
-                        if words and any(w in iname for w in words):
-                            procedure_options.append({'name': item['name'], 'price': item.get('price', ''), 'specialists': item.get('specialists', [])})
-            if len(procedure_options) == 1:
-                procedure = procedure_options[0]
-                # Auto-fill specialist if procedure has exactly one assigned specialist
-                if not intent.get('specialist') and len(procedure.get('specialists', [])) == 1:
-                    intent['specialist'] = procedure['specialists'][0]
-        except Exception as _pe:
-            logger.warning('procedure lookup error: {}'.format(_pe))
+        for p in all_procs:
+            if p['name'] == intent['procedure']:
+                procedure = p
+                procedure_options = [p]
+                break
+        # Fallback: case-insensitive if exact failed
+        if not procedure:
+            proc_q = intent['procedure'].lower()
+            for p in all_procs:
+                if p['name'].lower() == proc_q:
+                    procedure = p
+                    procedure_options = [p]
+                    break
+
+    # Auto-fill specialist from procedure if only one assigned
+    if not intent.get('specialist') and procedure and len(procedure.get('specialists', [])) == 1:
+        intent['specialist'] = procedure['specialists'][0]
 
     return jsonify({
         'action':            intent.get('action', 'unknown'),
         'client':            client,
         'client_options':    client_options,
-        'client_name':       intent.get('client_name'),   # raw name from LLM (fallback)
+        'client_name':       intent.get('client_name'),
         'procedure':         procedure,
         'procedure_options': procedure_options,
-        'procedure_raw':     intent.get('procedure'),     # raw procedure name from LLM (fallback)
+        'procedure_raw':     intent.get('procedure'),
         'date':              intent.get('date'),
         'time':              intent.get('time'),
         'specialist':        intent.get('specialist'),
