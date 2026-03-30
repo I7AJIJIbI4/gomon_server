@@ -441,6 +441,7 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **Specialist detection**: `sync_appointments.py` + `wlaunch_api.py` визначають спеціаліста через `resources[].phone` → маппінг у `RESOURCE_SPECIALIST_MAP`
 - **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)
 - **PIN_AUTH**: словник `{phone: pin}` у pwa_api.py для bypass SMS OTP. Наразі: `16452040153` (тестовий аккаунт Анастасії, PIN `0375`)
+- **Міжнародні номери в auth**: `formatPhone()` і `sendOtp()` визначають міжнародний номер як `≥11 цифр і не починається з 0`. В такому випадку `380` НЕ додається. UA-номери (0XXXXXXXXX або XXXXXXXXX) — як і раніше. Для тестового `+1`: вводити `16452040153` у поле (незважаючи на `+38` в префіксі — працює функціонально).
 - **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються.
 - **Push dedup**: `push_sender.py::save_subscription()` лімітує до 2 активних підписок на телефон (найновіші), щоб уникнути дублікатів push.
 
