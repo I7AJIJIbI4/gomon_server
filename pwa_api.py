@@ -1149,16 +1149,18 @@ def _load_clients_for_ai():
     return result
 
 def _load_procs_for_ai():
-    """Returns list of {name, price, specialists} from prices.json."""
+    """Returns list of {name, cat, price, specialists} from prices.json."""
     try:
         with open(PRICES_PATH, 'r', encoding='utf-8') as f:
             prices = json.load(f)
         result = []
         for cat in prices:
+            cat_name = cat.get('cat', '')
             for item in cat.get('items', []):
                 if item.get('name'):
                     result.append({
                         'name':        item['name'],
+                        'cat':         cat_name,
                         'price':       item.get('price', ''),
                         'specialists': item.get('specialists', []),
                     })
@@ -1188,7 +1190,8 @@ def admin_ai_intent():
         '{} [{}]'.format(c['name'], c['phone']) for c in all_clients
     )
     procs_block = '\n'.join(
-        '- ' + p['name'] for p in all_procs
+        '- {} → {}'.format(p['cat'], p['name']) if p['cat'] else '- ' + p['name']
+        for p in all_procs
     )
 
     system_prompt = (
