@@ -161,6 +161,10 @@
   gtag('js', new Date());
   gtag('config', 'AW-719653819');
   gtag('config', 'G-8FC2X4SHKE');
+  function gtag_report_conversion() {
+    gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
+    return false;
+  }
 </script>
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">

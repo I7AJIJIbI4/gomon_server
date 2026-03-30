@@ -1816,21 +1816,28 @@ async function admAiRequest(text) {
   const card = document.getElementById('adm-ai-card');
   card.style.display = '';
   card.innerHTML = '<div class="adm-ai-card"><div style="color:var(--text3);font-size:14px">Аналізую…</div></div>';
+  let d;
   try {
     const r = await fetch('/api/admin/ai-intent', {
       method: 'POST',
       headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
       body: JSON.stringify({text})
     });
-    const d = await r.json();
-    if (d.error) {
-      card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Помилка: ' + (d.error||'') + '</div></div>';
-      return;
-    }
-    _admAiResult = d;
+    d = await r.json();
+  } catch(e) {
+    card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Мережева помилка — спробуйте ще раз</div></div>';
+    return;
+  }
+  if (d.error) {
+    card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Помилка: ' + (d.error||'') + '</div></div>';
+    return;
+  }
+  _admAiResult = d;
+  try {
     admAiRenderCard(d);
   } catch(e) {
-    card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Мережева помилка</div></div>';
+    console.error('admAiRenderCard error:', e, d);
+    card.innerHTML = '<div class="adm-ai-card"><div class="adm-ai-reply" style="color:#d96d6d">Помилка відображення: ' + e.message + '</div></div>';
   }
 }
 

@@ -668,6 +668,10 @@
     function openModal() {
       if (isOpen) return;
       isOpen = true;
+      if (typeof gtag === 'function' && !sessionStorage.getItem('gw_conv_fired')) {
+        sessionStorage.setItem('gw_conv_fired', '1');
+        gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
+      }
       document.body.style.overflow = 'hidden';
       renderAllMessages(messages, els.messagesEl);
       els.overlay.classList.add('gw-open');
