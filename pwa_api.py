@@ -659,20 +659,16 @@ def _build_price_lookup():
         data = _json.load(open(PRICES_PATH))
         cats = data.values() if isinstance(data, dict) else data
         for cat in cats:
-            items = cat if isinstance(cat, list) else [cat]
+            if not isinstance(cat, dict):
+                continue
+            items = cat.get('items', [])
             for item in items:
-                rows = item.get('rows', []) if isinstance(item, dict) else []
-                for row in rows:
-                    if isinstance(row, list) and len(row) >= 3:
-                        name  = (row[0] or '').strip()
-                        price = (row[2] or '').strip()
-                        if name:
-                            lookup[name.lower()] = price
-                    elif isinstance(row, dict):
-                        name  = (row.get('name') or '').strip()
-                        price = (row.get('price') or row.get('cost') or '').strip()
-                        if name:
-                            lookup[name.lower()] = price
+                if not isinstance(item, dict):
+                    continue
+                name  = (item.get('name') or '').strip()
+                price = (item.get('price') or '').strip()
+                if name:
+                    lookup[name.lower()] = price
     except Exception:
         pass
     return lookup
@@ -778,7 +774,9 @@ def admin_push_list():
 @require_admin
 def admin_month_visits():
     from datetime import datetime
-    since = datetime.now().strftime('%Y-%m') + '-01'
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+    since = from_date if from_date else datetime.now().strftime('%Y-%m') + '-01'
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -796,17 +794,20 @@ def admin_month_visits():
             items = []
         for it in items:
             date = it.get('date', '')
-            if date >= since:
-                service = it.get('service', '')
-                price = price_lookup.get(service.lower(), '')
-                visits.append({
-                    'client':  name,
-                    'phone':   r['phone'],
-                    'service': service,
-                    'date':    date,
-                    'hour':    it.get('hour'),
-                    'price':   price,
-                })
+            if date < since:
+                continue
+            if to_date and date > to_date:
+                continue
+            service = it.get('service', '')
+            price = price_lookup.get(service.lower(), '')
+            visits.append({
+                'client':  name,
+                'phone':   r['phone'],
+                'service': service,
+                'date':    date,
+                'hour':    it.get('hour'),
+                'price':   price,
+            })
     visits.sort(key=lambda x: x['date'], reverse=True)
     return jsonify({'visits': visits})
 

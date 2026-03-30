@@ -1173,7 +1173,7 @@ async function loadPromos() {
   try {
     const cached = localStorage.getItem('gomon_promos');
     if (cached) PROMOS = JSON.parse(cached);
-    const r = await fetch('/promos.json');
+    const r = await fetch('/promos.php');
     const data = await r.json();
     if (Array.isArray(data) && data.length) {
       PROMOS = data;
@@ -1406,7 +1406,7 @@ async function loadPrices() {
 
 
 /* ── ADMIN ── */
-const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-chat','admin-clients'];
+const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-clients'];
 let adminRole = null;
 let adminSpecialist = null;
 
