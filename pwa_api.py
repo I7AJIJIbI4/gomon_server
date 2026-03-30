@@ -36,6 +36,11 @@ logger = logging.getLogger('pwa_api')
 DB_PATH      = '/home/gomoncli/zadarma/users.db'
 FEED_DB      = '/home/gomoncli/zadarma/feed.db'
 from config import TELEGRAM_TOKEN as TG_TOKEN, ANTHROPIC_KEY
+try:
+    from config import PIN_AUTH as _PIN_AUTH_CFG
+    _PIN_AUTH_OVERRIDE = _PIN_AUTH_CFG
+except (ImportError, AttributeError):
+    _PIN_AUTH_OVERRIDE = None
 
 def init_feed_db():
     conn = sqlite3.connect(FEED_DB)
@@ -147,10 +152,8 @@ SPECIALIST_MAP = {
     '380685129121': 'anastasia',
     '16452040153':  'anastasia',    # test account mirrors Anastasia
 }
-# Phones that authenticate via fixed PIN instead of SMS OTP
-PIN_AUTH = {
-    '16452040153': '0375',
-}
+# Phones that authenticate via fixed PIN instead of SMS OTP (loaded from config.py)
+PIN_AUTH = _PIN_AUTH_OVERRIDE if _PIN_AUTH_OVERRIDE is not None else {}
 ADMIN_PHONE = '380733103110'  # backward compat
 
 def get_admin_role(phone: str):
@@ -511,7 +514,8 @@ def feed_media(fid):
         fp = data['result']['file_path']
         return redirect('https://api.telegram.org/file/bot' + TG_TOKEN + '/' + fp)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error('feed_media error: {}'.format(e))
+        return jsonify({'error': 'media_unavailable'}), 500
 
 # ── PWA STATIC FILES ──
 
@@ -902,7 +906,8 @@ def admin_sync():
             'stderr': (r1.stderr + r2.stderr)[-300:],
         })
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        logger.error('admin_sync error: {}'.format(e))
+        return jsonify({'ok': False, 'error': 'sync_failed'}), 500
 
 # ── ADMIN NEW ENDPOINTS ──────────────────────────────────────────────────────
 
@@ -1086,8 +1091,9 @@ def admin_client_add():
         )
         conn.commit()
     except Exception as e:
+        logger.error('admin_client_add error: {}'.format(e))
         conn.close()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'db_error'}), 500
     conn.close()
     return jsonify({'ok': True, 'existing': False})
 
@@ -1147,7 +1153,8 @@ def admin_prices_put():
             json.dump(data, f, ensure_ascii=False, indent=2)
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error('admin_prices_put error: {}'.format(e))
+        return jsonify({'error': 'write_failed'}), 500
 
 # ── AI intent helpers ──
 _ai_clients_cache = []
@@ -1276,7 +1283,7 @@ def admin_ai_intent():
                 intent[k] = None
     except Exception as e:
         logger.error('ai_intent error: {}'.format(e))
-        return jsonify({'error': 'ai_error', 'detail': str(e)}), 500
+        return jsonify({'error': 'ai_error'}), 500
 
     # Enrich client: exact phone lookup (Claude matched from our list)
     client = None

@@ -1479,10 +1479,10 @@ async function loadAdminStats() {
       list.innerHTML = data.recent.map(r => {
         const d = (r.date||'').slice(5).replace('-','.');
         return `<div class="admin-visit-row">
-          <span class="admin-visit-date">${d}</span>
+          <span class="admin-visit-date">${_esc(d)}</span>
           <div class="admin-visit-info">
-            <div class="admin-visit-name">${r.first_name||''} ${r.last_name||''}</div>
-            <div class="admin-visit-svc">${r.service||''}</div>
+            <div class="admin-visit-name">${_esc(r.first_name)} ${_esc(r.last_name)}</div>
+            <div class="admin-visit-svc">${_esc(r.service)}</div>
           </div>
         </div>`;
       }).join('');
@@ -2026,12 +2026,12 @@ async function searchClientsAppt(q) {
       (c.name||'').toLowerCase().includes(ql) || (c.phone||'').includes(q)
     ).slice(0,6);
     if (!matches.length) { dd.style.display='none'; return; }
-    dd.innerHTML = matches.map(c =>
-      `<div class="adm-dropdown-item" onclick="selectClientAppt('${c.phone}','${(c.name||'').replace(/'/g,"\\'")}')">
-        <div style="font-size:13px;color:var(--text)">${c.name||c.phone}</div>
-        <div style="font-size:11px;color:var(--text3)">${(c.phone||'').replace(/^38/,'0')}</div>
-      </div>`
+    dd.innerHTML = matches.map((c,i) =>
+      `<div class="adm-dropdown-item" data-ci="${i}">${_esc(c.name||c.phone)}<br><span style="font-size:11px;color:var(--text3)">${_esc((c.phone||'').replace(/^380/,'0'))}</span></div>`
     ).join('');
+    matches.forEach((c,i) => {
+      dd.children[i].addEventListener('click', () => selectClientAppt(c.phone, c.name||c.phone));
+    });
     dd.style.display='';
   }, 250);
 }
@@ -2041,7 +2041,7 @@ function selectClientAppt(phone, name) {
   document.getElementById('appt-client-dd').style.display='none';
   const chip = document.getElementById('appt-client-chip');
   chip.style.display = '';
-  chip.innerHTML = `<span class="adm-chip">${name||phone} <button onclick="_apptClient=null;document.getElementById('appt-client-chip').style.display='none'">✕</button></span>`;
+  chip.innerHTML = `<span class="adm-chip">${_esc(name||phone)} <button onclick="_apptClient=null;document.getElementById('appt-client-chip').style.display='none'">✕</button></span>`;
 }
 
 let _procSearchT = null;
@@ -2068,13 +2068,17 @@ async function searchProcsAppt(q) {
       });
     });
     if (!matches.length) { dd.style.display='none'; return; }
-    dd.innerHTML = matches.slice(0,10).map(p =>
-      `<div class="adm-dropdown-item" onclick="selectProcAppt('${p.name.replace(/'/g,"\\'")}','${(p.price||'').replace(/'/g,"\\'")}')">
-        <div style="font-size:15px;color:var(--text)">${p.name}</div>
-        <div style="font-size:13px;color:var(--text3);margin-top:2px">${p._cat}</div>
-        <div style="font-size:13px;color:var(--gold)">${p.price||''}</div>
+    const procSlice = matches.slice(0,10);
+    dd.innerHTML = procSlice.map(p =>
+      `<div class="adm-dropdown-item">
+        <div style="font-size:15px;color:var(--text)">${_esc(p.name)}</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:2px">${_esc(p._cat)}</div>
+        <div style="font-size:13px;color:var(--gold)">${_esc(p.price||'')}</div>
       </div>`
     ).join('');
+    procSlice.forEach((p,i) => {
+      dd.children[i].addEventListener('click', () => selectProcAppt(p.name, p.price||''));
+    });
     dd.style.display='';
   }, 200);
 }
@@ -2084,7 +2088,7 @@ function selectProcAppt(name, price) {
   document.getElementById('appt-proc-dd').style.display='none';
   const chip = document.getElementById('appt-proc-chip');
   chip.style.display = '';
-  chip.innerHTML = `<span class="adm-chip">${name}<span style="color:var(--gold);margin-left:6px">${price}</span> <button onclick="_apptProc=null;document.getElementById('appt-proc-chip').style.display='none'">✕</button></span>`;
+  chip.innerHTML = `<span class="adm-chip">${_esc(name)}<span style="color:var(--gold);margin-left:6px">${_esc(price)}</span> <button onclick="_apptProc=null;document.getElementById('appt-proc-chip').style.display='none'">✕</button></span>`;
 }
 
 async function submitNewAppt() {
@@ -2274,6 +2278,13 @@ async function saveProcedures() {
     else showToast('Помилка: '+(data.error||''));
   } catch(e) { showToast('Помилка мережі'); }
   if (btn) { btn.disabled=false; btn.textContent='Зберегти'; }
+}
+
+/* ──────────────────────────────────────────── XSS HELPERS ── */
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 /* ──────────────────────────────────────────── TOAST ── */
