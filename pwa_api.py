@@ -717,29 +717,50 @@ def admin_clients_list():
 @app.route('/api/admin/users-list', methods=['GET'])
 @require_admin
 def admin_users_list():
+    # PWA users = phones that have authenticated via OTP (otp_sessions.db)
+    try:
+        otp_conn = sqlite3.connect(OTP_DB)
+        otp_phones = [r[0] for r in otp_conn.execute(
+            'SELECT DISTINCT phone FROM sessions ORDER BY created_at DESC'
+        ).fetchall()]
+        otp_conn.close()
+    except Exception:
+        otp_phones = []
+
+    if not otp_phones:
+        return jsonify({'clients': []})
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute("""SELECT u.phone, u.first_name,
-                        cl.first_name as cl_first, cl.last_name as cl_last,
-                        cl.last_service, cl.last_visit, cl.services_json
-                 FROM users u
-                 LEFT JOIN clients cl ON cl.phone = u.phone
-                 ORDER BY cl.last_visit DESC""")
-    rows = c.fetchall()
+    placeholders = ','.join('?' * len(otp_phones))
+    rows = conn.execute(
+        """SELECT phone, first_name, last_name, last_service, last_visit, services_json
+           FROM clients WHERE phone IN ({})""".format(placeholders),
+        otp_phones
+    ).fetchall()
     conn.close()
+
+    client_map = {r['phone']: r for r in rows}
     result = []
-    for r in rows:
-        name = ((r['cl_first'] or '') + ' ' + (r['cl_last'] or '')).strip()
-        if not name:
-            name = r['first_name'] or r['phone']
-        result.append({
-            'phone':        r['phone'],
-            'name':         name,
-            'last_service': r['last_service'] or '',
-            'last_visit':   r['last_visit'] or '',
-            'appointments': _client_appts(r['services_json']),
-        })
+    for phone in otp_phones:
+        r = client_map.get(phone)
+        if r:
+            name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip() or phone
+            result.append({
+                'phone':        phone,
+                'name':         name,
+                'last_service': r['last_service'] or '',
+                'last_visit':   r['last_visit'] or '',
+                'appointments': _client_appts(r['services_json']),
+            })
+        else:
+            result.append({
+                'phone':        phone,
+                'name':         phone,
+                'last_service': '',
+                'last_visit':   '',
+                'appointments': [],
+            })
     return jsonify({'clients': result})
 
 @app.route('/api/admin/push-list', methods=['GET'])
