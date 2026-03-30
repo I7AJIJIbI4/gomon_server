@@ -1465,7 +1465,8 @@ async function adminSync() {
   try {
     await fetch('/api/admin/sync', { method:'POST', headers:{ Authorization:'Bearer '+token }});
     await loadAdminStats();
-    window._adminApptLoaded = false;
+    window._calLoaded = false;
+    window._clientsLoaded = false;
     if (btn) btn.textContent = '✓ Готово';
     setTimeout(() => { if(btn) btn.textContent = '↻ Синхронізувати'; }, 2000);
   } catch(e) {
@@ -1859,7 +1860,7 @@ function renderClientsAdmin(clients) {
   if (!list) return;
   if (!clients.length) { list.innerHTML = '<p style="padding:20px;color:var(--text3);text-align:center">Не знайдено</p>'; return; }
   list.innerHTML = clients.map(c => `
-    <div class="adm-client-row" onclick="showNewApptForm();searchClientsAppt('${(c.phone||'').replace(/^38/,'0')}')">
+    <div class="adm-client-row" onclick="adminGo('admin-appts');showNewApptForm();selectClientAppt('${c.phone}','${(c.name||'').replace(/'/g,"\\'")}')">
       <div>
         <div class="adm-client-name">${c.name||c.phone}</div>
         <div class="adm-client-phone">${(c.phone||'').replace(/^38/,'0')}</div>
@@ -3028,7 +3029,7 @@ if ('serviceWorker' in navigator) {
 /* ── END PULL-TO-REFRESH ─────────────────────────── */
 
 /* ── ADMIN STAT MODALS ─────────────────────────────────── */
-function _fmtDate(d) {
+function _fmtDateStr(d) {
   if (!d) return '';
   const [y,m,day] = d.split('-');
   return day + '.' + m + '.' + y;
@@ -3053,7 +3054,7 @@ function _admShowClientAppts(name, appts) {
       const h = a.hour != null ? String(a.hour).padStart(2,'0') + ':00' : '';
       const stat = statMap[a.status] || a.status || '';
       return `<div class="adm-appt-row">
-        <div class="adm-appt-date">${_fmtDate(a.date)}${h ? ' · ' + h : ''}</div>
+        <div class="adm-appt-date">${_fmtDateStr(a.date)}${h ? ' · ' + h : ''}</div>
         <div class="adm-appt-service">${a.service || '—'}</div>
         ${stat ? '<div class="adm-appt-status">' + stat + '</div>' : ''}
       </div>`;
@@ -3077,7 +3078,7 @@ function _admRenderList(clients) {
   body.innerHTML = clients.map(cl => {
     const sub = [
       cl.visits_count != null ? cl.visits_count + ' відвід.' : '',
-      cl.last_visit ? _fmtDate(cl.last_visit) : '',
+      cl.last_visit ? _fmtDateStr(cl.last_visit) : '',
       cl.last_service || '',
     ].filter(Boolean).join(' · ');
     const phone = cl.phone ? '<div class="adm-client-sub" style="font-size:11px">' + (cl.phone+'').replace(/^38/,'0') + '</div>' : '';
@@ -3175,7 +3176,7 @@ function _admMonthRender(visits) {
       <div class="adm-month-info">
         <div class="adm-month-client">${v.client}</div>
         <div class="adm-month-service">${v.service || '—'}</div>
-        <div class="adm-month-date">${_fmtDate(v.date)}${h}</div>
+        <div class="adm-month-date">${_fmtDateStr(v.date)}${h}</div>
       </div>
       <div class="adm-month-price">${v.price || '—'}</div>
     </div>`;
@@ -3185,8 +3186,8 @@ function _admMonthRender(visits) {
   const fromV = document.getElementById('adm-mf-from').value;
   const toV   = document.getElementById('adm-mf-to').value;
   const label = (fromV && toV && fromV !== toV)
-    ? _fmtDate(fromV) + ' — ' + _fmtDate(toV)
-    : fromV ? _fmtDate(fromV) + ' — сьогодні' : 'Загальна сума';
+    ? _fmtDateStr(fromV) + ' — ' + _fmtDateStr(toV)
+    : fromV ? _fmtDateStr(fromV) + ' — сьогодні' : 'Загальна сума';
   document.getElementById('adm-month-total-label').textContent = label;
   countEl.textContent = visits.length + ' записів';
 }

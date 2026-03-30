@@ -51,6 +51,14 @@
 | `public_html/promos.php` | JSON з акціями (кешується SW) |
 | `public_html/callback_request_handler.php` | Обробка форми зворотного дзвінка |
 
+### Основний сайт (sitepro — website builder)
+| Файл | Призначення |
+|------|-------------|
+| `public_html/sitepro/a188dd94d37a0374c81c636d09cd1f05.php` | Головна сторінка сайту (index) |
+| `public_html/sitepro/a19c9ec17aa700fbe3c8ab3f51a1f461.php` | Інша сторінка сайту |
+| `public_html/sitepro/prices.php` | Повертає raw prices.json (origin-restricted) |
+| `public_html/sitepro/modal_prices.php` | **Трансформує prices.json** у формат `{1:[{title,rows}],...}` для модалок категорій послуг |
+
 ---
 
 ## База даних (users.db)
@@ -59,17 +67,26 @@
 ```sql
 id TEXT, first_name TEXT, last_name TEXT, phone TEXT,
 last_service TEXT, last_visit TEXT, visits_count INT,
-services_json TEXT  -- JSON масив [{appt_id, date, hour, service, status}]
+services_json TEXT  -- JSON масив [{appt_id, date, hour, service, status, specialist}]
 ```
 - `phone` — нормалізований номер (тільки цифри), напр. `380933297777`
 - `services_json` — топ-5 записів, відсортовано за датою (новіші першими)
 - Статуси: `CONFIRMED_BY_CLIENT`, `CANCELLED`, `CONFIRMED`, тощо
+- `specialist` — `'victoria'` або `'anastasia'` (заповнюється при sync через `resources[].phone`)
+
+### Таблиця `manual_appointments`
+```sql
+id INT PK, client_phone TEXT, client_name TEXT, procedure_name TEXT,
+specialist TEXT, date TEXT, time TEXT, status TEXT, notes TEXT, created_by TEXT
+```
+- Записи, створені вручну через адмінку (не з WLaunch)
+- `status`: `CONFIRMED`, `DONE`, `NO_SHOW`, `CANCELLED`
 
 ### Таблиця `users`
 ```sql
 telegram_id INTEGER PRIMARY KEY, phone TEXT, username TEXT, first_name TEXT
 ```
-- **Telegram-бот юзери** (69 станом на 2026-03-28) — НЕ PWA-юзери
+- **Telegram-бот юзери** — НЕ PWA-юзери
 - Заповнюється через bot.py коли юзер пише боту
 
 ### БД `otp_sessions.db` (окремий файл)
@@ -78,7 +95,7 @@ sessions: token TEXT PK, phone TEXT, created_at INT, expires_at INT
 otp_codes: phone TEXT PK, code TEXT, expires_at INT, attempts INT
 leads: phone TEXT PK, name TEXT, procedure TEXT, created_at TEXT, source TEXT
 ```
-- **PWA-юзери** — унікальні телефони в `sessions` (3 станом на 2026-03-28)
+- **PWA-юзери** — унікальні телефони в `sessions`
 - Сесія: 30 днів sliding window
 - `/api/admin/stats` → `pwa_users` = COUNT(DISTINCT phone) FROM sessions
 
@@ -86,6 +103,57 @@ leads: phone TEXT PK, name TEXT, procedure TEXT, created_at TEXT, source TEXT
 ```sql
 id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 ```
+
+---
+
+## Адмін-система
+
+### Ролі
+```python
+ADMIN_ROLES = {
+    '380733103110': 'superadmin',   # головний адмін
+    '380996093860': 'full',         # Вікторія — повний доступ
+    '380685129121': 'specialist',   # Анастасія — бачить тільки свої записи, не може редагувати ціни
+}
+SPECIALIST_MAP = {
+    '380996093860': 'victoria',
+    '380685129121': 'anastasia',
+}
+```
+
+### Права доступу
+| Дія | superadmin | full | specialist |
+|-----|-----------|------|-----------|
+| Календар (всі) | ✓ | ✓ | ✗ (тільки свої) |
+| Календар (свої) | ✓ | ✓ | ✓ |
+| Створити запис | ✓ | ✓ | ✓ (тільки собі) |
+| Клієнти | ✓ | ✓ | ✓ |
+| Редагувати процедури/ціни | ✓ | ✓ | ✗ |
+
+### Адмін-екрани (index.html)
+- `screen-admin-home` — статистика, останні відвідування, кнопка синхронізації
+- `screen-admin-appts` — календар (День/Тиждень/Місяць) + FAB "+"
+- `screen-admin-price` — редактор процедур і цін
+- `screen-admin-clients` — пошук/список клієнтів + додати нового
+
+### Адмін JS-функції
+```javascript
+adminGo(id)          // перехід між admin-екранами
+loadCalendarData()   // GET /api/admin/calendar/appointments?from=&to=
+renderCalDay/Week/Month()  // рендер відповідно до calView
+openApptAction(id)   // action sheet для ручного запису
+showNewApptForm()    // overlay форми нового запису
+submitNewAppt()      // POST /api/admin/calendar/appointments
+loadClientsAdmin()   // GET /api/admin/clients-list
+loadProcedures()     // GET /api/admin/prices/edit або /api/prices
+saveProcedures()     // PUT /api/admin/prices/edit
+adminSync()          // POST /api/admin/sync → скидає _calLoaded, _clientsLoaded
+```
+
+### Важливо: дві функції `_fmtDate`
+- `_fmtDate(d)` (рядок ~1486) — приймає `Date` об'єкт → повертає `YYYY-MM-DD` (для calendar)
+- `_fmtDateStr(d)` (рядок ~3031) — приймає рядок `YYYY-MM-DD` → повертає `DD.MM.YYYY` (для відображення)
+- **НЕ перейменовувати** і не додавати третю функцію з тим самим іменем!
 
 ---
 
@@ -100,12 +168,11 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 ### Клієнт
 | Endpoint | Метод | Опис |
 |----------|-------|------|
-| `/api/me` | GET | Дані авторизованого клієнта (ім'я, телефон) |
-| `/api/me/appointments` | GET | Записи клієнта (upcoming + done), фільтрує CANCELLED |
-| `/api/me/appointments/cancel` | POST | Скасовує запис: POST до WLaunch `{"appointment":{"id":...,"status":"CANCELLED"}}` + оновлює БД |
-| `/api/prices` | GET | Прайс з `/home/gomoncli/private_data/prices.json` |
+| `/api/me` | GET | Дані авторизованого клієнта + `is_admin`, `admin_role`, `specialist` |
+| `/api/me/appointments` | GET | Записи клієнта: WLaunch (services_json) + manual_appointments, фільтрує CANCELLED |
+| `/api/me/appointments/cancel` | POST | Скасовує запис у WLaunch + оновлює БД |
+| `/api/prices` | GET | Прайс у форматі `[{cat, items:[{name,price}]}]` |
 | `/api/feed` | GET | Пости з Telegram (feed.db) |
-| `/api/feed/media/<fid>` | GET | Редірект на Telegram CDN за file_id |
 | `/api/health` | GET | Стан БД, кількість клієнтів |
 
 ### Push
@@ -115,19 +182,76 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 | `/api/push/subscribe` | POST | Зберігає підписку |
 | `/api/push/unsubscribe` | POST | Видаляє підписку |
 | `/api/push/status` | GET | Чи є активні підписки у юзера |
-| `/api/push/procedure-reminder` | POST | Push + SMS нагадування про процедуру |
+| `/api/push/procedure-reminder` | POST | Push + SMS нагадування |
 | `/api/sms/procedure-reminder` | POST | SMS для гостьового юзера |
 
-### Адмін (require_admin — тільки ADMIN_PHONE)
+### Адмін (`require_admin` — superadmin + full + specialist)
 | Endpoint | Метод | Опис |
 |----------|-------|------|
-| `/api/admin/stats` | GET | Статистика: clients, `pwa_users` (otp_sessions.db), `pwa_active`, push_subs, visits_month |
-| `/api/admin/appointments` | GET | Всі записи всіх клієнтів |
-| `/api/admin/clients-list` | GET | Список клієнтів з appointments для модалки |
-| `/api/admin/users-list` | GET | PWA-юзери з otp_sessions.db (унікальні телефони + дати логінів) |
-| `/api/admin/push-list` | GET | Push-підписники (JOIN clients) |
-| `/api/admin/month-visits` | GET | Записи за поточний місяць з цінами з prices.json |
-| `/api/admin/sync` | POST | Запускає sync_clients.py + sync_appointments.py послідовно |
+| `/api/admin/stats` | GET | `total_clients`, `pwa_users` (з otp_sessions.db), `push_subs`, `visits_month`, `recent` |
+| `/api/admin/role` | GET | Поточна роль і specialist |
+| `/api/admin/calendar/appointments` | GET | Календар: manual + WLaunch; specialist бачить тільки свої |
+| `/api/admin/calendar/appointments` | POST | Створити ручний запис |
+| `/api/admin/calendar/appointments/<id>` | PUT | Оновити статус/дані ручного запису |
+| `/api/admin/calendar/appointments/<id>` | DELETE | Скасувати ручний запис |
+| `/api/admin/clients-list` | GET | Список клієнтів для пошуку |
+| `/api/admin/clients/add` | POST | Додати нового клієнта в БД |
+| `/api/admin/appointments` | GET | Всі WLaunch записи (для старих звітів) |
+| `/api/admin/push-list` | GET | Push-підписники |
+| `/api/admin/month-visits` | GET | Записи за місяць з цінами |
+| `/api/admin/sync` | POST | Запускає sync_clients.py + sync_appointments.py |
+
+### Адмін (`require_full_admin` — тільки superadmin + full)
+| Endpoint | Метод | Опис |
+|----------|-------|------|
+| `/api/admin/prices/edit` | GET | prices.json у форматі `[{cat, items:[{name,price,specialists}]}]` |
+| `/api/admin/prices/edit` | PUT | Зберегти оновлений prices.json |
+
+---
+
+## Формати даних
+
+### prices.json (`/home/gomoncli/private_data/prices.json`)
+```json
+[
+  {
+    "cat": "Апаратна косметологія",
+    "items": [
+      {"name": "WOW-чистка", "price": "1400 грн", "specialists": ["victoria", "anastasia"]},
+      ...
+    ]
+  }
+]
+```
+
+### modal_prices.php — формат для модалок сайту
+```json
+{
+  "1": [{"title": "Апаратна косметологія", "rows": [["WOW-чистка", "", "1400 грн"], ...]}],
+  "2": [...],
+  "3": [...],
+  "5": [...],
+  "6": [...]
+}
+```
+Маппінг service ID → ключові слова в назві категорії прописаний в `modal_prices.php`.
+Категорія 4 ("Домашній догляд") — `noPrice: true`, не запитує ціни.
+
+### services_json в clients (WLaunch дані)
+```json
+[
+  {
+    "appt_id": "abc123",
+    "date": "2026-03-30",
+    "hour": 14,
+    "service": "WOW-чистка",
+    "status": "CONFIRMED",
+    "specialist": "victoria"
+  }
+]
+```
+- Топ-5 записів, нові першими
+- `specialist` — заповнюється `sync_appointments.py` через `resources[].phone`
 
 ---
 
@@ -136,7 +260,7 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 ```
 /api/admin/sync (PWA кнопка)
 ├── sync_clients.py      → нові клієнти за 24г
-└── sync_appointments.py → оновлює appointments ±7д/+90д
+└── sync_appointments.py → оновлює appointments ±7д/+90д + поле specialist
 
 Telegram /admin (бот)
 ├── sync_with_notification.sh → sync_clients + Telegram звіт
@@ -149,8 +273,7 @@ Cron (09:00 і 21:00)
 └── sync_with_notification.sh → sync_clients
 ```
 
-**Важливо:** `sync_appointments.py` оновлює статуси (CONFIRMED, CANCELLED) в БД.
-Якщо запис у WLaunch має статус CANCELLED — він не буде показаний у додатку.
+**Важливо:** `sync_appointments.py` оновлює статуси (CONFIRMED, CANCELLED) і поле `specialist` в БД.
 
 ---
 
@@ -182,77 +305,65 @@ Cron (09:00 і 21:00)
 
 ### Зміни в API (pwa_api.py)
 ```bash
-# 1. Внести зміни на сервері
-ssh -i ~/.ssh/id_rsa -p 21098 gomoncli@31.131.18.79
+# 1. Скопіювати змінений файл на сервер
+scp -i ~/.ssh/id_rsa -P 21098 pwa_api.py gomoncli@31.131.18.79:/home/gomoncli/zadarma/
 
-# 2. Перевірити синтаксис
-python3 -m py_compile /home/gomoncli/zadarma/pwa_api.py
+# 2. check_flask.sh перезапустить автоматично через ≤5хв
+#    Або вручну для негайного ефекту:
+ssh -i ~/.ssh/id_rsa -p 21098 gomoncli@31.131.18.79 \
+  'pkill -f pwa_api; sleep 1; nohup python3 /home/gomoncli/zadarma/pwa_api.py >> /home/gomoncli/zadarma/pwa_api.log 2>&1 &'
 
-# 3. Перезапустити (check_flask.sh перезапустить автоматично через ≤5хв,
-#    але краще вручну для негайного ефекту)
-pkill -f 'python3.*pwa_api'
-nohup python3 /home/gomoncli/zadarma/pwa_api.py >> /home/gomoncli/zadarma/pwa_api.log 2>&1 &
-
-# 4. ВАЖЛИВО: перевірити що новий процес стартував ПІСЛЯ зміни файлу
-ps -o pid,lstart -p $(pgrep -f pwa_api)
+# 3. ВАЖЛИВО: перевірити що процес стартував ПІСЛЯ зміни файлу
+ssh ... 'ps -o pid,lstart -p $(pgrep -f pwa_api); stat -c "%y" /home/gomoncli/zadarma/pwa_api.py'
 # lstart повинен бути ПІЗНІШЕ ніж mtime pwa_api.py
-
-# 5. Перевірити
-curl -s http://127.0.0.1:5001/api/health
-
-# 6. Скачати локально і закомітити
-scp -i ~/.ssh/id_rsa -P 21098 gomoncli@31.131.18.79:/home/gomoncli/zadarma/pwa_api.py ./pwa_api.py
-git add pwa_api.py && git commit -m "fix: ..." && git push
 ```
 
 ### Зміни у frontend (index.html)
 ```bash
-# 1. Внести зміни в index.html на сервері
-# 2. Обов'язково збільшити версію кешу в sw.js
-sed -i 's/gomon-2026-03-28x/gomon-2026-03-28y/' /home/gomoncli/public_html/app/sw.js
-
-# 3. Скачати локально і закомітити
-scp ... index.html sw.js ./public_html/app/
-git add public_html/app/ && git commit -m "feat: ..." && git push
+# 1. Збільшити CACHE версію в sw.js (обов'язково!)
+# 2. Скопіювати файли:
+scp -i ~/.ssh/id_rsa -P 21098 \
+  public_html/app/index.html \
+  public_html/app/sw.js \
+  gomoncli@31.131.18.79:/home/gomoncli/public_html/app/
 ```
 
-### Перевірка що на сервері актуальне
+### Зміни на сайті (sitepro)
 ```bash
-curl -si https://www.gomonclinic.com/app/sw.js | grep -E 'last-modified|CACHE'
-curl -s https://www.gomonclinic.com/app/index.html | grep -c 'ptr-loader'
+scp -i ~/.ssh/id_rsa -P 21098 \
+  public_html/sitepro/modal_prices.php \
+  public_html/sitepro/a188dd94d37a0374c81c636d09cd1f05.php \
+  gomoncli@31.131.18.79:/home/gomoncli/public_html/sitepro/
+```
+
+### Перевірка
+```bash
+# API живий
+curl -si https://www.gomonclinic.com/api/health
+
+# SW версія (має відповідати sw.js)
+curl -si https://www.gomonclinic.com/app/sw.js | grep CACHE
 ```
 
 ---
 
 ## PWA Frontend — Ключові JS функції
 
-### Навігація
-- `showScreen(id)` — перехід між екранами (home, appointments, price, map, chat)
-- `screens`: `screen-home`, `screen-appointments`, `screen-price`, `screen-map`, `screen-chat`, `screen-auth`
-- `screen-admin-*` — адмін-екрани (виключені з PTR)
+### Навігація (клієнт)
+- `go(id)` — перехід між екранами (home, appointments, price, map, chat)
+- `showScreen(id)` — низькорівневий перехід
 
-### Дані
+### Навігація (адмін)
+- `adminGo(id)` — перехід між admin-home, admin-appts, admin-price, admin-clients
+- `afterLogin()` → якщо `user.is_admin` → `adminGo('admin-home')`
+
+### Дані клієнта
 - `appointments` — масив, кешується в `localStorage('gomon_appointments')`
 - `loadAppointments()` — GET `/api/me/appointments`
-- `renderAppointments()` — рендерить екран записів
-- `renderHomeAppt()` — рендерить "наступний запис" на home-екрані
-
-### Скасування запису
-```javascript
-cancelAppointment(apptId, date, service)
-// → showConfirm() → POST /api/me/appointments/cancel
-// → видаляє з localStorage → renderAppointments() → renderHomeAppt()
-```
 
 ### Pull-to-refresh
 - Виключені екрани: `auth`, всі `screen-admin*`, відкриті модалки
 - Threshold: 72px свайп вниз при `scrollTop === 0`
-- `doRefresh()` → завантажує дані залежно від активного екрану
-
-### Admin stat cards
-- `.stat-card[onclick="_admStatClick('clients|users|push|month')"]`
-- `_admStatClick('clients')` → GET `/api/admin/clients-list` → модалка зі списком
-- `_admStatClick('month')` → GET `/api/admin/month-visits` → список з цінами + сума
 
 ### SW update listener
 ```javascript
@@ -268,7 +379,8 @@ navigator.serviceWorker.addEventListener('message', e => {
 ### Перед деплоєм JS-коду обов'язково перевірити:
 1. **Імена функцій**: кожен виклик `renderXxx()` — `grep -n 'function renderXxx'` → функція має існувати
 2. **ID елементів**: кожен `getElementById('...')` — елемент має бути в HTML
-3. **API endpoints**: кожен `api('/xxx')` — endpoint має бути в pwa_api.py
+3. **API endpoints**: кожен `fetch('/api/xxx')` — endpoint має бути в pwa_api.py
+4. **Дублікати функцій**: `grep -n 'function _fmtDate'` — не повинно бути двох однакових
 
 ### Після деплою перевірити:
 1. `curl -s http://127.0.0.1:5001/api/health` — API живий
@@ -289,13 +401,9 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ## Міграція на новий сервер
 
-### Що потрібно від нового сервера (надати перед початком)
-- ОС (Ubuntu/Debian/CentOS)
-- IP-адреса
-- SSH доступ (порт, user, ключ або пароль)
-- Чи є root/sudo
-- Веб-сервер (nginx/apache або чистий сервер)
-- Реєстратор домену + доступ до DNS-панелі
+### Що потрібно від нового сервера
+- ОС (Ubuntu/Debian/CentOS), IP, SSH доступ, root/sudo
+- Веб-сервер (nginx/apache або чистий), реєстратор домену + DNS
 
 ### Що переносимо
 | Що | Звідки | Примітка |
@@ -306,69 +414,32 @@ navigator.serviceWorker.addEventListener('message', e => {
 | `feed.db` | `/home/gomoncli/zadarma/` | Telegram feed |
 | `config.py` | `/home/gomoncli/zadarma/` | **НЕ в git** — вручну |
 | `vapid_private.key` | `/home/gomoncli/zadarma/` | **Критично** — push підписки прив'язані |
-| `vapid_public.txt` | `/home/gomoncli/zadarma/` | |
 | `prices.json` | `/home/gomoncli/private_data/` | |
 | `public_html/` | весь каталог | Сайт + PWA + фото |
-
-### Порядок переїзду
-```
-За 1-2 дні до:
-1. Знизити TTL DNS до 300 сек
-2. Новий сервер: встановити Python 3.9+, nginx, certbot
-3. git clone + перенести БД і конфіг
-4. Налаштувати nginx reverse proxy + SSL (certbot)
-5. Налаштувати cron і systemd-сервіси
-6. Перевірити все на тест-домені або прямо по IP
-
-День переїзду:
-1. Зупинити cron на старому сервері
-2. Фінальний rsync БД (кілька секунд downtime)
-3. Перемкнути DNS A-запис → новий IP
-4. Перевірити SSL і всі ендпоінти
-
-Після:
-└── Тримати старий сервер ще 2-3 дні як backup
-```
-
-### Що я підготую (після отримання даних про сервер)
-- `setup.sh` — встановлення всіх залежностей
-- `gomonclinic.service` — systemd unit для Flask (замість watchdog-скриптів)
-- `nginx.conf` — reverse proxy + SSL конфіг
-- `migrate.sh` — rsync БД зі старого на новий
-- Команди certbot під конкретну ОС
-- Команди DNS під конкретний реєстратор
 
 ---
 
 ## Відомі особливості
 
-- **Python 3.6** на сервері — f-strings підтримуються, але деякі сучасні синтаксис-конструкції ні
+- **Python 3.6** на сервері — f-strings підтримуються, але деякі сучасні конструкції ні
 - **LiteSpeed** веб-сервер, без CDN/проксі
-- **WLaunch cancel**: використовує `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
+- **WLaunch cancel**: `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
 - **Sync**: `sync_appointments.py` зберігає топ-5 записів по даті (новіші першими), включаючи CANCELLED
 - **Parse services**: `pwa_api.py::parse_services()` фільтрує CANCELLED при поверненні клієнту
-- **OTP доставка**: Viber (відправник `PROMO`, TTL 5хв) → SMS-фолбек. Керується через `SMS_FLY_VIBER_SENDER` в config.py
-- **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот (69 осіб). Реальні PWA-юзери = `otp_sessions.db::sessions`
-- **Фото локації**: `location-aerial.jpg`, `location-entrance.jpg` лежать у `/home/gomoncli/public_html/sitepro/`
-- **AI Rate Limiting**: клієнтський, через localStorage. Сайт: `gw_rl` → 10 запитів/день. PWA: `gc_rl_guest` (гість) → 10, `gc_rl_{phone}` (авторизований) → 20. При ліміті — картка "Консультація лікаря" з кнопкою Instagram Direct. Адмін = авторизований → 20.
+- **OTP доставка**: Viber (відправник `PROMO`, TTL 5хв) → SMS-фолбек
+- **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот. Реальні PWA-юзери = `otp_sessions.db::sessions`
+- **Specialist detection**: `sync_appointments.py` + `wlaunch_api.py` визначають спеціаліста через `resources[].phone` → маппінг у `RESOURCE_SPECIALIST_MAP`
+- **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)
 
 ---
 
 ## AI Chat Rate Limiting
 
-### Як працює
-
 | Місце | localStorage ключ | Ліміт |
 |-------|------------------|-------|
 | Сайт (`gomon-widget.js`) | `gw_rl` | 10/день |
-| PWA гість (не залогінений) | `gc_rl_guest` | 10/день |
+| PWA гість | `gc_rl_guest` | 10/день |
 | PWA авторизований | `gc_rl_{phone}` | 20/день |
 
-Структура запису: `{"date":"2026-03-29","count":5}` — скидається автоматично наступного дня.
-
-### Що показується при ліміті
-Замість виклику AI API: повідомлення-картка з текстом "Зважаючи на складність вашого запиту, рекомендую звернутись до лікаря на особисту консультацію." + кнопка "Записатись на консультацію" (Instagram Direct `https://ig.me/m/dr.gomon`).
-
-### Де реалізовано
-- `gomon-widget.js`: `gwIsRateLimited()`, `gwRateLimitBump()`, `renderConsultCard()` — перевірка в `doSendModal()` та `doSendInline()`
-- `gomon-chat.js`: `gcIsRateLimited()`, `gcRateLimitBump()`, `addConsultCard()` — перевірка в `sendMessage()` після `addMessage('user', ...)`
+Структура: `{"date":"2026-03-30","count":5}` — скидається наступного дня.
+При ліміті — картка "Записатись на консультацію" (Instagram Direct).

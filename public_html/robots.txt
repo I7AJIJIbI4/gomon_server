@@ -4,6 +4,8 @@ Disallow: /messenger/
 Disallow: /api/
 Disallow: /sitepro/a1
 Disallow: /sitepro/prices.json
+Disallow: /sitepro/prices.php
+Disallow: /sitepro/modal_prices.php
 Disallow: /sitepro/promos.json
 Disallow: /sitepro/data.json
 Disallow: /sitepro/pd.json

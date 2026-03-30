@@ -829,7 +829,7 @@
 
   function loadPrices() {
     if (priceCache) return Promise.resolve(priceCache);
-    return fetch('prices.php').then(function(r) { return r.json(); }).then(function(data) {
+    return fetch('modal_prices.php').then(function(r) { return r.json(); }).then(function(data) {
       priceCache = data;
       return data;
     });

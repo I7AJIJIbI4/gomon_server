@@ -584,9 +584,6 @@ def admin_stats():
     c.execute("SELECT COUNT(*) FROM clients")
     total_clients = c.fetchone()[0]
 
-    c.execute("SELECT COUNT(*) FROM users")
-    total_users = c.fetchone()[0]
-
     c.execute("SELECT COUNT(*) FROM push_subscriptions WHERE active=1")
     push_subs = c.fetchone()[0]
 
@@ -614,9 +611,18 @@ def admin_stats():
     recent = [dict(r) for r in c.fetchall()]
     conn.close()
 
+    # PWA юзери з otp_sessions.db
+    pwa_users = 0
+    try:
+        otp_conn = sqlite3.connect(OTP_DB)
+        pwa_users = otp_conn.execute('SELECT COUNT(DISTINCT phone) FROM sessions').fetchone()[0]
+        otp_conn.close()
+    except Exception:
+        pass
+
     return jsonify({
         'total_clients': total_clients,
-        'total_users':   total_users,
+        'pwa_users':     pwa_users,
         'push_subs':     push_subs,
         'visits_month':  visits_month,
         'recent':        recent,

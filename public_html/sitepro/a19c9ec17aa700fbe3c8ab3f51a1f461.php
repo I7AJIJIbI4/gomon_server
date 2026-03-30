@@ -744,7 +744,7 @@
 
   function loadPrices() {
     if (priceCache) return Promise.resolve(priceCache);
-    return fetch('prices.php').then(function(r) { return r.json(); }).then(function(data) {
+    return fetch('modal_prices.php').then(function(r) { return r.json(); }).then(function(data) {
       priceCache = data;
       return data;
     });
@@ -767,7 +767,10 @@
     } else {
       modalPrices.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);">Завантаження…</div>';
       loadPrices().then(function(data) {
-        modalPrices.innerHTML = renderPrices(data[id] || []);
+        var ctaBtn = '<div style="margin-top:20px;"><a href="#cta" class="btn btn-outline" style="width:100%;max-width:100%;box-sizing:border-box;" id="modalCtaLink">Записатись на процедуру</a></div>';
+        modalPrices.innerHTML = renderPrices(data[id] || []) + ctaBtn;
+        var ctaEl = document.getElementById('modalCtaLink');
+        if (ctaEl) ctaEl.addEventListener('click', closeServiceModal);
       }).catch(function() {
         modalPrices.innerHTML = '';
       });
