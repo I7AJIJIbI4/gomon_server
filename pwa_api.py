@@ -35,7 +35,7 @@ logger = logging.getLogger('pwa_api')
 # ── CONFIG ──
 DB_PATH      = '/home/gomoncli/zadarma/users.db'
 FEED_DB      = '/home/gomoncli/zadarma/feed.db'
-from config import TELEGRAM_TOKEN as TG_TOKEN
+from config import TELEGRAM_TOKEN as TG_TOKEN, ANTHROPIC_KEY
 
 def init_feed_db():
     conn = sqlite3.connect(FEED_DB)
@@ -1246,7 +1246,6 @@ def admin_ai_intent():
         '- reply: "Записую [ім\'я] на [процедуру], [дата] о [час]." або уточнення'
     ).format(today=today, wd=today_wd, clients=clients_block, procs=procs_block)
 
-    ANTHROPIC_KEY = 'ANTHROPIC_KEY_REMOVED'
     payload = json.dumps({
         'model': 'claude-sonnet-4-6',
         'max_tokens': 512,
