@@ -1681,6 +1681,7 @@ function openApptAction(id) {
   document.getElementById('adm-action-sub').textContent =
     (a.procedure_name||'') + (a.time ? ' · ' + a.time.slice(0,5) : '');
   const btns = [];
+  btns.push(`<button class="adm-action-btn" onclick="showEditApptForm(${id})">✎ Редагувати</button>`);
   if (a.status !== 'DONE')      btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'DONE')">✓ Виконано</button>`);
   if (a.status !== 'NO_SHOW')   btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'NO_SHOW')">Не з'явився</button>`);
   if (a.status !== 'CONFIRMED') btns.push(`<button class="adm-action-btn" onclick="updateApptStatus(${id},'CONFIRMED')">↩ Підтвердити</button>`);
@@ -1713,8 +1714,12 @@ async function cancelAppt(id) {
 let _apptClient = null;
 let _apptProc   = null;
 let _apptSpec   = 'victoria';
+let _editApptId = null;
 
 function showNewApptForm(dateStr) {
+  _editApptId = null;
+  document.getElementById('appt-form-title').textContent = 'Новий запис';
+  document.getElementById('appt-submit-btn').textContent = 'Зберегти запис';
   const ov = document.getElementById('adm-new-appt-overlay');
   ov.classList.add('show');
   document.getElementById('appt-date').value = dateStr || _fmtDate(calDate);
@@ -1736,7 +1741,22 @@ function showNewApptForm(dateStr) {
     document.getElementById('appt-specialist-row').style.display = '';
   }
 }
+function showEditApptForm(id) {
+  const a = calAppointments.find(x => x.id === id);
+  if (!a) return;
+  closeApptAction();
+  showNewApptForm(a.date);
+  _editApptId = id;
+  document.getElementById('appt-form-title').textContent = 'Редагувати запис';
+  document.getElementById('appt-submit-btn').textContent = 'Зберегти зміни';
+  if (a.client_phone || a.client_name) selectClientAppt(a.client_phone || '', a.client_name || '');
+  if (a.procedure_name) selectProcAppt(a.procedure_name, '');
+  if (a.specialist) selectSpecialistAppt(a.specialist);
+  document.getElementById('appt-time').value = (a.time || '').slice(0,5);
+  document.getElementById('appt-notes').value = a.notes || '';
+}
 function closeNewApptForm() {
+  _editApptId = null;
   document.getElementById('adm-new-appt-overlay').classList.remove('show');
 }
 function selectSpecialistAppt(s) {
@@ -1830,11 +1850,13 @@ async function submitNewAppt() {
   const notes = document.getElementById('appt-notes').value.trim();
   const procName = _apptProc ? _apptProc.name : document.getElementById('appt-proc-q').value.trim();
   if (!procName || !date || !time) { showToast('Заповніть процедуру, дату і час'); return; }
+  const isEdit = !!_editApptId;
   const btn = document.getElementById('appt-submit-btn');
   btn.disabled = true; btn.textContent = 'Збереження…';
   try {
-    const r = await fetch('/api/admin/calendar/appointments', {
-      method: 'POST',
+    const url = '/api/admin/calendar/appointments' + (isEdit ? '/'+_editApptId : '');
+    const r = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
       headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
       body: JSON.stringify({
         client_phone: _apptClient ? _apptClient.phone : '',
@@ -1849,10 +1871,10 @@ async function submitNewAppt() {
       closeNewApptForm();
       window._calLoaded = false;
       loadCalendarData();
-      showToast('Запис збережено');
+      showToast(isEdit ? 'Запис оновлено' : 'Запис збережено');
     } else { showToast('Помилка: '+(data.error||'')); }
   } catch(e) { showToast('Помилка мережі'); }
-  btn.disabled = false; btn.textContent = 'Зберегти запис';
+  btn.disabled = false; btn.textContent = isEdit ? 'Зберегти зміни' : 'Зберегти запис';
 }
 
 /* ───────────────────────────────────── CLIENTS ADMIN ── */
@@ -2787,7 +2809,7 @@ if ('serviceWorker' in navigator) {
 <div id="adm-new-appt-overlay">
   <div class="adm-new-appt-sheet">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <span style="font-family:var(--serif);font-size:18px;color:var(--gold-pale)">Новий запис</span>
+      <span id="appt-form-title" style="font-family:var(--serif);font-size:18px;color:var(--gold-pale)">Новий запис</span>
       <button onclick="closeNewApptForm()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:0;line-height:1">✕</button>
     </div>
     <label class="adm-form-label">Клієнт</label>
