@@ -329,8 +329,13 @@ ssh ... 'ps -o pid,lstart -p $(pgrep -f pwa_api); stat -c "%y" /home/gomoncli/za
 ```
 
 ### Зміни у frontend (index.html)
+> **ОБОВ'ЯЗКОВО після КОЖНОЇ зміни frontend:**
+> 1. Збільшити CACHE в `sw.js` (формат `gomon-YYYY-MM-DDx`, де x — літера a/b/c/...)
+> 2. Деплоїти **обидва** файли разом: `index.html` + `sw.js`
+> Без цього браузери клієнтів бачать стару версію.
+
 ```bash
-# 1. Збільшити CACHE версію в sw.js (обов'язково!)
+# 1. Bump CACHE в sw.js: "gomon-2026-03-30a" → "gomon-2026-03-30b"
 # 2. Скопіювати файли:
 scp -i ~/.ssh/id_rsa -P 21098 \
   public_html/app/index.html \
