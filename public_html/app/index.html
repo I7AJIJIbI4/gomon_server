@@ -1937,6 +1937,7 @@ function admAiToggleMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recog = new SR();
   recog.lang = 'uk-UA';
+  recog.continuous = true;       // keep listening until button pressed again
   recog.interimResults = true;   // live preview while speaking
   recog.maxAlternatives = 1;
   const inp = document.getElementById('adm-ai-input');
@@ -1949,7 +1950,7 @@ function admAiToggleMic() {
       if (e.results[i].isFinal) _finalText += e.results[i][0].transcript;
       else interim += e.results[i][0].transcript;
     }
-    inp.value = _finalText || interim;
+    inp.value = interim ? _finalText + ' ' + interim : _finalText;
   };
   recog.onend = function() {
     btn.classList.remove('listening');
