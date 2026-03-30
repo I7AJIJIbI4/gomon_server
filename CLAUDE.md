@@ -114,10 +114,12 @@ ADMIN_ROLES = {
     '380733103110': 'superadmin',   # головний адмін
     '380996093860': 'full',         # Вікторія — повний доступ
     '380685129121': 'specialist',   # Анастасія — бачить тільки свої записи, не може редагувати ціни
+    '16452040153':  'specialist',   # тестовий акаунт Анастасії
 }
 SPECIALIST_MAP = {
     '380996093860': 'victoria',
     '380685129121': 'anastasia',
+    '16452040153':  'anastasia',    # тестовий акаунт → anastasia
 }
 ```
 
@@ -197,7 +199,7 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
 ### Адмін (`require_admin` — superadmin + full + specialist)
 | Endpoint | Метод | Опис |
 |----------|-------|------|
-| `/api/admin/stats` | GET | `total_clients`, `pwa_users` (з otp_sessions.db), `push_subs`, `visits_month`, `recent` |
+| `/api/admin/stats` | GET | `total_clients`, `pwa_users` (з otp_sessions.db), `push_subs`, `visits_month`, `recent`; для `specialist` — тільки свої записи |
 | `/api/admin/role` | GET | Поточна роль і specialist |
 | `/api/admin/calendar/appointments` | GET | Календар: manual + WLaunch; specialist бачить тільки свої |
 | `/api/admin/calendar/appointments` | POST | Створити ручний запис |
@@ -447,7 +449,8 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)
 - **PIN_AUTH**: словник `{phone: pin}` у pwa_api.py для bypass SMS OTP. Наразі: `16452040153` (тестовий аккаунт Анастасії, PIN `0375`)
 - **Міжнародні номери в auth**: `formatPhone()` і `sendOtp()` визначають міжнародний номер як `≥11 цифр і не починається з 0`. В такому випадку `380` НЕ додається. UA-номери (0XXXXXXXXX або XXXXXXXXX) — як і раніше. Для тестового `+1`: вводити `16452040153` у поле (незважаючи на `+38` в префіксі — працює функціонально).
-- **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються.
+- **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються. Картка показує `procedure.price` (з prices.json). Якщо клієнт новий — картка показує поле вводу телефону; при підтвердженні клієнт автоматично зберігається через `POST /api/admin/clients/add`. `_load_clients_for_ai()` сортує клієнтів без `NULLS LAST` (не підтримується SQLite 3.6).
+- **Specialist stats filter**: `/api/admin/stats` для ролі `specialist` фільтрує `visits_month` і `recent` по `specialist` полю у `services_json`. Тестовий акаунт `16452040153` → `'anastasia'` в `SPECIALIST_MAP`.
 - **Push dedup**: `push_sender.py::save_subscription()` лімітує до 2 активних підписок на телефон (найновіші), щоб уникнути дублікатів push.
 
 ---

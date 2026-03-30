@@ -615,24 +615,47 @@ def admin_stats():
     # Записи за останні 30 днів
     from datetime import datetime, timedelta
     since = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    c.execute("""
-        SELECT COUNT(*) FROM (
-            SELECT json_each.value FROM clients, json_each(clients.services_json)
-            WHERE json_extract(json_each.value, '$.date') >= ?
-        )
-    """, (since,))
+    if request.admin_role == 'specialist':
+        spec = request.admin_specialist
+        c.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT json_each.value FROM clients, json_each(clients.services_json)
+                WHERE json_extract(json_each.value, '$.date') >= ?
+                  AND json_extract(json_each.value, '$.specialist') = ?
+            )
+        """, (since, spec))
+    else:
+        c.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT json_each.value FROM clients, json_each(clients.services_json)
+                WHERE json_extract(json_each.value, '$.date') >= ?
+            )
+        """, (since,))
     visits_month = c.fetchone()[0]
 
     # Останні 10 відвідувань
-    c.execute("""
-        SELECT c.first_name, c.last_name, c.phone,
-               json_extract(s.value, '$.date') as date,
-               json_extract(s.value, '$.service') as service
-        FROM clients c, json_each(c.services_json) s
-        WHERE json_extract(s.value, '$.date') IS NOT NULL
-        ORDER BY json_extract(s.value, '$.date') DESC
-        LIMIT 10
-    """)
+    if request.admin_role == 'specialist':
+        spec = request.admin_specialist
+        c.execute("""
+            SELECT c.first_name, c.last_name, c.phone,
+                   json_extract(s.value, '$.date') as date,
+                   json_extract(s.value, '$.service') as service
+            FROM clients c, json_each(c.services_json) s
+            WHERE json_extract(s.value, '$.date') IS NOT NULL
+              AND json_extract(s.value, '$.specialist') = ?
+            ORDER BY json_extract(s.value, '$.date') DESC
+            LIMIT 10
+        """, (spec,))
+    else:
+        c.execute("""
+            SELECT c.first_name, c.last_name, c.phone,
+                   json_extract(s.value, '$.date') as date,
+                   json_extract(s.value, '$.service') as service
+            FROM clients c, json_each(c.services_json) s
+            WHERE json_extract(s.value, '$.date') IS NOT NULL
+            ORDER BY json_extract(s.value, '$.date') DESC
+            LIMIT 10
+        """)
     recent = [dict(r) for r in c.fetchall()]
     conn.close()
 
@@ -1137,7 +1160,7 @@ def _load_clients_for_ai():
         return _ai_clients_cache
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT phone, first_name, last_name FROM clients ORDER BY last_visit DESC NULLS LAST")
+    c.execute("SELECT phone, first_name, last_name FROM clients ORDER BY CASE WHEN last_visit IS NULL THEN 1 ELSE 0 END, last_visit DESC")
     result = []
     for row in c.fetchall():
         name = ((row[1] or '') + ' ' + (row[2] or '')).strip()

@@ -1828,10 +1828,11 @@ function admAiRenderCard(d) {
       d.client_options.forEach(function(c,i){ html += '<option value="'+i+'">'+c.name+'</option>'; });
       html += '</select></div>';
     } else if (d.client) {
-      var phoneShort = (d.client.phone||'').replace(/^38/,'0');
+      var phoneShort = (d.client.phone||'').replace(/^380/,'0');
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val">'+d.client.name+'<br><span style="font-size:12px;color:var(--text3)">'+phoneShort+'</span></span></div>';
     } else if (d.client_name) {
-      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val" style="color:var(--text3)">'+d.client_name+' — не знайдено</span></div>';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Клієнт</span><span class="adm-ai-preview-val"><span>'+d.client_name+'</span><br><span style="font-size:12px;color:#e09060">Новий клієнт</span></span></div>';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Тел. клієнта</span><input id="adm-ai-new-phone" type="tel" placeholder="+380XXXXXXXXX" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:4px 8px;width:155px;font-family:var(--sans)"></div>';
     }
     if (d.procedure_options && d.procedure_options.length > 1) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span>';
@@ -1839,7 +1840,8 @@ function admAiRenderCard(d) {
       d.procedure_options.forEach(function(p,i){ html += '<option value="'+i+'">'+p.name+'</option>'; });
       html += '</select></div>';
     } else if (d.procedure) {
-      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val">'+d.procedure.name+'</span></div>';
+      var priceStr = d.procedure.price ? '<br><span style="font-size:12px;color:var(--gold)">'+d.procedure.price+'</span>' : '';
+      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val">'+d.procedure.name+priceStr+'</span></div>';
     } else if (d.procedure_raw) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Процедура</span><span class="adm-ai-preview-val" style="color:var(--text3)">'+d.procedure_raw+'?</span></div>';
     }
@@ -1912,7 +1914,39 @@ function admAiFill() {
   if (d.notes) document.getElementById('appt-notes').value = d.notes;
 }
 
-function admAiConfirm() {
+async function admAiConfirm() {
+  const d = _admAiResult;
+  const isNewClient = d && !d.client && !(d.client_options && d.client_options.length) && d.client_name;
+  if (isNewClient) {
+    const phoneInp = document.getElementById('adm-ai-new-phone');
+    const rawPhone = phoneInp ? (phoneInp.value || '').replace(/\D/g, '') : '';
+    if (!rawPhone || rawPhone.length < 10) {
+      showToast('Введіть номер телефону нового клієнта');
+      return;
+    }
+    const normPhone = rawPhone.startsWith('0') ? '380' + rawPhone.slice(1) :
+                      rawPhone.startsWith('38') && rawPhone.length === 12 ? rawPhone : rawPhone;
+    const nameParts = (d.client_name || '').trim().split(/\s+/);
+    const firstName = nameParts[0] || d.client_name;
+    const lastName = nameParts.slice(1).join(' ') || '';
+    try {
+      const r = await fetch('/api/admin/clients/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({first_name: firstName, last_name: lastName, phone: normPhone})
+      });
+      const res = await r.json();
+      if (res.ok || res.existing) {
+        _admAiResult.client = res.client || {phone: normPhone, name: d.client_name};
+      } else {
+        showToast('Помилка: ' + (res.error || 'не вдалося зберегти клієнта'));
+        return;
+      }
+    } catch(e) {
+      showToast('Мережева помилка');
+      return;
+    }
+  }
   admAiFill();
   admAiClose();
 }
