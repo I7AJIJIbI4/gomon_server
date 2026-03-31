@@ -1200,21 +1200,25 @@ def admin_cal_delete(appt_id):
     conn.commit()
     conn.close()
 
+    # Сповіщення спеціалісту про скасування (клієнту — не надсилаємо поки)
     try:
-        from notifier import send_cancellation
-        appt_dict = {
-            'id':             appt_id,
-            'client_phone':   row['client_phone'],
-            'client_name':    row['client_name'],
-            'procedure_name': row['procedure_name'],
-            'specialist':     row['specialist'],
-            'date':           row['date'],
-            'time':           row['time'],
-            'duration_min':   row['duration'] or 60,
-        }
-        send_cancellation(appt_dict)
+        from notifier import notify_specialist, fmt_cancel_specialist
+        if row['specialist']:
+            appt_dict = {
+                'id':             appt_id,
+                'client_phone':   row['client_phone'],
+                'client_name':    row['client_name'],
+                'procedure_name': row['procedure_name'],
+                'specialist':     row['specialist'],
+                'date':           row['date'],
+                'time':           row['time'],
+                'duration_min':   row['duration'] or 60,
+            }
+            spec_text = fmt_cancel_specialist(appt_dict)
+            ok = notify_specialist(row['specialist'], spec_text)
+            logger.info('cancel specialist notify: spec={} ok={}'.format(row['specialist'], ok))
     except Exception as _e:
-        logger.error('notifier cancel (admin) error: {}'.format(_e))
+        logger.error('notifier cancel specialist error: {}'.format(_e))
 
     return jsonify({'ok': True})
 
@@ -1834,9 +1838,9 @@ def cancel_my_appointment():
     # Оновлюємо локальну БД
     _update_local_appt_cancelled(phone, date, service)
 
+    # Сповіщення спеціалісту про скасування (клієнту — не надсилаємо поки)
     try:
-        from notifier import send_cancellation
-        # Для WLaunch-запису specialist невідомий → витягуємо з services_json
+        from notifier import notify_specialist, fmt_cancel_specialist
         from user_db import get_client_by_phone as _gcbp
         import json as _json
         _client = _gcbp(phone)
@@ -1848,19 +1852,22 @@ def cancel_my_appointment():
                 if _it.get('date') == date and _it.get('service') == service:
                     _specialist = _it.get('specialist')
                     break
-        appt_dict = {
-            'appt_id':        appt_id,
-            'client_phone':   phone,
-            'client_name':    _client_name,
-            'procedure_name': service,
-            'specialist':     _specialist,
-            'date':           date,
-            'time':           '',
-            'duration_min':   60,
-        }
-        send_cancellation(appt_dict)
+        if _specialist:
+            appt_dict = {
+                'appt_id':        appt_id,
+                'client_phone':   phone,
+                'client_name':    _client_name,
+                'procedure_name': service,
+                'specialist':     _specialist,
+                'date':           date,
+                'time':           '',
+                'duration_min':   60,
+            }
+            spec_text = fmt_cancel_specialist(appt_dict)
+            ok = notify_specialist(_specialist, spec_text)
+            logger.info('cancel specialist notify (client): spec={} ok={}'.format(_specialist, ok))
     except Exception as _e:
-        logger.error('notifier cancel (client) error: {}'.format(_e))
+        logger.error('notifier cancel specialist (client-initiated) error: {}'.format(_e))
 
     logger.info("Cancelled appointment: {} {} {}".format(phone, date, service))
     return jsonify({'ok': True})
