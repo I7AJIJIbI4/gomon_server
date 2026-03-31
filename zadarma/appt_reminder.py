@@ -22,9 +22,30 @@ import json
 import logging
 import logging.handlers
 import sqlite3
+import fcntl
 from datetime import date, datetime, timedelta
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
+
+LOCK_FILE = '/tmp/appt_reminder.lock'
+_lock_fh  = None
+
+def _acquire_lock():
+    global _lock_fh
+    _lock_fh = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except IOError:
+        _lock_fh.close()
+        return False
+
+def _release_lock():
+    global _lock_fh
+    if _lock_fh:
+        fcntl.flock(_lock_fh, fcntl.LOCK_UN)
+        _lock_fh.close()
+        _lock_fh = None
 
 LOG_FILE = '/home/gomoncli/zadarma/appt_reminder.log'
 
@@ -310,20 +331,30 @@ def run_specialist_notifications(dry_run=False):
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    dry_run  = '--dry-run' in sys.argv
-    no_flags = not any(f in sys.argv for f in ('--reminder', '--feedback', '--specialist'))
-    do_rem   = '--reminder'   in sys.argv or no_flags
-    do_fb    = '--feedback'   in sys.argv or no_flags
-    do_spec  = '--specialist' in sys.argv or no_flags
+    if not _acquire_lock():
+        # Попередній екземпляр ще виконується — тихо виходимо
+        logging.basicConfig(level=logging.WARNING)
+        logging.getLogger('appt_reminder').warning(
+            'appt_reminder вже запущено (lock зайнятий). Пропускаємо.')
+        sys.exit(0)
 
-    if dry_run:
-        logger.info('*** DRY-RUN MODE — відправки не буде ***')
+    try:
+        dry_run  = '--dry-run' in sys.argv
+        no_flags = not any(f in sys.argv for f in ('--reminder', '--feedback', '--specialist'))
+        do_rem   = '--reminder'   in sys.argv or no_flags
+        do_fb    = '--feedback'   in sys.argv or no_flags
+        do_spec  = '--specialist' in sys.argv or no_flags
 
-    if do_rem:
-        run_reminder(dry_run=dry_run)
+        if dry_run:
+            logger.info('*** DRY-RUN MODE — відправки не буде ***')
 
-    if do_fb:
-        run_feedback(dry_run=dry_run)
+        if do_rem:
+            run_reminder(dry_run=dry_run)
 
-    if do_spec:
-        run_specialist_notifications(dry_run=dry_run)
+        if do_fb:
+            run_feedback(dry_run=dry_run)
+
+        if do_spec:
+            run_specialist_notifications(dry_run=dry_run)
+    finally:
+        _release_lock()

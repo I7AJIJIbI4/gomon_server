@@ -32,6 +32,13 @@ CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com'])
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('pwa_api')
 
+# ── Startup: перевірка що notifier.py імпортується без помилок ──
+try:
+    import notifier as _notifier_check  # noqa
+    logger.info('notifier.py OK')
+except Exception as _ne:
+    logger.error('notifier.py FAILED TO IMPORT: %s', _ne)
+
 # ── CONFIG ──
 DB_PATH      = '/home/gomoncli/zadarma/users.db'
 FEED_DB      = '/home/gomoncli/zadarma/feed.db'
