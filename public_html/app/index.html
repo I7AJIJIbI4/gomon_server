@@ -568,7 +568,8 @@ nav{
 .adm-ai-text{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none}
 .adm-ai-text:focus{border-color:var(--gold)}
 .adm-ai-mic-btn{width:42px;height:42px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.adm-ai-mic-btn.listening{border-color:var(--gold);background:#2a1e08}
+.adm-ai-mic-btn.listening{border-color:var(--gold);background:#2a1e08;animation:admAiMicPulse 1.2s ease-in-out infinite}
+@keyframes admAiMicPulse{0%,100%{box-shadow:0 0 0 0 rgba(193,156,82,.4)}50%{box-shadow:0 0 0 6px rgba(193,156,82,0)}}
 .adm-ai-send-btn{width:42px;height:42px;border-radius:10px;background:var(--gold);border:none;cursor:pointer;font-size:20px;color:#1a1209;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600}
 .adm-ai-card{background:var(--bg3);border:1px solid var(--border-gold);border-radius:14px;padding:14px 16px;margin-top:4px}
 .adm-ai-reply{font-size:15px;color:var(--gold-pale);margin-bottom:10px;line-height:1.5}
@@ -1445,6 +1446,11 @@ let adminRole = null;
 let adminSpecialist = null;
 
 function adminGo(id) {
+  // Якщо йдемо з admin-home — скидаємо стан AI-асистента
+  if (id !== 'admin-home') {
+    if (_admAiRecog) { try { _admAiRecog.stop(); } catch(e) {} _admAiRecog = null; }
+    admAiClose();
+  }
   ADMIN_SCREENS.forEach(s => {
     const sc = document.getElementById('screen-'+s);
     if (sc) { sc.classList.remove('active'); sc.style.display=''; }
@@ -1968,12 +1974,12 @@ async function admAiConfirm() {
       if (res.ok || res.existing) {
         _admAiResult.client = res.client || {phone: normPhone, name: fullName};
       } else {
-        showToast('Помилка: ' + (res.error || 'не вдалося зберегти клієнта'));
-        return;
+        showToast('Клієнта не збережено: ' + (res.error || 'спробуйте ще раз'));
+        // Продовжуємо заповнювати форму — адмін може виправити вручну
       }
     } catch(e) {
-      showToast('Мережева помилка');
-      return;
+      showToast('Мережева помилка при збереженні клієнта');
+      // Продовжуємо заповнювати форму — не втрачаємо дані запису
     }
   }
   admAiFill();

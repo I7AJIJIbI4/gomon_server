@@ -98,10 +98,13 @@ if (!$body) {
     exit;
 }
 
+$start_ms   = (int)(microtime(true) * 1000);
 $user_name  = trim($body['user']['name']  ?? '');
 $user_phone = trim($body['user']['phone'] ?? '');
 $source     = $body['source'] ?? 'app';
 $messages   = $body['messages'] ?? [];
+$client_ip  = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$client_ip  = trim(explode(',', $client_ip)[0]);
 
 // Очищаємо і валідуємо messages
 $clean_messages = [];
@@ -117,6 +120,56 @@ if (empty($clean_messages)) {
     http_response_code(400);
     echo json_encode(['error' => 'No valid messages']);
     exit;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SERVER-SIDE RATE LIMIT
+//  authed (phone known): 20 req/day  |  guest: 10 req/day
+//  key = last-9-digits-of-phone OR ip (whichever is more specific)
+// ═══════════════════════════════════════════════════════════════
+
+$rl_db_path = '/home/gomoncli/zadarma/chat_rl.db';
+$today      = date('Y-m-d');
+$phone_norm = preg_replace('/[^\d]/', '', $user_phone);
+$rl_key     = $phone_norm ? substr($phone_norm, -9) : 'ip:' . $client_ip;
+$rl_limit   = $phone_norm ? 20 : 10;
+
+try {
+    $rl_db = new SQLite3($rl_db_path);
+    $rl_db->exec('PRAGMA journal_mode=WAL');
+    $rl_db->exec(
+        'CREATE TABLE IF NOT EXISTS rl ('
+        . 'key TEXT NOT NULL, date TEXT NOT NULL, count INTEGER DEFAULT 0,'
+        . ' PRIMARY KEY(key, date))'
+    );
+    $rl_db->exec(
+        'CREATE TABLE IF NOT EXISTS chat_log ('
+        . 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        . 'ts TEXT NOT NULL, ip TEXT, phone TEXT, source TEXT,'
+        . 'duration_ms INTEGER, model TEXT, status TEXT, req_len INTEGER)'
+    );
+
+    $stmt = $rl_db->prepare('SELECT count FROM rl WHERE key=:k AND date=:d');
+    $stmt->bindValue(':k', $rl_key);
+    $stmt->bindValue(':d', $today);
+    $row   = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    $count = $row ? (int)$row['count'] : 0;
+
+    if ($count >= $rl_limit) {
+        $rl_db->close();
+        http_response_code(429);
+        echo json_encode(['error' => 'rate_limit']);
+        exit;
+    }
+
+    $rl_db->exec(
+        "INSERT INTO rl(key,date,count) VALUES('{$rl_key}','{$today}',1)"
+        . " ON CONFLICT(key,date) DO UPDATE SET count=count+1"
+    );
+} catch (Exception $e) {
+    // RL DB помилка — не блокуємо запит, логуємо в PHP error_log
+    error_log('chat.php RL error: ' . $e->getMessage());
+    $rl_db = null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -210,27 +263,36 @@ if (file_exists($prices_file)) {
         }
 
         $price_lines = [];
-        foreach ($prices_data as $cat_id => $groups) {
-            $discount = $cat_discounts[$cat_id] ?? null;
-            if ($discount && $source === 'app') {
-                $price_lines[] = "\n> Акція для користувачів додатку: {$discount['promo']} (-{$discount['percent']}% від прайсу)";
+        foreach ($prices_data as $cat_entry) {
+            $cat_name = $cat_entry['cat'] ?? '';
+            $items    = $cat_entry['items'] ?? [];
+            if (!$cat_name || empty($items)) continue;
+
+            // Знижка: шукаємо у cat_discounts по індексу, якщо є
+            $discount = null;
+            foreach ($cat_discounts as $disc_cat_id => $disc) {
+                // cat_id у promos відповідає порядковому номеру категорії прайсу (1-based)
+                // Порівнюємо ключове слово категорії
+                if (stripos($cat_name, 'ін\'єкц') !== false || stripos($cat_name, 'філер') !== false
+                    || stripos($cat_name, 'ботул') !== false || stripos($cat_name, 'контурна') !== false) {
+                    $discount = $disc;
+                    break;
+                }
             }
-            foreach ($groups as $group) {
-                $price_lines[] = "\n**" . $group['title'] . "**";
-                foreach ($group['rows'] as $row) {
-                    $name     = $row[0] ?? '';
-                    $desc     = !empty($row[1]) ? " ({$row[1]})" : '';
-                    $price    = $row[2] ?? '';
-                    $duration = !empty($row[3]) ? ", {$row[3]}" : '';
-                    if ($price && $discount && $source === 'app') {
-                        $orig = (int) preg_replace('/[^\d]/', '', $price);
-                        $sale = (int) round($orig * (1 - $discount['percent'] / 100));
-                        $price_lines[] = "- {$name}{$desc}: повна ₴ {$orig}, зі знижкою ₴ {$sale}{$duration}";
-                    } elseif ($price) {
-                        $price_lines[] = "- {$name}{$desc}: {$price}{$duration}";
-                    } else {
-                        $price_lines[] = "- {$name}{$desc} — ціна індивідуально";
-                    }
+
+            $price_lines[] = "\n**" . $cat_name . "**";
+            foreach ($items as $item) {
+                $name  = $item['name']  ?? '';
+                $price = $item['price'] ?? '';
+                if (!$name) continue;
+                if ($price && $discount && $source === 'app') {
+                    $orig = (int) preg_replace('/[^\d]/', '', $price);
+                    $sale = (int) round($orig * (1 - $discount['percent'] / 100));
+                    $price_lines[] = "- {$name}: повна ₴ {$orig}, зі знижкою ₴ {$sale}";
+                } elseif ($price) {
+                    $price_lines[] = "- {$name}: {$price}";
+                } else {
+                    $price_lines[] = "- {$name} — ціна індивідуально";
                 }
             }
         }
@@ -352,8 +414,31 @@ if (preg_match('/<PROCEDURE>(.*?)<\/PROCEDURE>/si', $reply, $matches)) {
 
 echo json_encode([
     'reply'     => $reply,
-    'procedure' => $procedure, // null або назва — фронт може показати спецповідомлення
+    'procedure' => $procedure,
 ], JSON_UNESCAPED_UNICODE);
+
+// ── LOG ──────────────────────────────────────────────────────────
+$duration_ms = (int)(microtime(true) * 1000) - $start_ms;
+if (!empty($rl_db)) {
+    try {
+        $log_stmt = $rl_db->prepare(
+            'INSERT INTO chat_log(ts,ip,phone,source,duration_ms,model,status,req_len)'
+            . ' VALUES(:ts,:ip,:ph,:src,:dur,:mdl,:st,:rlen)'
+        );
+        $log_stmt->bindValue(':ts',   date('Y-m-d H:i:s'));
+        $log_stmt->bindValue(':ip',   $client_ip);
+        $log_stmt->bindValue(':ph',   $phone_norm ?: null);
+        $log_stmt->bindValue(':src',  $source);
+        $log_stmt->bindValue(':dur',  $duration_ms, SQLITE3_INTEGER);
+        $log_stmt->bindValue(':mdl',  $used_model ?: 'unknown');
+        $log_stmt->bindValue(':st',   'ok');
+        $log_stmt->bindValue(':rlen', strlen($clean_messages[count($clean_messages)-1]['content'] ?? ''), SQLITE3_INTEGER);
+        $log_stmt->execute();
+        $rl_db->close();
+    } catch (Exception $e) {
+        error_log('chat.php log error: ' . $e->getMessage());
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  ХЕЛПЕРИ
