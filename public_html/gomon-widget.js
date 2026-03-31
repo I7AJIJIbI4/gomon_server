@@ -305,6 +305,28 @@
     #gw-send svg { width: 18px; height: 18px; fill: #1a1612; }
     #gw-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    #gw-mic, #gw-inline-mic {
+      width: 42px; height: 42px;
+      border-radius: 11px;
+      border: 1px solid rgba(184,149,90,0.3);
+      background: transparent;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: rgba(247,243,238,0.45);
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    #gw-mic.listening, #gw-inline-mic.listening {
+      border-color: #b8955a;
+      color: #b8955a;
+      background: rgba(184,149,90,0.08);
+      animation: gwMicPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes gwMicPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(184,149,90,0.4); }
+      50%      { box-shadow: 0 0 0 5px rgba(184,149,90,0); }
+    }
+
     /* ── Inline input block on page ── */
     #gw-inline {
       display: flex;
@@ -358,6 +380,9 @@
   function sendSVG() {
     return '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
   }
+  function micSVG() {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>';
+  }
   function closeSVG() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   }
@@ -389,6 +414,7 @@
         '<div id="gw-messages"></div>' +
         '<div id="gw-input-area">' +
           '<textarea id="gw-textarea" placeholder="\u0417\u0430\u043f\u0438\u0442\u0430\u0439\u0442\u0435 \u043f\u0440\u043e \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0438, \u0446\u0456\u043d\u0438 \u0430\u0431\u043e \u043f\u0456\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0443\u2026" rows="1"></textarea>' +
+          '<button id="gw-mic" aria-label="\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0438\u0439 \u0432\u0432\u0456\u0434">' + micSVG() + '</button>' +
           '<button id="gw-send" aria-label="\u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438">' + sendSVG() + '</button>' +
         '</div>' +
       '</div>';
@@ -402,6 +428,7 @@
       inlineBlock.id = 'gw-inline';
       inlineBlock.innerHTML =
         '<textarea id="gw-inline-textarea" placeholder="\u0417\u0430\u043f\u0438\u0442\u0430\u0439\u0442\u0435 \u043f\u0440\u043e \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0438, \u0446\u0456\u043d\u0438 \u0430\u0431\u043e \u043f\u0456\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0443\u2026" rows="1"></textarea>' +
+        '<button id="gw-inline-mic" aria-label="\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0438\u0439 \u0432\u0432\u0456\u0434">' + micSVG() + '</button>' +
         '<button id="gw-inline-send" aria-label="\u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438">' + sendSVG() + '</button>';
       aiInner.appendChild(inlineBlock);
     }
@@ -414,9 +441,11 @@
       messagesEl: overlay.querySelector('#gw-messages'),
       textarea: overlay.querySelector('#gw-textarea'),
       sendBtn: overlay.querySelector('#gw-send'),
+      micBtn: overlay.querySelector('#gw-mic'),
       inlineBlock: inlineBlock,
       inlineTextarea: inlineBlock ? inlineBlock.querySelector('#gw-inline-textarea') : null,
       inlineSend: inlineBlock ? inlineBlock.querySelector('#gw-inline-send') : null,
+      inlineMic: inlineBlock ? inlineBlock.querySelector('#gw-inline-mic') : null,
     };
   }
 
@@ -782,9 +811,50 @@
       this.style.overflowY = this.scrollHeight > 110 ? 'auto' : 'hidden';
     });
 
+    // ── Голосовий ввід (modal + inline) ──────────────────────────────────────
+    function _gwVoice(textarea, micBtn, onFinal) {
+      if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
+      if (micBtn._recog) { micBtn._recog.stop(); return; }
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var r = new SR();
+      r.lang = 'uk-UA'; r.continuous = false; r.interimResults = true;
+      micBtn._recog = r;
+      micBtn.classList.add('listening');
+      var ph = textarea.placeholder;
+      textarea.placeholder = 'Слухаю\u2026';
+      var fin = '';
+      r.onresult = function(e) {
+        var interim = ''; fin = '';
+        for (var i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) fin += e.results[i][0].transcript;
+          else interim += e.results[i][0].transcript;
+        }
+        textarea.value = interim ? fin + ' ' + interim : fin;
+        textarea.dispatchEvent(new Event('input'));
+      };
+      var done = function() {
+        micBtn.classList.remove('listening');
+        micBtn._recog = null;
+        textarea.placeholder = ph;
+        if (fin) onFinal();
+      };
+      r.onend = done; r.onerror = done;
+      r.start();
+    }
+    if (els.micBtn) {
+      els.micBtn.addEventListener('click', function() {
+        _gwVoice(els.textarea, els.micBtn, doSendModal);
+      });
+    }
+
     // Inline send
     if (els.inlineSend) {
       els.inlineSend.addEventListener('click', doSendInline);
+    }
+    if (els.inlineMic && els.inlineTextarea) {
+      els.inlineMic.addEventListener('click', function() {
+        _gwVoice(els.inlineTextarea, els.inlineMic, doSendInline);
+      });
     }
     if (els.inlineTextarea) {
       els.inlineTextarea.addEventListener('keydown', function (e) {
