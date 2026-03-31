@@ -49,6 +49,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 //  ХЕЛПЕРИ ДЛЯ TELEGRAM
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Нормалізує телефон до формату 380XXXXXXXXX (як pwa_api.py::norm_phone).
+ * Повертає рядок із тільки цифрами, або порожній рядок якщо невалідний.
+ */
+function normalize_phone(string $raw): string {
+    $d = preg_replace('/[^\d]/', '', $raw);
+    if (strlen($d) === 10 && $d[0] === '0') return '38' . $d;          // 0XXXXXXXXX
+    if (strlen($d) === 11 && substr($d, 0, 2) === '80') return '3' . $d; // 80XXXXXXXXX
+    if (strlen($d) === 12 && substr($d, 0, 3) === '380') return $d;      // 380XXXXXXXXX
+    if (strlen($d) >= 7) return $d;   // міжнародний або невідомий — повертаємо digits
+    return '';
+}
+
 function lookup_telegram_user(string $phone): ?array {
     $db_path = '/home/gomoncli/zadarma/users.db';
     if (!file_exists($db_path)) return null;
@@ -100,7 +113,7 @@ if (!$body) {
 
 $start_ms   = (int)(microtime(true) * 1000);
 $user_name  = trim($body['user']['name']  ?? '');
-$user_phone = trim($body['user']['phone'] ?? '');
+$user_phone = normalize_phone(trim($body['user']['phone'] ?? ''));
 $source     = $body['source'] ?? 'app';
 $messages   = $body['messages'] ?? [];
 $client_ip  = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
@@ -345,7 +358,7 @@ $models_to_try = array_unique(array_merge(
 
 $raw = false; $code = 0; $used_model = null;
 
-foreach ($models_to_try as $model) {
+foreach ($models_to_try as $idx => $model) {
     $payload = json_encode([
         'model'      => $model,
         'max_tokens' => 1024,
@@ -363,20 +376,30 @@ foreach ($models_to_try as $model) {
             'x-api-key: ' . ANTHROPIC_API_KEY,
             'anthropic-version: 2023-06-01',
         ],
-        CURLOPT_TIMEOUT => 30,
+        // Primary model: 20s full timeout. Fallbacks: 12s (швидші моделі).
+        // CONNECTTIMEOUT: fail-fast при недоступності endpoint (5s).
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => ($idx === 0 ? 20 : 12),
     ]);
-    $raw  = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $raw      = curl_exec($ch);
+    $curl_err = curl_error($ch);
+    $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($raw !== false && $code === 200) {
-        // Якщо модель змінилась — оновлюємо кеш
+    // Помилка з'єднання (HTTP 000) — endpoint недоступний,
+    // немає сенсу пробувати інші моделі на тому самому хості
+    if ($raw === false || $code === 0) {
+        break;
+    }
+
+    if ($code === 200) {
         if ($model !== $active_model) {
             file_put_contents($model_cache_file, $model);
         }
         $used_model = $model;
         break;
     }
+    // 529 overloaded або 4xx (модель не знайдена) → пробуємо наступну
 }
 
 if (!$used_model) {

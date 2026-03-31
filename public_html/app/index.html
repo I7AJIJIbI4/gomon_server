@@ -1882,7 +1882,12 @@ function admAiRenderCard(d) {
     }
     if (d.date) {
       var dp = d.date.split('-');
-      html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Дата</span><span class="adm-ai-preview-val">'+(dp.length===3?dp[2]+'.'+dp[1]+'.'+dp[0]:d.date)+'</span></div>';
+      var dateOk = dp.length===3 && +dp[1]>=1 && +dp[1]<=12 && +dp[2]>=1 && +dp[2]<=31;
+      if (dateOk) {
+        html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Дата</span><span class="adm-ai-preview-val">'+dp[2]+'.'+dp[1]+'.'+dp[0]+'</span></div>';
+      } else {
+        d.date = null; // невалідна дата — не передаємо далі
+      }
     }
     if (d.time) {
       html += '<div class="adm-ai-preview-row"><span class="adm-ai-preview-label">Час</span><span class="adm-ai-preview-val">'+d.time+'</span></div>';

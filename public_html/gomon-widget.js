@@ -550,7 +550,7 @@
     card.innerHTML =
       '<p class="gw-proc-label">\u2728 \u041f\u0456\u0434\u0456\u0431\u0440\u0430\u043d\u0430 \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0430</p>' +
       '<div class="gw-proc-row">' +
-        '<span class="gw-proc-name">' + procedure.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>' +
+        '<span class="gw-proc-name"></span>' +
         '<button class="gw-proc-copy" title="\u0421\u043a\u043e\u043f\u0456\u044e\u0432\u0430\u0442\u0438 \u043d\u0430\u0437\u0432\u0443">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
         '</button>' +
@@ -560,6 +560,10 @@
         '\u041d\u0430\u043f\u0438\u0441\u0430\u0442\u0438 \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Instagram' +
       '</a>' +
       '<p class="gw-proc-hint">\u0421\u043a\u043e\u043f\u0456\u0439\u0442\u0435 \u043d\u0430\u0437\u0432\u0443 \u0442\u0430 \u043d\u0430\u0434\u0456\u0448\u043b\u0456\u0442\u044c \u043b\u0456\u043a\u0430\u0440\u044e \u0432 Direct \u0434\u043b\u044f \u0437\u0430\u043f\u0438\u0441\u0443</p>';
+
+    // Назва процедури через textContent — повністю безпечно від XSS
+    var procNameEl = card.querySelector('.gw-proc-name');
+    if (procNameEl) procNameEl.textContent = procedure;
 
     var igBtn = card.querySelector('.gw-proc-ig');
     if (igBtn) igBtn.addEventListener('click', function () {

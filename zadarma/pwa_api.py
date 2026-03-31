@@ -1165,18 +1165,22 @@ def _load_clients_for_ai():
     global _ai_clients_cache, _ai_clients_cache_ts
     if time.time() - _ai_clients_cache_ts < 300 and _ai_clients_cache:
         return _ai_clients_cache
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT phone, first_name, last_name FROM clients ORDER BY CASE WHEN last_visit IS NULL THEN 1 ELSE 0 END, last_visit DESC")
-    result = []
-    for row in c.fetchall():
-        name = ((row[1] or '') + ' ' + (row[2] or '')).strip()
-        if name:
-            result.append({'phone': row[0], 'name': name})
-    conn.close()
-    _ai_clients_cache = result
-    _ai_clients_cache_ts = time.time()
-    return result
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        c = conn.cursor()
+        c.execute("SELECT phone, first_name, last_name FROM clients ORDER BY CASE WHEN last_visit IS NULL THEN 1 ELSE 0 END, last_visit DESC")
+        result = []
+        for row in c.fetchall():
+            name = ((row[1] or '') + ' ' + (row[2] or '')).strip()
+            if name:
+                result.append({'phone': row[0], 'name': name})
+        conn.close()
+        _ai_clients_cache = result
+        _ai_clients_cache_ts = time.time()
+        return result
+    except Exception as e:
+        logger.error('_load_clients_for_ai error: {}'.format(e))
+        return _ai_clients_cache  # повертаємо застарілий кеш замість порожнього списку
 
 def _load_procs_for_ai():
     """Returns list of {name, cat, price, specialists} from prices.json."""
