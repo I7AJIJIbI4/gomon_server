@@ -442,6 +442,28 @@
     #gc-send:active { transform: scale(0.93); }
     #gc-send:disabled { opacity: 0.3; cursor: default; }
 
+    #gc-mic {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      border: 1px solid var(--gc-border);
+      background: transparent;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: var(--gc-text3);
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    #gc-mic.listening {
+      border-color: var(--gc-gold);
+      color: var(--gc-gold);
+      background: rgba(193,156,82,.08);
+      animation: gcMicPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes gcMicPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(193,156,82,.4); }
+      50%      { box-shadow: 0 0 0 5px rgba(193,156,82,0); }
+    }
+
     /* ── KEYFRAMES ── */
     @keyframes gcFadeUp {
       from { opacity: 0; transform: translateY(8px); }
@@ -531,6 +553,7 @@
       <div id="gc-footer">
         <div id="gc-input-row">
           <textarea id="gc-input" placeholder="Напишіть ваш запит…" rows="1"></textarea>
+          <button id="gc-mic" aria-label="Голосовий ввід" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
           <button id="gc-send" aria-label="Надіслати">➤</button>
         </div>
       </div>
@@ -547,6 +570,7 @@
   const elTypingText  = document.getElementById('gc-typing-text');
   const elInput       = document.getElementById('gc-input');
   const elSend        = document.getElementById('gc-send');
+  const elMic         = document.getElementById('gc-mic');
   const elClose       = document.getElementById('gc-close-btn');
 
   // Переміщуємо typing indicator в кінець messages (щоб скрол пра цювало)
@@ -912,6 +936,38 @@
   elClose.addEventListener('click', closeChat);
 
   elSend.addEventListener('click', sendMessage);
+
+  // ── ГОЛОСОВИЙ ВВІД ────────────────────────────────────────────────────────
+  let _gcMicRecog = null;
+  elMic.addEventListener('click', () => {
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
+    if (_gcMicRecog) { _gcMicRecog.stop(); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const r  = new SR();
+    r.lang = 'uk-UA'; r.continuous = false; r.interimResults = true;
+    _gcMicRecog = r;
+    elMic.classList.add('listening');
+    const ph = elInput.placeholder;
+    elInput.placeholder = 'Слухаю…';
+    let fin = '';
+    r.onresult = e => {
+      let interim = ''; fin = '';
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) fin += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      elInput.value = interim ? fin + ' ' + interim : fin;
+      elInput.dispatchEvent(new Event('input'));
+    };
+    const done = () => {
+      elMic.classList.remove('listening');
+      _gcMicRecog = null;
+      elInput.placeholder = ph;
+      if (fin) sendMessage();
+    };
+    r.onend = done; r.onerror = done;
+    r.start();
+  });
 
   elInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {

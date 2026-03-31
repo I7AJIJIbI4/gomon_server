@@ -401,6 +401,9 @@ nav{
 .ai-send-btn{width:44px;height:44px;flex-shrink:0;border:none;border-radius:10px;background:linear-gradient(135deg,#c9a96e,#a07848);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .15s}
 .ai-send-btn:active{transform:scale(.93)}
 .ai-send-btn{font-size:18px;color:#111}
+.ai-mic-btn{width:44px;height:44px;flex-shrink:0;border:1px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:color .2s,border-color .2s,background .2s}
+.ai-mic-btn.listening{border-color:var(--gold);color:var(--gold);background:rgba(193,156,82,.08);animation:micPulse 1.2s ease-in-out infinite}
+@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(193,156,82,.4)}50%{box-shadow:0 0 0 5px rgba(193,156,82,0)}}
 .chat-info{margin:0 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
 .chat-info p{font-size:13px;color:var(--text2);line-height:1.6}
 .chat-info strong{color:var(--gold);font-weight:400}
@@ -590,9 +593,8 @@ nav{
 .adm-ai-input-row{display:flex;gap:6px;margin-bottom:6px}
 .adm-ai-text{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none}
 .adm-ai-text:focus{border-color:var(--gold)}
-.adm-ai-mic-btn{width:42px;height:42px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;font-size:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.adm-ai-mic-btn.listening{border-color:var(--gold);background:#2a1e08;animation:admAiMicPulse 1.2s ease-in-out infinite}
-@keyframes admAiMicPulse{0%,100%{box-shadow:0 0 0 0 rgba(193,156,82,.4)}50%{box-shadow:0 0 0 6px rgba(193,156,82,0)}}
+.adm-ai-mic-btn{width:42px;height:42px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:color .2s,border-color .2s}
+.adm-ai-mic-btn.listening{border-color:var(--gold);color:var(--gold);background:#2a1e08;animation:micPulse 1.2s ease-in-out infinite}
 .adm-ai-send-btn{width:42px;height:42px;border-radius:10px;background:var(--gold);border:none;cursor:pointer;font-size:20px;color:#1a1209;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600}
 .adm-ai-card{background:var(--bg3);border:1px solid var(--border-gold);border-radius:14px;padding:14px 16px;margin-top:4px}
 .adm-ai-reply{font-size:15px;color:var(--gold-pale);margin-bottom:10px;line-height:1.5}
@@ -1002,6 +1004,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
           </div>
           <div class="ai-input-row">
             <input type="text" id="ai-auth-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-mic-btn" id="ai-auth-mic" onclick="_voiceMic('ai-auth-input','ai-auth-mic',function(t){document.getElementById('ai-auth-input').value=t;document.getElementById('ai-auth-send').click();})" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
             <button class="ai-send-btn" id="ai-auth-send" aria-label="Відправити">&#10148;</button>
           </div>
         </div>
@@ -1180,6 +1183,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
           </div>
           <div class="ai-input-row">
             <input type="text" id="ai-quick-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-mic-btn" id="ai-quick-mic" onclick="_voiceMic('ai-quick-input','ai-quick-mic',function(t){document.getElementById('ai-quick-input').value=t;document.getElementById('ai-quick-send').click();})" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
             <button class="ai-send-btn" id="ai-quick-send" aria-label="Відправити">&#10148;</button>
           </div>
         </div>
@@ -1471,7 +1475,7 @@ let adminSpecialist = null;
 function adminGo(id) {
   // Якщо йдемо з admin-home — скидаємо стан AI-асистента
   if (id !== 'admin-home') {
-    if (_admAiRecog) { try { _admAiRecog.stop(); } catch(e) {} _admAiRecog = null; }
+    if (_voiceRecogs['adm-ai-mic']) { try { _voiceRecogs['adm-ai-mic'].stop(); } catch(e) {} }
     admAiClose();
   }
   ADMIN_SCREENS.forEach(s => {
@@ -1930,7 +1934,6 @@ function closeNewApptForm() {
 }
 
 // ── Admin AI assistant ──
-let _admAiRecog = null;
 let _admAiResult = null;
 
 function admAiSend() {
@@ -2118,50 +2121,54 @@ function admAiEdit() {
   admAiClose();
 }
 
-function admAiToggleMic() {
-  const btn = document.getElementById('adm-ai-mic');
+// ─── Shared voice mic helper ─────────────────────────────────────────────────
+// continuous=true → тримає запис до повторного натискання (для адміна)
+// continuous=false → один знімок і авто-сабміт (для юзерських чатів)
+const _voiceRecogs = {};
+function _voiceMic(inputId, btnId, onFinal, continuous) {
+  const btn = document.getElementById(btnId);
+  const inp = document.getElementById(inputId);
   if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-    showToast('Голосовий ввід не підтримується цим браузером');
+    if (typeof showToast === 'function') showToast('Голосовий ввід не підтримується цим браузером');
     return;
   }
-  if (_admAiRecog) {
-    _admAiRecog.stop();
-    _admAiRecog = null;
-    btn.classList.remove('listening');
+  if (_voiceRecogs[btnId]) {
+    _voiceRecogs[btnId].stop();
     return;
   }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recog = new SR();
   recog.lang = 'uk-UA';
-  recog.continuous = true;       // keep listening until button pressed again
-  recog.interimResults = true;   // live preview while speaking
+  recog.continuous    = !!continuous;
+  recog.interimResults = true;
   recog.maxAlternatives = 1;
-  const inp = document.getElementById('adm-ai-input');
+  _voiceRecogs[btnId] = recog;
+  btn.classList.add('listening');
+  const origPH = inp.placeholder;
   inp.placeholder = 'Слухаю…';
-  let _finalText = '';
+  let finalText = '';
   recog.onresult = function(e) {
     let interim = '';
-    _finalText = '';
+    finalText = '';
     for (let i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) _finalText += e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
       else interim += e.results[i][0].transcript;
     }
-    inp.value = interim ? _finalText + ' ' + interim : _finalText;
+    inp.value = interim ? finalText + ' ' + interim : finalText;
   };
-  recog.onend = function() {
+  function _done() {
     btn.classList.remove('listening');
-    _admAiRecog = null;
-    inp.placeholder = 'ПІБ, процедура, дата час';
-    if (_finalText) admAiRequest(_finalText);
-  };
-  recog.onerror = function() {
-    btn.classList.remove('listening');
-    _admAiRecog = null;
-    inp.placeholder = 'ПІБ, процедура, дата час';
-  };
+    delete _voiceRecogs[btnId];
+    inp.placeholder = origPH;
+    if (finalText && onFinal) onFinal(finalText);
+  }
+  recog.onend  = _done;
+  recog.onerror = _done;
   recog.start();
-  _admAiRecog = recog;
-  btn.classList.add('listening');
+}
+
+function admAiToggleMic() {
+  _voiceMic('adm-ai-input', 'adm-ai-mic', function(t) { admAiRequest(t); }, true);
 }
 
 function selectSpecialistAppt(s) {
@@ -3030,6 +3037,7 @@ if ('serviceWorker' in navigator) {
           </div>
           <div class="ai-input-row">
             <input type="text" id="ai-nc-input" placeholder="Запитати ШІ асистента" autocomplete="off" />
+            <button class="ai-mic-btn" id="ai-nc-mic" onclick="_voiceMic('ai-nc-input','ai-nc-mic',function(t){document.getElementById('ai-nc-input').value=t;document.getElementById('ai-nc-send').click();})" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
             <button class="ai-send-btn" id="ai-nc-send" aria-label="Відправити">&#10148;</button>
           </div>
         </div>
@@ -3114,7 +3122,7 @@ if ('serviceWorker' in navigator) {
           placeholder="ПІБ, процедура, дата час"
           autocomplete="off"
           onkeydown="if(event.key==='Enter')admAiSend()">
-        <button id="adm-ai-mic" class="adm-ai-mic-btn" onclick="admAiToggleMic()" title="Голосовий ввід">🎤</button>
+        <button id="adm-ai-mic" class="adm-ai-mic-btn" onclick="admAiToggleMic()" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
         <button class="adm-ai-send-btn" onclick="admAiSend()">›</button>
       </div>
       <div id="adm-ai-card" style="display:none"></div>
