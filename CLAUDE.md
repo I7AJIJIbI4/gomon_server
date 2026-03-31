@@ -32,7 +32,9 @@
 | `zadarma/sync_appointments.py` | Всі appointments (±7 днів + 90 вперед) → оновлює services_json |
 | `zadarma/sync_with_notification.sh` | Запускає sync_clients + надсилає Telegram-звіт адміну |
 | `zadarma/push_reminder.py` | Push/SMS нагадування про завтрашній запис |
-| `zadarma/sms_reminder.py` | SMS нагадування |
+| `zadarma/sms_reminder.py` | SMS нагадування (TG-first, SMS fallback) |
+| `zadarma/notifier.py` | **Диспетчер сповіщень**: Push→TG→SMS. 4 типи: reminder_24h, post_visit, cancellation (client+spec), spec_new_appt |
+| `zadarma/appt_reminder.py` | Cron-скрипт: `--reminder` (10:00/18:00), `--feedback` (20:00), `--specialist` (20:00, активно) |
 
 ### Watchdog / DevOps
 | Файл | Призначення |
@@ -299,6 +301,10 @@ Cron (09:00 і 21:00)
 0 9,21 * * *    /home/gomoncli/zadarma/sync_with_notification.sh
 0 9 * * *       python3 /home/gomoncli/zadarma/sms_reminder.py
 */15 8-22 * * * python3 /home/gomoncli/zadarma/push_reminder.py
+# Сповіщення спеціалістам про нові записи (АКТИВНО з 2026-03-31)
+0 20 * * *      python3 /home/gomoncli/zadarma/appt_reminder.py --specialist
+# (НЕ В CRON) Нагадування за 24 год: 0 10,18 * * * appt_reminder.py --reminder
+# (НЕ В CRON) Відгук після процедури:  0 20   * * * appt_reminder.py --feedback
 ```
 
 ---
@@ -443,7 +449,9 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **WLaunch cancel**: `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
 - **Sync**: `sync_appointments.py` зберігає топ-5 записів по даті (новіші першими), включаючи CANCELLED
 - **Parse services**: `pwa_api.py::parse_services()` фільтрує CANCELLED при поверненні клієнту
-- **OTP доставка**: Viber (відправник `PROMO`, TTL 5хв) → SMS-фолбек
+- **OTP доставка**: TG-first (plain text, без Viber-суфіксу) → SMS з `@www.gomonclinic.com #code` для Viber auto-fill
+- **Notification stack (notifier.py)**: Push (завжди, fire-and-forget) → TG (основний) → SMS (fallback тільки якщо TG fail/невідомий). Дедуплікація через `notification_log` (UNIQUE phone+type+reference+channel). АКТИВНО: cancellation клієнт+спеціаліст, spec_new_appt (о 20:00 дня створення). НЕ АКТИВНО: reminder_24h, post_visit.
+- **send_cancellation**: викликається в `DELETE /api/admin/calendar/appointments/<id>`. Надсилає клієнту підтвердження + спеціалісту внутрішнє повідомлення. WLaunch-запис: specialist витягується з services_json.
 - **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот. Реальні PWA-юзери = `otp_sessions.db::sessions`
 - **Specialist detection**: `sync_appointments.py` + `wlaunch_api.py` визначають спеціаліста через `resources[].phone` → маппінг у `RESOURCE_SPECIALIST_MAP`
 - **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)

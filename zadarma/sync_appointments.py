@@ -150,6 +150,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
 
             appt_status = (appt.get('status') or '').upper()
             specialist = get_specialist(appt.get('resources', []))
+            duration_min = (appt.get('duration') or 0) // 60 or 60
 
             entry = {
                 'appt_id': appt.get('id', ''),
@@ -158,6 +159,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 'service': service_name,
                 'status': appt_status,
                 'specialist': specialist,
+                'duration_min': duration_min,
             }
 
             # Оновлюємо або додаємо

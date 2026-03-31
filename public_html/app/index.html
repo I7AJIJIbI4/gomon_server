@@ -498,6 +498,29 @@ nav{
 .adm-cal-fill .adm-week-day{overflow-y:auto;min-height:0}
 .adm-cal-fill .adm-month-grid{flex:1;height:0;grid-template-rows:22px;grid-auto-rows:1fr;padding-bottom:0}
 .adm-week-appt-proc{color:var(--text3);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;opacity:.85}
+/* ── Timeline day view ── */
+.adm-timeline-wrap{position:relative;display:grid;grid-template-columns:42px 1fr;user-select:none}
+.adm-tl-labels{display:flex;flex-direction:column}
+.adm-tl-label{display:flex;align-items:flex-start;justify-content:flex-end;padding-right:8px;font-size:10px;color:var(--text3);line-height:1;flex-shrink:0}
+.adm-tl-col{position:relative}
+.adm-tl-line{position:absolute;left:0;right:0;height:0;border-top:0.5px solid var(--border);pointer-events:none}
+.adm-tl-line.half{border-top-style:dashed;opacity:.45}
+.adm-tl-stripe{position:absolute;left:0;right:0;background:rgba(255,255,255,.03);pointer-events:none}
+.adm-tl-appt{position:absolute;left:4px;right:4px;border-radius:8px;padding:5px 8px;z-index:2;cursor:pointer;transition:opacity .15s,transform .1s;overflow:hidden}
+.adm-tl-appt:hover{opacity:.88;transform:scale(1.01)}
+.adm-tl-appt.victoria{background:rgba(29,158,117,.22);border-left:3px solid #1D9E75}
+.adm-tl-appt.anastasia{background:rgba(127,119,221,.22);border-left:3px solid #7F77DD}
+.adm-tl-appt.other{background:rgba(201,169,110,.2);border-left:3px solid #c9a96e}
+.adm-tl-appt.wlaunch{opacity:.78;border-left-style:dashed}
+.adm-tl-appt-time{font-size:10px;opacity:.65;line-height:1;margin-bottom:1px}
+.adm-tl-appt-name{font-size:12px;font-weight:500;color:var(--text);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-tl-appt-proc{font-size:11px;color:var(--text2);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-tl-appt-spec{font-size:10px;opacity:.55;margin-top:2px}
+.adm-tl-free{position:absolute;left:4px;right:4px;border-radius:6px;border:1.5px dashed var(--border);background:rgba(201,169,110,.04);z-index:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
+.adm-tl-free:hover{background:rgba(201,169,110,.12)}
+.adm-tl-free-label{font-size:11px;color:var(--text3);letter-spacing:.3px}
+.adm-tl-now-line{position:absolute;left:0;right:0;height:1.5px;background:#E24B4A;z-index:10;pointer-events:none}
+.adm-tl-now-dot{position:absolute;left:-5px;width:7px;height:7px;background:#E24B4A;border-radius:50%;top:-2.75px;z-index:11}
 /* FAB */
 .adm-fab{position:fixed;right:20px;bottom:calc(56px + var(--safe-bottom) + 16px);width:52px;height:52px;border-radius:26px;background:var(--gold);border:none;font-size:26px;color:#1a1209;cursor:pointer;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-weight:300;line-height:1}
 /* New appt overlay */
@@ -1625,16 +1648,110 @@ function _apptCard(a) {
   </div>`;
 }
 
+/* ── Timeline helpers ── */
+const TL_HOUR_START = 9;
+const TL_HOUR_END   = 21;
+const TL_SLOT_H     = 52; // px per hour
+
+function _timeToMin(t) {
+  const p = (t || '00:00').split(':');
+  return parseInt(p[0],10) * 60 + parseInt(p[1]||0,10);
+}
+function _tlMinToY(min) {
+  return (min - TL_HOUR_START * 60) / 60 * TL_SLOT_H;
+}
+function _tlEndTime(startMin, dur) {
+  const total = startMin + dur;
+  return String(Math.floor(total/60)).padStart(2,'0') + ':' + String(total%60).padStart(2,'0');
+}
+function _tlSpecLabel(s) {
+  return s==='victoria'?'Вікторія':s==='anastasia'?'Анастасія':s?s:'';
+}
+function _tlFreeSlots(appts) {
+  const busy = appts.map(a => {
+    const s = _timeToMin(a.time || '00:00');
+    return [s, s + (a.duration_min || 60)];
+  }).sort((a,b)=>a[0]-b[0]);
+  const free = [];
+  let cur = TL_HOUR_START * 60;
+  const end = TL_HOUR_END * 60;
+  busy.forEach(([s,e]) => {
+    if (s > cur + 14) free.push([cur, s]);
+    if (e > cur) cur = e;
+  });
+  if (cur < end - 14) free.push([cur, end]);
+  return free.filter(([s,e]) => e-s>=30 && s>=TL_HOUR_START*60 && e<=TL_HOUR_END*60);
+}
+
+function _tlBuildGrid(appts, ds) {
+  const totalH = TL_SLOT_H * (TL_HOUR_END - TL_HOUR_START);
+  let labelsHtml = '<div class="adm-tl-labels">';
+  for (let h = TL_HOUR_START; h <= TL_HOUR_END; h++) {
+    const height = h < TL_HOUR_END ? TL_SLOT_H : 1;
+    labelsHtml += `<div class="adm-tl-label" style="height:${height}px">${h}:00</div>`;
+  }
+  labelsHtml += '</div>';
+
+  let colHtml = `<div class="adm-tl-col" style="height:${totalH}px">`;
+  for (let h = TL_HOUR_START; h <= TL_HOUR_END; h++) {
+    const y = (h - TL_HOUR_START) * TL_SLOT_H;
+    colHtml += `<div class="adm-tl-line" style="top:${y}px"></div>`;
+    if (h < TL_HOUR_END)
+      colHtml += `<div class="adm-tl-line half" style="top:${y + TL_SLOT_H/2}px"></div>`;
+  }
+  for (let h = TL_HOUR_START; h < TL_HOUR_END; h += 2) {
+    const y = (h - TL_HOUR_START) * TL_SLOT_H;
+    colHtml += `<div class="adm-tl-stripe" style="top:${y}px;height:${TL_SLOT_H}px"></div>`;
+  }
+
+  /* Free slots */
+  _tlFreeSlots(appts).forEach(([s,e]) => {
+    const y = _tlMinToY(s), h = (e-s)/60*TL_SLOT_H;
+    if (h < 22) return;
+    colHtml += `<div class="adm-tl-free" style="top:${y+2}px;height:${h-4}px"
+      onclick="showNewApptForm('${ds}')" title="Додати запис">
+      <span class="adm-tl-free-label">вільно ${e-s} хв</span></div>`;
+  });
+
+  /* Appointments */
+  appts.forEach(a => {
+    const startMin = _timeToMin(a.time || '00:00');
+    if (startMin < TL_HOUR_START*60 || startMin >= TL_HOUR_END*60) return;
+    const dur = a.duration_min || 60;
+    const y   = _tlMinToY(startMin);
+    const h   = Math.max((dur/60)*TL_SLOT_H - 4, 22);
+    const endTime = _tlEndTime(startMin, dur);
+    const isWl  = a.source === 'wlaunch';
+    const specCls = a.specialist || 'other';
+    const clickAttr = isWl ? '' : `onclick="event.stopPropagation();openApptAction(${a.id})"`;
+    colHtml += `<div class="adm-tl-appt ${specCls}${isWl?' wlaunch':''}"
+      style="top:${y+2}px;height:${h}px" ${clickAttr}>
+      <div class="adm-tl-appt-time">${(a.time||'').slice(0,5)} – ${endTime}${isWl?' · WL':''}</div>
+      <div class="adm-tl-appt-name">${_esc(a.client_name||a.client_phone||'—')}</div>
+      ${h>34?`<div class="adm-tl-appt-proc">${_esc(a.procedure_name||'')}</div>`:''}
+      ${h>52&&a.specialist?`<div class="adm-tl-appt-spec">${_tlSpecLabel(a.specialist)}</div>`:''}
+    </div>`;
+  });
+
+  /* "Now" line */
+  const now = new Date();
+  const nowDs = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  if (ds === nowDs) {
+    const nowMin = now.getHours()*60+now.getMinutes();
+    if (nowMin >= TL_HOUR_START*60 && nowMin < TL_HOUR_END*60) {
+      const y = _tlMinToY(nowMin);
+      colHtml += `<div class="adm-tl-now-line" style="top:${y}px"><div class="adm-tl-now-dot"></div></div>`;
+    }
+  }
+  colHtml += '</div>';
+  return `<div class="adm-timeline-wrap">${labelsHtml}${colHtml}</div>`;
+}
+
 function renderCalDay() {
   const ds = _fmtDate(calDate);
   const appts = calAppointments.filter(a => a.date === ds)
     .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-  const c = document.getElementById('adm-cal-container');
-  if (!appts.length) {
-    c.innerHTML = `<div class="adm-cal-empty">Немає записів<br><span style="font-size:13px;color:var(--text3)">Натисніть + щоб додати</span></div>`;
-    return;
-  }
-  c.innerHTML = appts.map(a => _apptCard(a)).join('');
+  document.getElementById('adm-cal-container').innerHTML = _tlBuildGrid(appts, ds);
 }
 
 function renderCalWeek() {
@@ -1771,6 +1888,7 @@ function showNewApptForm(dateStr) {
   ov.classList.add('show');
   document.getElementById('appt-date').value = dateStr || _fmtDate(calDate);
   document.getElementById('appt-time').value = '';
+  document.getElementById('appt-duration').value = '60';
   document.getElementById('appt-notes').value = '';
   document.getElementById('appt-client-q').value = '';
   document.getElementById('appt-proc-q').value = '';
@@ -1800,6 +1918,10 @@ function showEditApptForm(id) {
   if (a.procedure_name) selectProcAppt(a.procedure_name, '');
   if (a.specialist) selectSpecialistAppt(a.specialist);
   document.getElementById('appt-time').value = (a.time || '').slice(0,5);
+  const durSel = document.getElementById('appt-duration');
+  const durVal = String(a.duration_min || 60);
+  if ([...durSel.options].some(o => o.value === durVal)) durSel.value = durVal;
+  else durSel.value = '60';
   document.getElementById('appt-notes').value = a.notes || '';
 }
 function closeNewApptForm() {
@@ -2132,9 +2254,10 @@ function selectProcAppt(name, price) {
 }
 
 async function submitNewAppt() {
-  const date  = document.getElementById('appt-date').value;
-  const time  = document.getElementById('appt-time').value;
-  const notes = document.getElementById('appt-notes').value.trim();
+  const date     = document.getElementById('appt-date').value;
+  const time     = document.getElementById('appt-time').value;
+  const duration = parseInt(document.getElementById('appt-duration').value, 10) || 60;
+  const notes    = document.getElementById('appt-notes').value.trim();
   const procName = _apptProc ? _apptProc.name : document.getElementById('appt-proc-q').value.trim();
   if (!procName || !date || !time) { showToast('Заповніть процедуру, дату і час'); return; }
   const isEdit = !!_editApptId;
@@ -2150,11 +2273,13 @@ async function submitNewAppt() {
         client_name:  _apptClient ? _apptClient.name  : '',
         procedure_name: procName,
         specialist: _apptSpec,
-        date, time, notes
+        date, time, duration, notes
       })
     });
     const data = await r.json();
-    if (data.ok) {
+    if (r.status === 409 || data.error === 'conflict') {
+      showToast('Конфлікт: у цього спеціаліста вже є запис на цей час');
+    } else if (data.ok) {
       closeNewApptForm();
       window._calLoaded = false;
       loadCalendarData();
@@ -3143,6 +3268,15 @@ if ('serviceWorker' in navigator) {
         <input class="adm-form-input" type="time" id="appt-time" step="900"/>
       </div>
     </div>
+    <label class="adm-form-label">Тривалість</label>
+    <select class="adm-form-input" id="appt-duration">
+      <option value="30">30 хв</option>
+      <option value="45">45 хв</option>
+      <option value="60" selected>60 хв</option>
+      <option value="75">75 хв</option>
+      <option value="90">90 хв</option>
+      <option value="120">120 хв</option>
+    </select>
     <label class="adm-form-label">Нотатки</label>
     <textarea class="adm-form-input" id="appt-notes" rows="2" style="resize:none"></textarea>
     <button class="adm-save-btn" id="appt-submit-btn" onclick="submitNewAppt()">Зберегти запис</button>

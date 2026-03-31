@@ -117,10 +117,59 @@ def init_appointments_db():
         created_at   TEXT DEFAULT (datetime('now')),
         created_by   TEXT
     )''')
+    # Add duration column if missing (existing installs)
+    try:
+        conn.execute('ALTER TABLE manual_appointments ADD COLUMN duration INTEGER DEFAULT 60')
+        conn.commit()
+    except Exception:
+        pass  # column already exists
     conn.commit()
     conn.close()
 
 init_appointments_db()
+
+
+def _time_to_min(t):
+    """Convert 'HH:MM' string to minutes since midnight."""
+    try:
+        h, m = map(int, (t or '00:00').split(':'))
+        return h * 60 + m
+    except Exception:
+        return 0
+
+
+def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None):
+    """Return True if specialist already has a non-cancelled appointment overlapping [new_start, new_end) on date."""
+    # Check manual_appointments
+    q = "SELECT time, duration FROM manual_appointments WHERE specialist=? AND date=? AND status!='CANCELLED'"
+    params = [specialist, date]
+    if exclude_id is not None:
+        q += ' AND id != ?'
+        params.append(exclude_id)
+    for row in conn.execute(q, params).fetchall():
+        s = _time_to_min(row[0] or '00:00')
+        e = s + (row[1] or 60)
+        if new_start < e and s < new_end:
+            return True
+    # Check WLaunch appointments from services_json
+    for row in conn.execute('SELECT services_json FROM clients').fetchall():
+        try:
+            items = json.loads(row[0] or '[]')
+        except Exception:
+            items = []
+        for it in items:
+            if it.get('date') != date or it.get('specialist') != specialist:
+                continue
+            if (it.get('status') or '').upper() == 'CANCELLED':
+                continue
+            hour = it.get('hour')
+            if hour is None:
+                continue
+            s = hour * 60
+            e = s + (it.get('duration_min') or 60)
+            if new_start < e and s < new_end:
+                return True
+    return False
 
 def save_lead(phone: str, procedure: str, source: str = 'app'):
     """Зберігає потенційного клієнта якщо він ще не в clients."""
@@ -290,19 +339,35 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    msg = (f"Ваш код — {code}. Дійсний 5 хвилин."
-           f"\n\n@www.gomonclinic.com #{code}")
-    ok  = send_sms(phone, msg)
+    # TG-first, SMS/Viber fallback
+    tg_text  = f"Ваш код для входу в Dr. Gomon — {code}. Дійсний 5 хвилин."
+    sms_text = (f"Ваш код — {code}. Дійсний 5 хвилин."
+                f"\n\n@www.gomonclinic.com #{code}")
+
+    ok = False
+    channel = 'sms'
+    try:
+        from notifier import _get_tg_id, _send_tg
+        tg_id = _get_tg_id(phone)
+        if tg_id:
+            ok = _send_tg(tg_id, tg_text)
+            if ok:
+                channel = 'tg'
+    except Exception as _e:
+        logger.warning(f"TG OTP attempt failed for {phone}: {_e}")
+
     if not ok:
-        time.sleep(2)
-        logger.warning(f"SMS retry для {phone}")
-        ok = send_sms(phone, msg)
+        ok = send_sms(phone, sms_text)
+        if not ok:
+            time.sleep(2)
+            logger.warning(f"SMS retry для {phone}")
+            ok = send_sms(phone, sms_text)
 
     if ok:
-        logger.info(f"OTP відправлено: {phone}")
+        logger.info(f"OTP відправлено ({channel}): {phone}")
         return jsonify({'ok': True})
     else:
-        logger.warning(f"SMS fail для {phone}")
+        logger.warning(f"OTP fail (всі канали): {phone}")
         return jsonify({'error': 'sms_failed'}), 500
 
 @app.route('/api/auth/verify', methods=['POST'])
@@ -941,7 +1006,9 @@ def admin_cal_get():
         params.append(request.admin_specialist)
     query += ' ORDER BY date ASC, time ASC'
     for r in conn.execute(query, params).fetchall():
-        result.append(dict(r))
+        row_dict = dict(r)
+        row_dict['duration_min'] = r['duration'] if r['duration'] else 60
+        result.append(row_dict)
 
     # 2. WLaunch appointments from services_json
     rows = conn.execute(
@@ -982,6 +1049,7 @@ def admin_cal_get():
                 'status': status or 'CONFIRMED',
                 'notes': '',
                 'source': 'wlaunch',
+                'duration_min': it.get('duration_min') or 60,
             })
 
     conn.close()
@@ -1000,6 +1068,9 @@ def admin_cal_create():
     date           = (d.get('date', '') or '').strip()
     appt_time      = (d.get('time', '') or '').strip()
     notes          = (d.get('notes', '') or '').strip()
+    duration       = int(d.get('duration', 60) or 60)
+    if duration < 15 or duration > 480:
+        duration = 60
 
     if not procedure_name or not specialist or not date or not appt_time:
         return jsonify({'error': 'missing_fields'}), 400
@@ -1008,16 +1079,60 @@ def admin_cal_create():
         return jsonify({'error': 'forbidden'}), 403
 
     conn = sqlite3.connect(DB_PATH)
+    new_start = _time_to_min(appt_time)
+    new_end   = new_start + duration
+    if _check_overlap(conn, specialist, date, new_start, new_end):
+        conn.close()
+        return jsonify({'error': 'conflict'}), 409
+
     c = conn.cursor()
     c.execute(
         '''INSERT INTO manual_appointments
-           (client_phone, client_name, procedure_name, specialist, date, time, notes, created_by)
-           VALUES (?,?,?,?,?,?,?,?)''',
-        (client_phone, client_name, procedure_name, specialist, date, appt_time, notes, request.admin_phone)
+           (client_phone, client_name, procedure_name, specialist, date, time, duration, notes, created_by)
+           VALUES (?,?,?,?,?,?,?,?,?)''',
+        (client_phone, client_name, procedure_name, specialist, date, appt_time, duration, notes, request.admin_phone)
     )
     new_id = c.lastrowid
     conn.commit()
     conn.close()
+
+    # ── ЗАКОМЕНТОВАНО: підтвердження запису клієнту ──────────────────────────
+    # Розкоментуй після перевірки notifier.py (крок 2 міграції з NOTIFICATIONS.md)
+    #
+    # if client_phone:
+    #     try:
+    #         from notifier import send_cancellation  # noqa — тут send_cancellation не потрібен
+    #         from notifier import notify_client, fmt_reminder_24h
+    #         # Для підтвердження — адаптований текст (не нагадування, а підтвердження)
+    #         appt_dict = {
+    #             'client_phone':   client_phone,
+    #             'client_name':    client_name,
+    #             'procedure_name': procedure_name,
+    #             'specialist':     specialist,
+    #             'date':           date,
+    #             'time':           appt_time,
+    #             'duration_min':   duration,
+    #         }
+    #         from notifier import _appt_vars, _fmt_date, _fmt_time, _fmt_duration, SPECIALIST_INFO, _UNKNOWN_SPEC
+    #         v = _appt_vars(appt_dict)
+    #         tg = (
+    #             'Ваш запис підтверджено ✅\n\n'
+    #             '📅 {date} о {time}\n'
+    #             '💆 {service}\n'
+    #             '👩\u200d⚕️ {spec_name}\n\n'
+    #             'Адреса: БЦ Галерея, вхід "ЛІФТ", 6 поверх\n'
+    #             'https://flyl.link/map\n\n'
+    #             'Переглянути або скасувати: https://flyl.link/app'
+    #         ).format(**v)
+    #         sms = 'Dr.Gomon: запис {date} о {time}, {service}. Адреса: БЦ Галерея, "ЛІФТ", 6 пов. https://flyl.link/map'.format(**v)
+    #         notify_client(client_phone, tg, sms,
+    #                       push_title='Запис підтверджено ✅',
+    #                       push_body='{service}, {date} о {time}'.format(**v),
+    #                       push_tag='confirm')
+    #     except Exception as _e:
+    #         logger.error('notifier confirm error: {}'.format(_e))
+    # ─────────────────────────────────────────────────────────────────────────
+
     return jsonify({'ok': True, 'id': new_id})
 
 @app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['PUT'])
@@ -1033,7 +1148,7 @@ def admin_cal_update(appt_id):
     if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
         conn.close()
         return jsonify({'error': 'forbidden'}), 403
-    fields = ['procedure_name', 'specialist', 'date', 'time', 'status', 'notes', 'client_name', 'client_phone']
+    fields = ['procedure_name', 'specialist', 'date', 'time', 'status', 'notes', 'client_name', 'client_phone', 'duration']
     updates, params = [], []
     for f in fields:
         if f in d:
@@ -1042,6 +1157,20 @@ def admin_cal_update(appt_id):
     if not updates:
         conn.close()
         return jsonify({'ok': True})
+
+    # Overlap check only when time/date/specialist/duration is being changed
+    time_related = {'specialist', 'date', 'time', 'duration'}
+    if time_related.intersection(set(d.keys())):
+        eff_specialist = d.get('specialist', row['specialist'])
+        eff_date       = d.get('date',       row['date'])
+        eff_time       = d.get('time',       row['time'])
+        eff_duration   = int(d.get('duration', row['duration'] or 60) or 60)
+        new_start = _time_to_min(eff_time)
+        new_end   = new_start + eff_duration
+        if _check_overlap(conn, eff_specialist, eff_date, new_start, new_end, exclude_id=appt_id):
+            conn.close()
+            return jsonify({'error': 'conflict'}), 409
+
     params.append(appt_id)
     conn.execute('UPDATE manual_appointments SET {} WHERE id=?'.format(', '.join(updates)), params)
     conn.commit()
@@ -1063,6 +1192,23 @@ def admin_cal_delete(appt_id):
     conn.execute("UPDATE manual_appointments SET status='CANCELLED' WHERE id=?", (appt_id,))
     conn.commit()
     conn.close()
+
+    try:
+        from notifier import send_cancellation
+        appt_dict = {
+            'id':             appt_id,
+            'client_phone':   row['client_phone'],
+            'client_name':    row['client_name'],
+            'procedure_name': row['procedure_name'],
+            'specialist':     row['specialist'],
+            'date':           row['date'],
+            'time':           row['time'],
+            'duration_min':   row['duration'] or 60,
+        }
+        send_cancellation(appt_dict)
+    except Exception as _e:
+        logger.error('notifier cancel (admin) error: {}'.format(_e))
+
     return jsonify({'ok': True})
 
 @app.route('/api/admin/clients/add', methods=['POST'])
@@ -1425,29 +1571,44 @@ def push_procedure_reminder():
     if not procedure:
         return jsonify({'error': 'no_procedure'}), 400
 
-    push_ok = False
-    if _push_ok:
-        title = '\U0001f338 Ваша процедура чекає'
-        body  = 'AI підібрав для вас {}. Запишіться до лікаря — це займе хвилину \U0001f48c'.format(procedure)
-        push_ok = send_push_to_phone(request.user_phone, title, body, url='https://ig.me/m/dr.gomon', tag='procedure-reminder')
-        logger.info('procedure-reminder push: {} ok={}'.format(request.user_phone, push_ok))
-
-    # SMS — незалежно від push
-    sms_text = (
+    tg_text = (
         '\U0001f338 Dr.Gomon: AI підібрав для вас — {}.\n'
         'Запишіться зручним способом:\n'
         '\U0001f4f1 Instagram: instagram.com/dr.gomon\n'
         '\U0001f4de +38 073 310 31 10'
     ).format(procedure)
-    sms_ok = send_sms(request.user_phone, sms_text)
-    if not sms_ok:
-        sms_ok = send_sms(request.user_phone, sms_text)  # 1 retry
-    logger.info('procedure-reminder sms: {} ok={}'.format(request.user_phone, sms_ok))
 
-    # Якщо не клієнт — зберегти як потенційного клієнта
+    push_ok = False
+    if _push_ok:
+        push_title = '\U0001f338 Ваша процедура чекає'
+        push_body  = 'AI підібрав для вас {}. Запишіться — це займе хвилину \U0001f48c'.format(procedure)
+        push_ok = send_push_to_phone(request.user_phone, push_title, push_body,
+                                     url='https://ig.me/m/dr.gomon', tag='procedure-reminder')
+        logger.info('procedure-reminder push: {} ok={}'.format(request.user_phone, push_ok))
+
+    # TG-first, SMS fallback (незалежно від push)
+    msg_ok = False
+    channel = 'none'
+    try:
+        from notifier import _get_tg_id, _send_tg
+        tg_id = _get_tg_id(request.user_phone)
+        if tg_id:
+            msg_ok = _send_tg(tg_id, tg_text)
+            if msg_ok:
+                channel = 'tg'
+    except Exception as _e:
+        logger.warning('procedure-reminder TG failed: {}'.format(_e))
+
+    if not msg_ok:
+        msg_ok = send_sms(request.user_phone, tg_text)
+        if not msg_ok:
+            msg_ok = send_sms(request.user_phone, tg_text)
+        channel = 'sms' if msg_ok else 'failed'
+
+    logger.info('procedure-reminder msg ({}) {} ok={}'.format(channel, request.user_phone, msg_ok))
+
     save_lead(request.user_phone, procedure)
-
-    return jsonify({'ok': push_ok or sms_ok})
+    return jsonify({'ok': push_ok or msg_ok})
 
 
 @app.route('/api/sms/procedure-reminder', methods=['POST'])
@@ -1470,16 +1631,33 @@ def sms_procedure_reminder_guest():
         logger.warning('sms/procedure-reminder: phone not in recent leads: {}'.format(phone))
         return jsonify({'error': 'not_eligible'}), 403
 
-    sms_text = (
+    text = (
         '\U0001f338 Dr.Gomon: AI підібрав для вас — {}.\n'
         'Запишіться зручним способом:\n'
         '\U0001f4f1 Instagram: instagram.com/dr.gomon\n'
         '\U0001f4de +38 073 310 31 10'
     ).format(procedure)
-    ok = send_sms(phone, sms_text)
+
+    # TG-first, SMS fallback
+    ok = False
+    channel = 'none'
+    try:
+        from notifier import _get_tg_id, _send_tg
+        tg_id = _get_tg_id(phone)
+        if tg_id:
+            ok = _send_tg(tg_id, text)
+            if ok:
+                channel = 'tg'
+    except Exception as _e:
+        logger.warning('guest procedure-reminder TG failed: {}'.format(_e))
+
     if not ok:
-        ok = send_sms(phone, sms_text)
-    logger.info('guest procedure-reminder sms: {} ok={}'.format(phone, ok))
+        ok = send_sms(phone, text)
+        if not ok:
+            ok = send_sms(phone, text)
+        channel = 'sms' if ok else 'failed'
+
+    logger.info('guest procedure-reminder ({}) {} ok={}'.format(channel, phone, ok))
 
     # Оновлюємо процедуру в leads
     try:
@@ -1648,6 +1826,34 @@ def cancel_my_appointment():
 
     # Оновлюємо локальну БД
     _update_local_appt_cancelled(phone, date, service)
+
+    try:
+        from notifier import send_cancellation
+        # Для WLaunch-запису specialist невідомий → витягуємо з services_json
+        from user_db import get_client_by_phone as _gcbp
+        import json as _json
+        _client = _gcbp(phone)
+        _client_name = ((_client.get('first_name','') + ' ' + _client.get('last_name','')).strip()
+                        if _client else '')
+        _specialist = None
+        if _client:
+            for _it in _json.loads(_client.get('services_json','[]') or '[]'):
+                if _it.get('date') == date and _it.get('service') == service:
+                    _specialist = _it.get('specialist')
+                    break
+        appt_dict = {
+            'appt_id':        appt_id,
+            'client_phone':   phone,
+            'client_name':    _client_name,
+            'procedure_name': service,
+            'specialist':     _specialist,
+            'date':           date,
+            'time':           '',
+            'duration_min':   60,
+        }
+        send_cancellation(appt_dict)
+    except Exception as _e:
+        logger.error('notifier cancel (client) error: {}'.format(_e))
 
     logger.info("Cancelled appointment: {} {} {}".format(phone, date, service))
     return jsonify({'ok': True})

@@ -13,6 +13,27 @@ from datetime import date, datetime, timedelta
 from user_db import DB_PATH
 from sms_fly import send_sms
 
+
+def _send_reminder(phone, tg_text, sms_text=None):
+    """
+    TG-first, SMS-fallback для нагадувань клієнту.
+    Повертає (success: bool, channel: str).
+    channel: 'tg' | 'sms' | 'failed'
+    """
+    try:
+        from notifier import _get_tg_id, _send_tg
+        tg_id = _get_tg_id(phone)
+        if tg_id:
+            ok = _send_tg(tg_id, tg_text)
+            if ok:
+                return True, 'tg'
+            # TG fail → fallthrough to SMS
+    except Exception as e:
+        logger.warning('TG lookup/send failed for {}: {}'.format(phone, e))
+
+    ok = send_sms(phone, sms_text or tg_text)
+    return ok, ('sms' if ok else 'failed')
+
 logger = logging.getLogger('sms_reminder')
 
 LOG_FILE = '/home/gomoncli/zadarma/sms_reminder.log'
@@ -241,8 +262,9 @@ def _tg_send_long(chat_id, text, token, limit=4000):
 def notify_telegram(stats, sent_details, error_details, dry_run):
     """
     Надсилає Telegram-звіти після завершення запуску.
-    - Підсумок з відправленими SMS → NOTIFY_ALL (обидва)
-    - Помилки → тільки NOTIFY_ADMIN
+    sent_details: [(phone, name, text, channel), ...]
+    - Підсумок → NOTIFY_ALL (обидва)
+    - Помилки  → тільки NOTIFY_ADMIN
     Якщо нічого не відправлено і помилок немає — мовчимо.
     """
     from config import TELEGRAM_TOKEN
@@ -250,15 +272,19 @@ def notify_telegram(stats, sent_details, error_details, dry_run):
     dry_tag = ' [DRY RUN]' if dry_run else ''
 
     if stats['sent'] == 0 and stats['errors'] == 0:
-        return  # тихий запуск — нічого не надсилаємо
+        return
 
     if stats['sent'] > 0:
-        lines = ['📱 <b>SMS НАГАДУВАННЯ{}</b>'.format(dry_tag), '🕐 {}'.format(now), '']
-        for phone, name, sms_text in sent_details:
-            lines.append('✅ <b>{}</b> ({})'.format(phone, name))
-            lines.append('<i>{}</i>'.format(sms_text))
+        tg_count  = sum(1 for *_, ch in sent_details if ch == 'tg')
+        sms_count = sum(1 for *_, ch in sent_details if ch == 'sms')
+        lines = ['🔔 <b>НАГАДУВАННЯ{}</b>'.format(dry_tag), '🕐 {}'.format(now), '']
+        for phone, name, text, channel in sent_details:
+            ch_icon = '💬' if channel == 'tg' else '📱'
+            lines.append('{} <b>{}</b> ({})'.format(ch_icon, phone, name))
+            lines.append('<i>{}</i>'.format(text))
             lines.append('')
-        lines.append('📊 Відправлено: <b>{}</b>'.format(stats['sent']))
+        lines.append('📊 Відправлено: <b>{}</b>  (💬 TG: {} | 📱 SMS: {})'.format(
+            stats['sent'], tg_count, sms_count))
         if stats['errors']:
             lines.append('⚠️ Помилок: {}'.format(stats['errors']))
         text = '\n'.join(lines)
@@ -266,10 +292,10 @@ def notify_telegram(stats, sent_details, error_details, dry_run):
             _tg_send_long(uid, text, TELEGRAM_TOKEN)
 
     if stats['errors'] > 0:
-        lines = ['❌ <b>ПОМИЛКИ SMS НАГАДУВАНЬ{}</b>'.format(dry_tag), '🕐 {}'.format(now), '']
-        for phone, name, sms_text in error_details:
+        lines = ['❌ <b>ПОМИЛКИ НАГАДУВАНЬ{}</b>'.format(dry_tag), '🕐 {}'.format(now), '']
+        for phone, name, text, *_ in error_details:
             lines.append('❌ {} — {}'.format(phone, name))
-            lines.append('<i>{}</i>'.format(sms_text))
+            lines.append('<i>{}</i>'.format(text))
             lines.append('')
         text = '\n'.join(lines)
         for uid in NOTIFY_ADMIN:
@@ -558,25 +584,29 @@ def check_and_send_reminders(dry_run=False):
             template = random.choice(templates)
             message = format_sms(template, first_name, service, visit_date_str, days_ago)
 
-            logger.info('📱 {:02d}h | {} | {} | {} | {} дн. тому'.format(
+            logger.info('{:02d}h | {} | {} | {} | {} дн. тому'.format(
                 send_hour, phone, first_name, service, days_ago
             ))
 
             if dry_run:
-                logger.info('🔇 DRY RUN — SMS: {}'.format(message))
+                logger.info('🔇 DRY RUN: {}'.format(message))
                 mark_reminder_sent(client_id, phone, service, visit_date_str, category, status='dry_run')
                 stats['sent'] += 1
-                sent_details.append((phone, first_name or '', message))
+                sent_details.append((phone, first_name or '', message, 'dry_run'))
             else:
-                success = send_sms(phone, message)
+                success, channel = _send_reminder(phone, message)
+                ch_icon = '💬' if channel == 'tg' else '📱'
                 if success:
-                    mark_reminder_sent(client_id, phone, service, visit_date_str, category, status='sent')
+                    mark_reminder_sent(client_id, phone, service, visit_date_str, category,
+                                       status='sent_{}'.format(channel))
                     stats['sent'] += 1
-                    sent_details.append((phone, first_name or '', message))
+                    sent_details.append((phone, first_name or '', message, channel))
+                    logger.info('{} відправлено ({}) | {}'.format(ch_icon, channel, phone))
                 else:
                     mark_reminder_sent(client_id, phone, service, visit_date_str, category, status='failed')
                     stats['errors'] += 1
-                    error_details.append((phone, first_name or '', message))
+                    error_details.append((phone, first_name or '', message, 'failed'))
+                    logger.warning('❌ всі канали провалились | {}'.format(phone))
 
     logger.info('✅ Готово: відправлено={sent}, пропущено={skipped}, помилок={errors}'.format(**stats))
     log_run(stats, current_hour)
