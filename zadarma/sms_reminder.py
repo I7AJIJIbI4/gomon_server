@@ -9,9 +9,22 @@ import json
 import sqlite3
 import random
 import requests
+import calendar
 from datetime import date, datetime, timedelta
 from user_db import DB_PATH
 from sms_fly import send_sms
+
+
+def _kyiv_offset():
+    """UTC offset для Europe/Kyiv: +2 (зима) або +3 (літо/DST)."""
+    now = datetime.utcnow()
+    year = now.year
+    # DST: остання неділя березня 01:00 UTC — остання неділя жовтня 01:00 UTC
+    mar_last_sun = 31 - calendar.weekday(year, 3, 31)
+    oct_last_sun = 31 - calendar.weekday(year, 10, 31)
+    dst_start = datetime(year, 3, mar_last_sun, 1, 0)
+    dst_end = datetime(year, 10, oct_last_sun, 1, 0)
+    return 3 if dst_start <= now < dst_end else 2
 
 
 def _send_reminder(phone, tg_text, sms_text=None):
@@ -229,16 +242,12 @@ def get_service_category(service_name):
 
 
 def _tg_send(chat_id, text, token):
-    """Відправляє повідомлення в Telegram. Логує помилки API."""
+    """Відправляє повідомлення в Telegram (HTML). Делегує в notifier._send_tg."""
     try:
-        resp = requests.post(
-            'https://api.telegram.org/bot{}/sendMessage'.format(token),
-            json={'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'},
-            timeout=10
-        )
-        data = resp.json()
-        if not data.get('ok'):
-            logger.warning('Telegram API error to {}: {}'.format(chat_id, data))
+        from notifier import _send_tg
+        ok = _send_tg(chat_id, text)
+        if not ok:
+            logger.warning('Telegram send failed via notifier to {}'.format(chat_id))
     except Exception as e:
         logger.warning('Telegram send failed to {}: {}'.format(chat_id, e))
 
@@ -547,9 +556,9 @@ def check_and_send_reminders(dry_run=False):
                 stats['skipped'] += 1
                 continue
 
-            # Визначаємо годину відправки (UTC → Київ +2, зимовий час)
+            # Визначаємо годину відправки (UTC → Київ, з урахуванням DST)
             if appt_hour_utc is not None:
-                send_hour = appt_hour_utc + 2
+                send_hour = appt_hour_utc + _kyiv_offset()
                 if send_hour < 9:
                     send_hour = 9
                 elif send_hour > MAX_SEND_HOUR:
@@ -590,7 +599,6 @@ def check_and_send_reminders(dry_run=False):
 
             if dry_run:
                 logger.info('🔇 DRY RUN: {}'.format(message))
-                mark_reminder_sent(client_id, phone, service, visit_date_str, category, status='dry_run')
                 stats['sent'] += 1
                 sent_details.append((phone, first_name or '', message, 'dry_run'))
             else:

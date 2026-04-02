@@ -1,4 +1,5 @@
 import json
+import calendar as _cal
 # wlaunch_api.py — ОНОВЛЕНА ВЕРСІЯ
 # Використовує /appointment endpoint для реальних клієнтів з послугами та датами
 # Розташування: /home/gomoncli/zadarma/wlaunch_api.py
@@ -7,6 +8,18 @@ import logging
 from datetime import datetime, timedelta
 from config import WLAUNCH_API_KEY, COMPANY_ID
 from user_db import add_or_update_client
+
+
+def _kyiv_offset():
+    """UTC offset для Europe/Kyiv: +2 (зима) або +3 (літо/DST).
+    DST: остання неділя березня 01:00 UTC — остання неділя жовтня 01:00 UTC."""
+    now = datetime.utcnow()
+    year = now.year
+    mar_last_sun = 31 - _cal.weekday(year, 3, 31)
+    oct_last_sun = 31 - _cal.weekday(year, 10, 31)
+    dst_start = datetime(year, 3, mar_last_sun, 1, 0)
+    dst_end = datetime(year, 10, oct_last_sun, 1, 0)
+    return 3 if dst_start <= now < dst_end else 2
 
 logger = logging.getLogger("wlaunch_api")
 
@@ -120,17 +133,21 @@ def fetch_all_clients():
             services_list_appt = appt.get("services", [])
             service_name = ", ".join(s.get("name", "") for s in services_list_appt if s.get("name"))
 
-            # Дата, година та статус запису
+            # Дата, година та статус запису (WLaunch повертає UTC → конвертуємо в Київ)
             visit_date = ""
-            visit_hour = None  # година запису — для SMS нагадування в той самий час
+            visit_hour = None
             start_time = appt.get("start_time", "")
             if start_time:
                 try:
-                    visit_date = start_time[:10]  # YYYY-MM-DD
-                    if len(start_time) >= 13:
-                        visit_hour = int(start_time[11:13])  # година (0-23), UTC
+                    utc_dt = datetime.strptime(start_time[:19], '%Y-%m-%dT%H:%M:%S')
+                    kyiv_dt = utc_dt + timedelta(hours=_kyiv_offset())
+                    visit_date = kyiv_dt.strftime('%Y-%m-%d')
+                    visit_hour = kyiv_dt.hour
                 except Exception:
-                    pass
+                    visit_date = start_time[:10]
+                    if len(start_time) >= 13:
+                        try: visit_hour = int(start_time[11:13])
+                        except Exception: pass
 
             # Статус апоінтменту з wlaunch (CONFIRMED, DONE, CANCELLED, NO_SHOW тощо)
             appt_status = (appt.get("status") or "").upper()

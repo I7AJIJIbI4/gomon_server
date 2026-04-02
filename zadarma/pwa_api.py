@@ -6,13 +6,14 @@
 import sqlite3
 import random
 import string
+import secrets
 import time
 import json
 import logging
 import os
 import sys
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from typing import Optional
 from flask import Flask, request, jsonify, send_from_directory, redirect
@@ -229,7 +230,7 @@ def norm_phone(phone: str) -> str:
     return d
 
 def gen_token(n=40):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+    return secrets.token_urlsafe(n)
 
 def get_client(phone: str) -> Optional[dict]:
     """
@@ -282,6 +283,8 @@ def parse_services(client: dict) -> list:
             'date':    date_str,
             'appt_id': item.get('appt_id', ''),
             'time':    '{:02d}:00'.format(hour) if hour is not None else '',
+            'specialist': item.get('specialist', ''),
+            'duration_min': item.get('duration_min', 60),
             # Якщо дата сьогодні або в майбутньому — "upcoming", інакше — "done"
             'status':  'upcoming' if date_str >= today_str else 'done',
         })
@@ -320,12 +323,27 @@ def require_auth(f):
 
 # ── AUTH ──
 
+_otp_rate = {}  # phone -> (count, first_request_ts)
+OTP_RATE_LIMIT = 3  # max OTPs per hour
+OTP_RATE_WINDOW = 3600  # 1 hour
+_magic_tokens = {}  # magic_token -> (phone, expires_at)
+
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
     data  = request.get_json() or {}
     phone = norm_phone(data.get('phone', ''))
     if len(phone) < 11:
         return jsonify({'error': 'invalid_phone'}), 400
+
+    # Rate limit: max 3 OTPs per phone per hour
+    now_ts = int(time.time())
+    rate = _otp_rate.get(phone, (0, now_ts))
+    if now_ts - rate[1] < OTP_RATE_WINDOW:
+        if rate[0] >= OTP_RATE_LIMIT:
+            return jsonify({'error': 'rate_limited'}), 429
+        _otp_rate[phone] = (rate[0] + 1, rate[1])
+    else:
+        _otp_rate[phone] = (1, now_ts)
 
     # Не клієнт → гостьовий режим (без OTP)
     if not get_client(phone) and phone not in ADMIN_ROLES:
@@ -346,8 +364,13 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    # TG-first, SMS/Viber fallback
-    tg_text  = f"Ваш код для входу в Dr. Gomon — {code}. Дійсний 5 хвилин."
+    # TG-first з magic link, SMS/Viber fallback з WebOTP
+    magic = secrets.token_urlsafe(32)
+    _magic_tokens[magic] = (phone, expires)
+    magic_link = 'https://www.gomonclinic.com/app/?magic={}'.format(magic)
+
+    tg_text  = 'Ваш код для входу в Dr. Gomon — {code}.\n\nАбо натисніть для автоматичного входу:\n{link}'.format(
+        code=code, link=magic_link)
     sms_text = (f"Ваш код — {code}. Дійсний 5 хвилин."
                 f"\n\n@www.gomonclinic.com #{code}")
 
@@ -366,9 +389,7 @@ def send_otp():
     if not ok:
         ok = send_sms(phone, sms_text)
         if not ok:
-            time.sleep(2)
-            logger.warning(f"SMS retry для {phone}")
-            ok = send_sms(phone, sms_text)
+            logger.warning(f"SMS fail (без retry): {phone}")
 
     if ok:
         logger.info(f"OTP відправлено ({channel}): {phone}")
@@ -376,6 +397,40 @@ def send_otp():
     else:
         logger.warning(f"OTP fail (всі канали): {phone}")
         return jsonify({'error': 'sms_failed'}), 500
+
+@app.route('/api/auth/magic', methods=['POST'])
+def verify_magic():
+    """Magic link auto-login — одноразовий токен з TG повідомлення."""
+    data = request.get_json() or {}
+    magic = (data.get('token') or '').strip()
+    if not magic or magic not in _magic_tokens:
+        return jsonify({'error': 'invalid_token'}), 400
+
+    phone, expires_at = _magic_tokens.pop(magic)  # одноразовий — видаляємо
+
+    if int(time.time()) > expires_at:
+        return jsonify({'error': 'token_expired'}), 400
+
+    # Видаляємо OTP (вже не потрібен)
+    conn = sqlite3.connect(OTP_DB)
+    conn.execute('DELETE FROM otp_codes WHERE phone=?', (phone,))
+    # Створюємо сесію
+    token = gen_token()
+    now = int(time.time())
+    conn.execute('INSERT INTO sessions VALUES (?,?,?,?)',
+                 (token, phone, now, now + SESSION_TTL))
+    conn.commit()
+    conn.close()
+
+    client = get_client(phone)
+    logger.info('Magic link login: {}'.format(phone))
+
+    return jsonify({
+        'ok':    True,
+        'token': token,
+        'client': _client_payload(client, phone),
+    })
+
 
 @app.route('/api/auth/verify', methods=['POST'])
 def verify_otp():
@@ -467,7 +522,7 @@ def get_my_appointments():
         conn.row_factory = sqlite3.Row
         normalized = norm_phone(phone)
         rows = conn.execute(
-            '''SELECT procedure_name, date, time, status, id
+            '''SELECT procedure_name, date, time, status, id, specialist, duration
                FROM manual_appointments
                WHERE client_phone=? AND status != 'CANCELLED'
                ORDER BY date DESC''',
@@ -482,6 +537,8 @@ def get_my_appointments():
                 'date':    r['date'],
                 'time':    r['time'] or '',
                 'appt_id': 'manual_{}'.format(r['id']),
+                'specialist': r['specialist'] if 'specialist' in r.keys() else '',
+                'duration_min': r['duration'] if 'duration' in r.keys() else 60,
                 'status':  appt_status,
             })
     except Exception as e:
@@ -576,25 +633,30 @@ def get_feed():
 
 @app.route('/api/feed/media/<fid>')
 def feed_media(fid):
-    import urllib.request
     try:
-        url = 'https://api.telegram.org/bot' + TG_TOKEN + '/getFile?file_id=' + fid
-        with urllib.request.urlopen(url, timeout=5) as r:
-            data = json.loads(r.read())
-        if not data.get('ok'):
-            return jsonify({'error': 'not found'}), 404
-        fp = data['result']['file_path']
-        return redirect('https://api.telegram.org/file/bot' + TG_TOKEN + '/' + fp)
-    except Exception as e:
-        logger.error('feed_media error: {}'.format(e))
-        return jsonify({'error': 'media_unavailable'}), 500
+        import requests as _req
+        from config import TELEGRAM_TOKEN as TG_TOKEN_LOCAL
+        r = _req.get('https://api.telegram.org/bot{}/getFile'.format(TG_TOKEN_LOCAL),
+                      params={'file_id': fid}, timeout=5)
+        fp = r.json().get('result', {}).get('file_path', '')
+        if not fp:
+            return '', 404
+        media = _req.get('https://api.telegram.org/file/bot{}/{}'.format(TG_TOKEN_LOCAL, fp), timeout=15)
+        if media.status_code != 200:
+            return '', 502
+        from flask import Response
+        content_type = media.headers.get('Content-Type', 'application/octet-stream')
+        return Response(media.content, content_type=content_type,
+                        headers={'Cache-Control': 'public, max-age=86400'})
+    except Exception:
+        return '', 502
 
 # ── PWA STATIC FILES ──
 
 @app.route('/app/', defaults={'path': ''})
 @app.route('/app/<path:path>')
 def serve_pwa(path):
-    if path and os.path.exists(os.path.join(PWA_DIR, path)):
+    if path and '..' not in path and os.path.exists(os.path.join(PWA_DIR, path)):
         return send_from_directory(PWA_DIR, path)
     return send_from_directory(PWA_DIR, 'index.html')
 
@@ -710,28 +772,35 @@ def admin_stats():
     visits_month = c.fetchone()[0]
 
     # Останні 10 відвідувань
+    today_str = datetime.now().strftime('%Y-%m-%d')
     if request.admin_role == 'specialist':
         spec = request.admin_specialist
         c.execute("""
             SELECT c.first_name, c.last_name, c.phone,
                    json_extract(s.value, '$.date') as date,
-                   json_extract(s.value, '$.service') as service
+                   json_extract(s.value, '$.service') as service,
+                   json_extract(s.value, '$.hour') as hour
             FROM clients c, json_each(c.services_json) s
             WHERE json_extract(s.value, '$.date') IS NOT NULL
+              AND json_extract(s.value, '$.date') >= ?
               AND json_extract(s.value, '$.specialist') = ?
-            ORDER BY json_extract(s.value, '$.date') DESC
+              AND IFNULL(json_extract(s.value, '$.status'),'') != 'CANCELLED'
+            ORDER BY json_extract(s.value, '$.date') ASC
             LIMIT 10
-        """, (spec,))
+        """, (today_str, spec))
     else:
         c.execute("""
             SELECT c.first_name, c.last_name, c.phone,
                    json_extract(s.value, '$.date') as date,
-                   json_extract(s.value, '$.service') as service
+                   json_extract(s.value, '$.service') as service,
+                   json_extract(s.value, '$.hour') as hour
             FROM clients c, json_each(c.services_json) s
             WHERE json_extract(s.value, '$.date') IS NOT NULL
-            ORDER BY json_extract(s.value, '$.date') DESC
+              AND json_extract(s.value, '$.date') >= ?
+              AND IFNULL(json_extract(s.value, '$.status'),'') != 'CANCELLED'
+            ORDER BY json_extract(s.value, '$.date') ASC
             LIMIT 10
-        """)
+        """, (today_str,))
     recent = [dict(r) for r in c.fetchall()]
     conn.close()
 
@@ -1000,7 +1069,8 @@ def admin_cal_get():
     conn.row_factory = sqlite3.Row
 
     # 1. Manual appointments
-    query = 'SELECT * FROM manual_appointments WHERE status != \'CANCELLED\''
+    # Specialist бачить свої записи повністю + чужі як "Зайнято" (без деталей)
+    query = "SELECT * FROM manual_appointments WHERE status != 'CANCELLED'"
     params = []
     if from_date:
         query += ' AND date >= ?'
@@ -1008,13 +1078,16 @@ def admin_cal_get():
     if to_date:
         query += ' AND date <= ?'
         params.append(to_date)
-    if request.admin_role == 'specialist':
-        query += ' AND specialist = ?'
-        params.append(request.admin_specialist)
     query += ' ORDER BY date ASC, time ASC'
     for r in conn.execute(query, params).fetchall():
         row_dict = dict(r)
         row_dict['duration_min'] = r['duration'] if r['duration'] else 60
+        if request.admin_role == 'specialist' and row_dict.get('specialist') != request.admin_specialist:
+            row_dict['client_name'] = ''
+            row_dict['client_phone'] = ''
+            row_dict['procedure_name'] = 'Зайнято'
+            row_dict['notes'] = ''
+            row_dict['busy'] = True
         result.append(row_dict)
 
     # 2. WLaunch appointments from services_json
@@ -1038,23 +1111,21 @@ def admin_cal_get():
             if to_date and d > to_date:
                 continue
             specialist = it.get('specialist')
-            # Фільтр для specialist ролі
-            if request.admin_role == 'specialist':
-                if specialist != request.admin_specialist:
-                    continue
             hour = it.get('hour')
             time_str = '{:02d}:00'.format(hour) if hour is not None else ''
             name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            is_other_spec = request.admin_role == 'specialist' and specialist != request.admin_specialist
             result.append({
                 'id': 'wl_{}'.format(it.get('appt_id', '')),
-                'client_phone': row['phone'],
-                'client_name':  name or row['phone'],
-                'procedure_name': it.get('service', ''),
+                'client_phone': '' if is_other_spec else row['phone'],
+                'client_name':  '' if is_other_spec else (name or row['phone']),
+                'procedure_name': 'Зайнято' if is_other_spec else it.get('service', ''),
                 'specialist': specialist,
                 'date': d,
                 'time': time_str,
                 'status': status or 'CONFIRMED',
                 'notes': '',
+                'busy': True if is_other_spec else False,
                 'source': 'wlaunch',
                 'duration_min': it.get('duration_min') or 60,
             })
@@ -1062,6 +1133,150 @@ def admin_cal_get():
     conn.close()
     result.sort(key=lambda x: (x['date'], x['time'] or ''))
     return jsonify({'appointments': result})
+
+
+# Безстрокові ключі для Google Calendar підписки (не протухають, можна відкликати)
+ICS_KEYS = {
+    'rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw': {'phone': '380733103110', 'role': 'superadmin', 'specialist': ''},
+    '3zIZzKlBoW37t_-T7zjmhQTDunK9bQUVde3JiQGg4rk': {'phone': '380996093860', 'role': 'full',       'specialist': 'victoria'},
+    'z_eszoPbMUFTt_TKiGUkI6ZOkaZGu4P7YfT8-yJLX8k': {'phone': '380685129121', 'role': 'specialist',  'specialist': 'anastasia'},
+}
+
+@app.route('/api/admin/calendar.ics')
+def admin_calendar_ics():
+    """
+    iCalendar feed — підписка в Google Calendar.
+    Auth: ?key= (безстроковий) або ?token= (сесійний) або Authorization header.
+
+    URL для Google Calendar:
+      superadmin: /api/admin/calendar.ics?key=rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw
+      victoria:   /api/admin/calendar.ics?key=3zIZzKlBoW37t_-T7zjmhQTDunK9bQUVde3JiQGg4rk
+      anastasia:  /api/admin/calendar.ics?key=z_eszoPbMUFTt_TKiGUkI6ZOkaZGu4P7YfT8-yJLX8k
+    """
+    # 1. Безстроковий ключ (для Google Calendar)
+    ics_key = request.args.get('key', '')
+    if ics_key and ics_key in ICS_KEYS:
+        info = ICS_KEYS[ics_key]
+        ics_phone = info['phone']
+        ics_role = info['role']
+        ics_specialist = info['specialist']
+    else:
+        # 2. Сесійний token (fallback)
+        ics_token = request.args.get('token', '')
+        if not ics_token:
+            auth_h = request.headers.get('Authorization', '')
+            if auth_h.startswith('Bearer '):
+                ics_token = auth_h[7:]
+        if not ics_token:
+            return 'Unauthorized', 401
+        otp_conn = sqlite3.connect(OTP_DB)
+        sess = otp_conn.execute('SELECT phone, expires_at FROM sessions WHERE token=?', (ics_token,)).fetchone()
+        otp_conn.close()
+        if not sess or sess[1] < int(time.time()):
+            return 'Unauthorized', 401
+        ics_phone = sess[0]
+        ics_role = ADMIN_ROLES.get(ics_phone)
+        if not ics_role:
+            return 'Forbidden', 403
+        ics_specialist = SPECIALIST_MAP.get(ics_phone, '')
+    ics_specialist = SPECIALIST_MAP.get(ics_phone, '')
+
+    from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%d')
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    appts = []
+
+    # Manual appointments
+    for r in conn.execute(
+        "SELECT id, client_phone, client_name, procedure_name, specialist, date, time, duration, notes, status "
+        "FROM manual_appointments WHERE status != 'CANCELLED' AND date >= ? AND date <= ? ORDER BY date",
+        (from_date, to_date)
+    ).fetchall():
+        if ics_role == 'specialist' and r['specialist'] != ics_specialist:
+            continue
+        appts.append(dict(r))
+
+    # WLaunch
+    for row in conn.execute('SELECT phone, first_name, last_name, services_json FROM clients').fetchall():
+        try:
+            items = json.loads(row['services_json'] or '[]')
+        except Exception:
+            continue
+        for it in items:
+            d = it.get('date', '')
+            if not d or d < from_date or d > to_date:
+                continue
+            status = (it.get('status') or '').upper()
+            if status == 'CANCELLED':
+                continue
+            spec = it.get('specialist', '')
+            if ics_role == 'specialist' and spec != ics_specialist:
+                continue
+            hour = it.get('hour')
+            name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            appts.append({
+                'id': 'wl_{}'.format(it.get('appt_id', '')),
+                'client_name': name,
+                'client_phone': row['phone'],
+                'procedure_name': it.get('service', ''),
+                'specialist': spec,
+                'date': d,
+                'time': '{:02d}:00'.format(hour) if hour is not None else '09:00',
+                'duration': it.get('duration_min') or 60,
+                'notes': '',
+                'status': status,
+            })
+    conn.close()
+
+    # Build iCalendar
+    spec_names = {'victoria': 'Вікторія', 'anastasia': 'Анастасія'}
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//GomonClinic//PWA//UK',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:Dr. Gomon Cosmetology',
+        'X-WR-TIMEZONE:Europe/Kyiv',
+    ]
+    for a in appts:
+        uid = 'gomon-{}-{}@gomonclinic.com'.format(a.get('id', ''), a['date'])
+        t = a.get('time', '09:00') or '09:00'
+        h, m = int(t[:2]), int(t[3:5]) if len(t) >= 5 else 0
+        dur = int(a.get('duration') or 60)
+        dtstart = '{}T{:02d}{:02d}00'.format(a['date'].replace('-', ''), h, m)
+        eh, em = divmod(h * 60 + m + dur, 60)
+        dtend = '{}T{:02d}{:02d}00'.format(a['date'].replace('-', ''), eh, em)
+        summary = '{} — {}'.format(a.get('procedure_name', ''), a.get('client_name', ''))
+        spec = spec_names.get(a.get('specialist', ''), a.get('specialist', ''))
+        desc = 'Клієнт: {}\\nТелефон: {}\\nСпеціаліст: {}\\nСтатус: {}'.format(
+            a.get('client_name', ''), (a.get('client_phone', '') or '').replace('380', '0', 1),
+            spec, a.get('status', ''))
+        if a.get('notes'):
+            desc += '\\nНотатки: {}'.format(a['notes'])
+        lines.extend([
+            'BEGIN:VEVENT',
+            'UID:{}'.format(uid),
+            'DTSTART;TZID=Europe/Kyiv:{}'.format(dtstart),
+            'DTEND;TZID=Europe/Kyiv:{}'.format(dtend),
+            'SUMMARY:{}'.format(summary.replace(',', '\\,')),
+            'DESCRIPTION:{}'.format(desc.replace(',', '\\,')),
+            'LOCATION:Dr. Gomon Cosmetology\\, БЦ Галерея\\, 6 поверх',
+            'STATUS:CONFIRMED',
+            'END:VEVENT',
+        ])
+    lines.append('END:VCALENDAR')
+
+    from flask import Response
+    return Response(
+        '\r\n'.join(lines),
+        content_type='text/calendar; charset=utf-8',
+        headers={'Content-Disposition': 'inline; filename="gomon-calendar.ics"'}
+    )
+
 
 @app.route('/api/admin/calendar/appointments', methods=['POST'])
 @require_admin
@@ -1081,14 +1296,31 @@ def admin_cal_create():
 
     if not procedure_name or not specialist or not date or not appt_time:
         return jsonify({'error': 'missing_fields'}), 400
+
+    import re
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        return jsonify({'error': 'invalid_date'}), 400
+    if not re.match(r'^\d{2}:\d{2}$', appt_time):
+        return jsonify({'error': 'invalid_time'}), 400
+    if specialist not in ('victoria', 'anastasia', ''):
+        return jsonify({'error': 'invalid_specialist'}), 400
+
     # Specialist може записувати тільки до себе
     if request.admin_role == 'specialist' and specialist != request.admin_specialist:
         return jsonify({'error': 'forbidden'}), 403
 
+    # Validate end time doesn't exceed 21:00
+    start_min = int(appt_time[:2]) * 60 + int(appt_time[3:5])
+    end_min = start_min + duration
+    if end_min > 21 * 60:
+        return jsonify({'error': 'too_late', 'detail': 'Запис не може закінчуватись пізніше 21:00'}), 400
+
     conn = sqlite3.connect(DB_PATH)
+    conn.execute('BEGIN IMMEDIATE')
     new_start = _time_to_min(appt_time)
     new_end   = new_start + duration
     if _check_overlap(conn, specialist, date, new_start, new_end):
+        conn.rollback()
         conn.close()
         return jsonify({'error': 'conflict'}), 409
 
@@ -1103,42 +1335,22 @@ def admin_cal_create():
     conn.commit()
     conn.close()
 
-    # ── ЗАКОМЕНТОВАНО: підтвердження запису клієнту ──────────────────────────
-    # Розкоментуй після перевірки notifier.py (крок 2 міграції з NOTIFICATIONS.md)
-    #
-    # if client_phone:
-    #     try:
-    #         from notifier import send_cancellation  # noqa — тут send_cancellation не потрібен
-    #         from notifier import notify_client, fmt_reminder_24h
-    #         # Для підтвердження — адаптований текст (не нагадування, а підтвердження)
-    #         appt_dict = {
-    #             'client_phone':   client_phone,
-    #             'client_name':    client_name,
-    #             'procedure_name': procedure_name,
-    #             'specialist':     specialist,
-    #             'date':           date,
-    #             'time':           appt_time,
-    #             'duration_min':   duration,
-    #         }
-    #         from notifier import _appt_vars, _fmt_date, _fmt_time, _fmt_duration, SPECIALIST_INFO, _UNKNOWN_SPEC
-    #         v = _appt_vars(appt_dict)
-    #         tg = (
-    #             'Ваш запис підтверджено ✅\n\n'
-    #             '📅 {date} о {time}\n'
-    #             '💆 {service}\n'
-    #             '👩\u200d⚕️ {spec_name}\n\n'
-    #             'Адреса: БЦ Галерея, вхід "ЛІФТ", 6 поверх\n'
-    #             'https://flyl.link/map\n\n'
-    #             'Переглянути або скасувати: https://flyl.link/app'
-    #         ).format(**v)
-    #         sms = 'Dr.Gomon: запис {date} о {time}, {service}. Адреса: БЦ Галерея, "ЛІФТ", 6 пов. https://flyl.link/map'.format(**v)
-    #         notify_client(client_phone, tg, sms,
-    #                       push_title='Запис підтверджено ✅',
-    #                       push_body='{service}, {date} о {time}'.format(**v),
-    #                       push_tag='confirm')
-    #     except Exception as _e:
-    #         logger.error('notifier confirm error: {}'.format(_e))
-    # ─────────────────────────────────────────────────────────────────────────
+    # Підтвердження запису клієнту
+    if client_phone:
+        try:
+            from notifier import send_appt_confirm
+            send_appt_confirm({
+                'id':             new_id,
+                'client_phone':   client_phone,
+                'client_name':    client_name,
+                'procedure_name': procedure_name,
+                'specialist':     specialist,
+                'date':           date,
+                'time':           appt_time,
+                'duration_min':   duration,
+            })
+        except Exception as _e:
+            logger.error('notifier confirm error: {}'.format(_e))
 
     return jsonify({'ok': True, 'id': new_id})
 
@@ -1200,25 +1412,21 @@ def admin_cal_delete(appt_id):
     conn.commit()
     conn.close()
 
-    # Сповіщення спеціалісту про скасування (клієнту — не надсилаємо поки)
+    # Сповіщення клієнту + спеціалісту про скасування
     try:
-        from notifier import notify_specialist, fmt_cancel_specialist
-        if row['specialist']:
-            appt_dict = {
-                'id':             appt_id,
-                'client_phone':   row['client_phone'],
-                'client_name':    row['client_name'],
-                'procedure_name': row['procedure_name'],
-                'specialist':     row['specialist'],
-                'date':           row['date'],
-                'time':           row['time'],
-                'duration_min':   row['duration'] or 60,
-            }
-            spec_text = fmt_cancel_specialist(appt_dict)
-            ok = notify_specialist(row['specialist'], spec_text)
-            logger.info('cancel specialist notify: spec={} ok={}'.format(row['specialist'], ok))
+        from notifier import send_cancellation
+        send_cancellation({
+            'id':             appt_id,
+            'client_phone':   row['client_phone'],
+            'client_name':    row['client_name'],
+            'procedure_name': row['procedure_name'],
+            'specialist':     row['specialist'],
+            'date':           row['date'],
+            'time':           row['time'],
+            'duration_min':   row['duration'] or 60,
+        })
     except Exception as _e:
-        logger.error('notifier cancel specialist error: {}'.format(_e))
+        logger.error('notifier cancel error: {}'.format(_e))
 
     return jsonify({'ok': True})
 
@@ -1253,6 +1461,104 @@ def admin_client_add():
         return jsonify({'error': 'db_error'}), 500
     conn.close()
     return jsonify({'ok': True, 'existing': False})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ФОТО-АЛЬБОМИ КЛІЄНТІВ — ЗАКОМЕНТОВАНО, ГОТОВО ДО АКТИВАЦІЇ
+#
+# Концепція:
+#   Спеціалісти ведуть shared Google Photos / iCloud альбом для кожного клієнта.
+#   В БД зберігається тільки ПОСИЛАННЯ на альбом (не файли).
+#   В адмін-додатку — кнопка "Фото" що відкриває альбом у браузері.
+#   Без upload на сервер, без thumbnails, без зайвого навантаження.
+#
+# Формат альбому (рекомендація):
+#   - Google Photos: створити shared album → "Отримати посилання" → зберегти URL
+#     URL формат: https://photos.google.com/share/...
+#     Плюси: автобекап, необмежений простір, зручний UI
+#   - iCloud: створити shared album → скопіювати посилання
+#     URL формат: https://www.icloud.com/sharedalbum/...
+#     Плюси: нативний на iPhone, автосинк
+#   - Будь-яке інше: Dropbox, OneDrive — головне URL
+#
+# Структура папок в альбомі (рекомендація):
+#   Назва альбому: "{Ім'я Прізвище} — {Телефон}"
+#   Фото всередині: підписувати датою процедури (Google Photos дозволяє)
+#   Порада: використовувати один Google-акаунт клініки для всіх альбомів
+#
+# Таблиця: client_albums (phone → album_url)
+# API: GET/PUT для збереження і отримання URL альбому
+# UI: кнопка "📷 Фото" в action sheet запису + в картці клієнта
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# def _init_albums_table():
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.execute('''
+#         CREATE TABLE IF NOT EXISTS client_albums (
+#             phone       TEXT PRIMARY KEY,
+#             album_url   TEXT NOT NULL,
+#             album_type  TEXT DEFAULT 'google',  -- 'google', 'icloud', 'other'
+#             updated_by  TEXT,
+#             updated_at  TEXT DEFAULT (datetime('now'))
+#         )
+#     ''')
+#     conn.commit()
+#     conn.close()
+#
+# _init_albums_table()
+#
+#
+# @app.route('/api/admin/album/<phone>', methods=['GET'])
+# @require_admin
+# def admin_album_get(phone):
+#     """Отримати URL фото-альбому клієнта."""
+#     phone = norm_phone(phone)
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.row_factory = sqlite3.Row
+#     row = conn.execute('SELECT * FROM client_albums WHERE phone=?', (phone,)).fetchone()
+#     conn.close()
+#     if not row:
+#         return jsonify({'album': None})
+#     return jsonify({'album': dict(row)})
+#
+#
+# @app.route('/api/admin/album/<phone>', methods=['PUT'])
+# @require_admin
+# def admin_album_set(phone):
+#     """Зберегти/оновити URL фото-альбому клієнта."""
+#     phone = norm_phone(phone)
+#     d = request.get_json() or {}
+#     url = (d.get('album_url') or '').strip()
+#     album_type = d.get('album_type', 'google')
+#     if not url:
+#         return jsonify({'error': 'empty_url'}), 400
+#     if album_type not in ('google', 'icloud', 'other'):
+#         album_type = 'other'
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.execute(
+#         '''INSERT INTO client_albums (phone, album_url, album_type, updated_by, updated_at)
+#            VALUES (?,?,?,?,datetime('now'))
+#            ON CONFLICT(phone) DO UPDATE SET
+#              album_url=excluded.album_url,
+#              album_type=excluded.album_type,
+#              updated_by=excluded.updated_by,
+#              updated_at=excluded.updated_at''',
+#         (phone, url, album_type, request.admin_phone)
+#     )
+#     conn.commit()
+#     conn.close()
+#     return jsonify({'ok': True})
+#
+#
+# @app.route('/api/admin/album/<phone>', methods=['DELETE'])
+# @require_admin
+# def admin_album_delete(phone):
+#     """Видалити прив'язку альбому (не сам альбом — він в Google/iCloud)."""
+#     phone = norm_phone(phone)
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.execute('DELETE FROM client_albums WHERE phone=?', (phone,))
+#     conn.commit()
+#     conn.close()
+#     return jsonify({'ok': True})
 
 @app.route('/api/admin/prices/edit', methods=['GET'])
 @require_full_admin
@@ -1306,8 +1612,15 @@ def admin_prices_put():
         if not isinstance(cat, dict) or 'cat' not in cat or 'items' not in cat:
             return jsonify({'error': 'invalid_format'}), 400
     try:
-        with open(PRICES_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        import tempfile
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(PRICES_PATH), suffix='.json')
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, PRICES_PATH)  # atomic on POSIX
+        except Exception:
+            os.unlink(tmp_path)
+            raise
         return jsonify({'ok': True})
     except Exception as e:
         logger.error('admin_prices_put error: {}'.format(e))
@@ -1360,10 +1673,18 @@ def _load_procs_for_ai():
         return []
 
 
+_ai_rate = {}  # admin_phone -> last_request_ts
+AI_RATE_COOLDOWN = 5  # seconds between requests
+
 @app.route('/api/admin/ai-intent', methods=['POST'])
 @require_admin
 def admin_ai_intent():
     """Розбирає NLP-запит адміністратора через claude-sonnet-4-6."""
+    now_ts = time.time()
+    if now_ts - _ai_rate.get(request.admin_phone, 0) < AI_RATE_COOLDOWN:
+        return jsonify({'error': 'rate_limited', 'retry_after': AI_RATE_COOLDOWN}), 429
+    _ai_rate[request.admin_phone] = now_ts
+
     import urllib.request as _urlreq
     data = request.get_json() or {}
     text = (data.get('text') or '').strip()
@@ -1612,8 +1933,6 @@ def push_procedure_reminder():
 
     if not msg_ok:
         msg_ok = send_sms(request.user_phone, tg_text)
-        if not msg_ok:
-            msg_ok = send_sms(request.user_phone, tg_text)
         channel = 'sms' if msg_ok else 'failed'
 
     logger.info('procedure-reminder msg ({}) {} ok={}'.format(channel, request.user_phone, msg_ok))
@@ -1838,9 +2157,9 @@ def cancel_my_appointment():
     # Оновлюємо локальну БД
     _update_local_appt_cancelled(phone, date, service)
 
-    # Сповіщення спеціалісту про скасування (клієнту — не надсилаємо поки)
+    # Сповіщення клієнту + спеціалісту про скасування
     try:
-        from notifier import notify_specialist, fmt_cancel_specialist
+        from notifier import send_cancellation
         from user_db import get_client_by_phone as _gcbp
         import json as _json
         _client = _gcbp(phone)
@@ -1852,22 +2171,18 @@ def cancel_my_appointment():
                 if _it.get('date') == date and _it.get('service') == service:
                     _specialist = _it.get('specialist')
                     break
-        if _specialist:
-            appt_dict = {
-                'appt_id':        appt_id,
-                'client_phone':   phone,
-                'client_name':    _client_name,
-                'procedure_name': service,
-                'specialist':     _specialist,
-                'date':           date,
-                'time':           '',
-                'duration_min':   60,
-            }
-            spec_text = fmt_cancel_specialist(appt_dict)
-            ok = notify_specialist(_specialist, spec_text)
-            logger.info('cancel specialist notify (client): spec={} ok={}'.format(_specialist, ok))
+        send_cancellation({
+            'appt_id':        appt_id,
+            'client_phone':   phone,
+            'client_name':    _client_name,
+            'procedure_name': service,
+            'specialist':     _specialist,
+            'date':           date,
+            'time':           '',
+            'duration_min':   60,
+        })
     except Exception as _e:
-        logger.error('notifier cancel specialist (client-initiated) error: {}'.format(_e))
+        logger.error('notifier cancel (client-initiated) error: {}'.format(_e))
 
     logger.info("Cancelled appointment: {} {} {}".format(phone, date, service))
     return jsonify({'ok': True})

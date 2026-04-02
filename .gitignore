@@ -135,3 +135,6 @@ tmp/
 *.backup_[0-9]*
 *_backup_[0-9]*
 public_html/app/config.php
+google-play/android-sdk/
+google-play/twa-project/
+google-play/gomon-release.keystore

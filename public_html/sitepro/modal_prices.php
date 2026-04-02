@@ -6,15 +6,9 @@ $allowed = ['gomonclinic.com', 'www.gomonclinic.com'];
 $origin  = $_SERVER['HTTP_ORIGIN']  ?? '';
 $referer = $_SERVER['HTTP_REFERER'] ?? '';
 
-$ok = false;
-foreach ($allowed as $host) {
-    if (str_contains($origin, $host) || str_contains($referer, $host)) {
-        $ok = true;
-        break;
-    }
-}
-
-if (!$ok) {
+$origin_host = parse_url($origin, PHP_URL_HOST) ?: '';
+$referer_host = parse_url($referer, PHP_URL_HOST) ?: '';
+if (!in_array($origin_host, $allowed) && !in_array($referer_host, $allowed)) {
     http_response_code(403);
     exit;
 }

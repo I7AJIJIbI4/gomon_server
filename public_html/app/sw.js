@@ -1,6 +1,6 @@
 // sw.js — Service Worker для Dr. Gomon PWA
 // CACHE_VERSION — оновлюй при кожному деплої (YYYY-MM-DD)
-const CACHE = "gomon-2026-03-31k";
+const CACHE = "gomon-2026-04-02j";
 const STATIC = [
   '/app/index.html',
   '/app/gomon-chat.js',
@@ -75,7 +75,8 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title || 'Dr. Gómon', {
       body: data.body || 'Нове повідомлення',
-      icon: '/app/icons/icon-192.png',
+      icon: '/app/icons/icon-192-gomon.png',
+      badge: '/app/icons/badge-white.png',
       tag: data.tag || 'gomon',
       data: data.url || '/app/',
       vibrate: [200, 100, 200],
@@ -86,7 +87,10 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = e.notification.data || '/app/';
-  const screen = url.includes('#') ? url.split('#')[1] : null;
+  // Only allow same-origin URLs
+  const allowed = url.startsWith('/') || url.startsWith(self.location.origin);
+  const safeUrl = allowed ? url : '/app/';
+  const screen = safeUrl.includes('#') ? safeUrl.split('#')[1] : null;
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       const appClient = list.find(c => c.url.includes('/app/'));
@@ -94,7 +98,7 @@ self.addEventListener('notificationclick', e => {
         if (screen) appClient.postMessage({ type: 'navigate', screen });
         return appClient.focus();
       }
-      return clients.openWindow(url);
+      return clients.openWindow(safeUrl);
     })
   );
 });

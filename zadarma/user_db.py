@@ -244,18 +244,20 @@ def update_clients(clients):
                 last_service = client.get("last_service", "")
                 last_visit = client.get("last_visit", "")
                 visits_count = client.get("visits_count", 0)
+                services_json = client.get("services_json", "[]")
 
                 cursor.execute('''
                     INSERT INTO clients(id, first_name, last_name, phone,
-                                        last_service, last_visit, visits_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        last_service, last_visit, visits_count, services_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         first_name=excluded.first_name,
                         last_name=excluded.last_name,
                         phone=excluded.phone,
                         last_service=excluded.last_service,
                         last_visit=excluded.last_visit,
-                        visits_count=excluded.visits_count
+                        visits_count=excluded.visits_count,
+                        services_json=excluded.services_json
                 ''', (client_id, first_name, last_name, phone,
                       last_service, last_visit, visits_count, services_json))
                 updated_count += 1

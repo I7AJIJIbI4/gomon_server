@@ -1,0 +1,39 @@
+{
+  "packageId": "com.gomonclinic.app",
+  "host": "www.gomonclinic.com",
+  "name": "Dr. Gomon Cosmetology",
+  "launcherName": "Dr. Gomon",
+  "display": "standalone",
+  "themeColor": "#111010",
+  "themeColorDark": "#111010",
+  "navigationColor": "#111010",
+  "navigationColorDark": "#111010",
+  "navigationDividerColor": "#111010",
+  "navigationDividerColorDark": "#111010",
+  "backgroundColor": "#111010",
+  "enableNotifications": true,
+  "startUrl": "/app/",
+  "iconUrl": "https://www.gomonclinic.com/app/icons/icon-512-gomon.png",
+  "maskableIconUrl": "https://www.gomonclinic.com/app/icons/icon-512-gomon.png",
+  "monochromeIconUrl": "https://www.gomonclinic.com/app/icons/badge-white.png",
+  "shortcuts": [],
+  "signingKey": {
+    "path": "./gomon-release.keystore",
+    "alias": "gomon"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "splashScreenFadeOutDuration": 300,
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://www.gomonclinic.com/app/",
+  "minSdkVersion": 23,
+  "orientation": "portrait",
+  "fingerprints": [
+    {
+      "name": "gomon",
+      "value": "B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:31:E5:ED:A6:B0:69:9A:EC:55:0F"
+    }
+  ]
+}

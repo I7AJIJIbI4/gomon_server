@@ -473,3 +473,161 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 Структура: `{"date":"2026-03-30","count":5}` — скидається наступного дня.
 При ліміті — картка "Записатись на консультацію" (Instagram Direct).
+
+---
+
+## Google Ads Conversion Tracking
+
+### Загальне
+- **Google Ads ID:** `AW-719653819`
+- **Google Analytics:** `G-8FC2X4SHKE`
+- **gtag завантажується** в `a188dd94d37a0374c81c636d09cd1f05.php` (рядок 157)
+- **PWA (index.html) НЕ має gtag** — конверсії працюють тільки на сайті
+
+### Конверсії
+
+| Назва | Мітка | Тригер | Файл | Рядок |
+|-------|-------|--------|------|-------|
+| APP_CLICK | `EjWcCL7qyY0cELuXlNcC` | Клік "Наш APP" в бургер-меню | a188dd94...php | onclick на `<a>` |
+| CHAT_CONVERSION | `WaavCKa45JAcELuXlNcC` | Відкриття AI чату на сайті | gomon-widget.js | `openModal()` |
+| CHAT_CONVERSION | `WaavCKa45JAcELuXlNcC` | Перше повідомлення в чаті | gomon-widget.js, gomon-chat.js | `sendMessage()` |
+| INSTAGRAM_CLICK | `IK5ZCJbLxIUcELuXlNcC` | Клік на Instagram лінк | a188dd94...php | `conversionMap` |
+| TELEGRAM_CLICK | `594oCJnLxIUcELuXlNcC` | Клік на Telegram лінк | a188dd94...php | `conversionMap` |
+| PHONE_CLICK | `djjPCJzLxIUcELuXlNcC` | Клік на номер телефону | a188dd94...php | `conversionMap` |
+
+### Механізм на сайті
+
+**Клік-конверсії (IG, TG, Phone):**
+```javascript
+// a188dd94...php рядок 917-944: делегація через document click
+var conversionMap = {
+  'ig.me/m/dr.gomon':        'AW-719653819/IK5ZCJbLxIUcELuXlNcC',
+  'instagram.com/dr.gomon':  'AW-719653819/IK5ZCJbLxIUcELuXlNcC',
+  't.me/DrGomonCosmetology': 'AW-719653819/594oCJnLxIUcELuXlNcC',
+  'tel:+380733103110':       'AW-719653819/djjPCJzLxIUcELuXlNcC'
+};
+// Один handler на document, break після першого збігу — без дублювання
+```
+
+**Chat конверсія:**
+```javascript
+// gomon-widget.js openModal(): спрацьовує при кожному відкритті чату
+// gomon-widget.js sendMessage(): спрацьовує при першому повідомленні (messages.length === 1)
+// gomon-chat.js sendMessage(): аналогічно (але працює тільки в PWA де немає gtag)
+```
+
+### Важливі нюанси
+
+1. **Widget JS кешується** — при зміні `gomon-widget.js` ОБОВ'ЯЗКОВО оновити `?v=YYYYMMDD` в `a188dd94...php` (рядок ~989)
+2. **PWA не має gtag** — конверсії в `gomon-chat.js` мовчки ігноруються (`typeof gtag === 'function'` = false)
+3. **Google Tag Assistant** перевіряє в реальному часі — потрібно відкрити чат на сайті щоб побачити подію
+4. **Нова конверсія** з'являється в Google Ads через 24-48 годин після першого спрацювання
+5. **conversionMap** обробляє кліки через делегацію — новий лінк на IG/TG автоматично ловиться без додаткового коду
+
+---
+
+## Правила деплою
+
+### При КОЖНОМУ деплої:
+1. **SW cache bump** — збільшити літеру в `sw.js` CACHE (`gomon-YYYY-MM-DDx`)
+2. **Widget version bump** — при зміні `gomon-widget.js` оновити `?v=YYYYMMDDx` в `a188dd94...php`
+3. **Оновити документацію** — `google-play/PLAYSTORE-LISTING.md` (release notes, зміни, версія)
+4. **Оновити CLAUDE.md** — якщо змінились endpoints, структура БД, cron, правила
+
+---
+
+## Правила безпеки та якості коду
+
+### ОБОВ'ЯЗКОВО при написанні коду:
+
+**Python (pwa_api.py, notifier.py, bot.py, ...)**:
+1. **Токени/секрети**: використовувати `secrets.token_urlsafe()`, НІКОЛИ `random.choices()` для сесій
+2. **SQL**: тільки параметризовані запити `?`. НІКОЛИ `.format()` для SQL
+3. **Path traversal**: при `send_from_directory()` завжди перевіряти `'..' not in path`
+4. **Зовнішні токени**: НІКОЛИ не передавати API-ключі в redirect URL. Проксувати запити серверсайд
+5. **Rate limiting**: кожен публічний endpoint повинен мати ліміт (OTP: 3/год, AI: 5с cooldown, SMS: 1/15хв)
+6. **Валідація вхідних даних**: date → `re.match(r'^\d{4}-\d{2}-\d{2}$')`, time → `re.match(r'^\d{2}:\d{2}$')`, specialist → whitelist
+7. **Subprocess**: НІКОЛИ `os.system()`. Тільки `subprocess.run(cmd, shell=False, timeout=60)`
+8. **Логування**: `RotatingFileHandler(maxBytes=5*1024*1024, backupCount=3)`, НІКОЛИ голий `FileHandler`
+9. **Часові зони**: НІКОЛИ хардкодити `+2`. Використовувати `_kyiv_offset()` з DST-розрахунком
+10. **Dry-run**: НІКОЛИ не записувати в БД при `--dry-run` (ні `mark_sent`, ні `_log()`)
+11. **Атомарність**: overlap-check + INSERT мають бути в одній транзакції (`BEGIN IMMEDIATE`)
+12. **`time.sleep()` в хендлерах**: ЗАБОРОНЕНО — блокує диспатчер бота та Flask-потоки
+
+**JavaScript (index.html, gomon-*.js)**:
+1. **XSS**: ЗАВЖДИ ескейпити динамічні дані через `_esc()` перед вставкою в `innerHTML`
+2. **Посилання з API**: парсити через `new URL(url)` + `url.replace(/"/g, '&quot;')` перед вставкою в `href`
+3. **console.log**: НІКОЛИ не логувати OTP коди, токени, паролі (навіть за `if debug`)
+4. **Мертвий код**: функції без викликів видаляти одразу
+5. **Модалки**: завжди додавати `Escape` key handler при створенні нового модального вікна
+6. **Fetch**: завжди використовувати `AbortController` з таймаутом 30с
+7. **SW notification click**: `clients.openWindow()` тільки для same-origin URL (перевіряти `url.startsWith('/')`)
+8. **setInterval/setTimeout**: завжди зберігати ID і очищувати через `clearInterval/clearTimeout` у всіх code paths
+
+**PHP (promos.php, prices.php, modal_prices.php)**:
+1. **CORS**: ТІЛЬКИ `parse_url($origin, PHP_URL_HOST)` + `in_array($host, $allowed)`. НІКОЛИ `str_contains()`
+2. **Помилки**: `error_reporting(0)` в продакшені, щоб не витікали шляхи файлів
+
+### НЕ дублювати код між файлами:
+- `get_specialist()`, `get_branch_id()` — тільки в `wlaunch_api.py`, решта імпортує
+- `_send_tg()` — тільки в `notifier.py`, решта імпортує
+- `normalize_phone()` — тільки в `user_db.py`
+- `send_admin_error()` — тільки в одному місці, решта імпортує
+
+---
+
+## Аудит інтеграцій та рішення (2026-04-01)
+
+### Що працює і не потребує змін
+
+| Компонент | Статус | Примітка |
+|-----------|--------|----------|
+| WLaunch cancel з клієнтського додатку | Працює | `/api/me/appointments/cancel` → `_cancel_wlaunch_appt()` |
+| 24h нагадування, SMS feedback | На стороні WLaunch | Не дублюємо — WLaunch надсилає |
+| Скасування + створення (замість редагування) | На стороні WLaunch | Адмін скасовує і створює новий |
+
+### Виправлення (імплементовано 2026-04-01)
+
+| # | Проблема | Рішення | Файл |
+|---|----------|---------|------|
+| 3 | Briefing о 20:00 UTC = 23:00 Київ | Cron змінено на `0 17 * * *` (= 20:00 Київ DST) | crontab |
+| 4 | Deep link `connect_093...` без нормалізації | Нормалізує до `380...` в bot.py start_command | bot.py |
+| 7 | Спеціаліст не бачить чужі слоти | Показує "Зайнято" (без деталей) для чужих записів | pwa_api.py, index.html |
+| 8 | Push click → загальний /app/ | Push URL тепер `/app/#appointments` для записів | notifier.py |
+| 9 | Feedback через TG+SMS | Змінено на push-only (TG/SMS на стороні WLaunch) | notifier.py |
+| 12 | prices.json — не атомарний запис | `os.replace(tmp, path)` — атомарний на POSIX | pwa_api.py |
+| 13 | Stale push-підписки не очищуються | Видалення inactive > 30 днів при старті | push_sender.py |
+
+### Рішення без імплементації (нотатки)
+
+**#5 Guest dead end:** Гість може використовувати AI-асистента на auth-екрані або Telegram-бот. Для повноцінної реєстрації — зателефонувати або написати в Instagram Direct. Не потребує коду — UX вже покриває.
+
+**#6 Chat rate limit (localStorage → серверний):**
+Рекомендовано: нова таблиця `chat_rate(phone TEXT, date TEXT, count INT, UNIQUE(phone,date))` в otp_sessions.db. При кожному запиті до chat.php перевіряти count < 20. Найнадійніший варіант.
+
+**#10 Manual appointments sync TO WLaunch:** Поки не імплементовано. Manual записи живуть тільки в нашій БД. WLaunch не знає про них. При міграції з WLaunch — реалізувати POST до WLaunch API при створенні manual запису.
+
+**#14 Admin stats O(n²):** Запит через `json_each(services_json)` при 580 клієнтах × 5 записів = 2900 рядків. Поки не критично (~50ms). Оптимізація: використовувати `last_visit` + `visits_count` колонки (вже є) замість json_each. Додати колонку `last_specialist` при потребі.
+
+### Specialist view — логіка "Зайнято"
+
+Спеціаліст (роль `specialist`) бачить в календарі:
+- **Свої записи** — повна інформація (ім'я, телефон, процедура, нотатки)
+- **Чужі записи** — `procedure_name='Зайнято'`, без імені/телефону/нотаток, `busy=true`
+- **Busy слоти** — відображаються напівпрозоро, не клікабельні
+- Адмін (`full`/`superadmin`) бачить ВСЕ як раніше
+
+### Cron (оновлено 2026-04-01)
+
+```cron
+*/5 * * * *     /home/gomoncli/zadarma/check_flask.sh
+*/5 * * * *     /home/gomoncli/zadarma/check_and_run_bot.sh
+@reboot         sleep 15 && /home/gomoncli/zadarma/check_flask.sh
+0 * * * *       python3 /home/gomoncli/zadarma/sync_appointments.py
+0 9,21 * * *    /home/gomoncli/zadarma/sync_with_notification.sh
+0 9 * * *       python3 /home/gomoncli/zadarma/sms_reminder.py
+*/15 8-22 * * * python3 /home/gomoncli/zadarma/push_reminder.py
+0 17 * * *      python3 /home/gomoncli/zadarma/appt_reminder.py --specialist --tomorrow
+# 17:00 UTC = 20:00 Київ (DST, літо). Зимою буде 19:00 Київ — прийнятно.
+# Для точного 20:00 Київ цілий рік — потрібен wrapper з _kyiv_offset().
+```

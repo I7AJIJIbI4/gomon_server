@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import logging
+import logging.handlers
+import subprocess
 import threading
 import atexit
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
@@ -24,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('bot.log', encoding='utf-8')
+        logging.handlers.RotatingFileHandler('bot.log', maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
     ]
 )
 
@@ -70,40 +72,84 @@ def start_command(bot, update):
     user_id = update.effective_user.id
     username = update.effective_user.username
     first_name = update.effective_user.first_name
-    
+
     logger.info(f"👤 /start викликано користувачем: {user_id} (@{username}, {first_name})")
-    
+
+    # Deep link: /start connect_380XXXXXXXXX — автоприв'язка телефону з PWA
+    text = update.message.text or ''
+    parts = text.split()
+    if len(parts) > 1 and parts[1].startswith('connect_'):
+        phone = parts[1][8:]
+        digits = ''.join(filter(str.isdigit, phone))
+        # Normalize to 380XXXXXXXXX
+        if len(digits) == 10 and digits[0] == '0':
+            digits = '38' + digits
+        elif len(digits) == 9:
+            digits = '380' + digits
+        if len(digits) >= 11:
+            # Не перезаписувати якщо вже прив'язаний інший номер
+            import sqlite3 as _sq
+            _uc = _sq.connect('/home/gomoncli/zadarma/users.db')
+            _existing = _uc.execute('SELECT phone FROM users WHERE telegram_id=?', (user_id,)).fetchone()
+            _uc.close()
+            if _existing and _existing[0] and _existing[0] != digits:
+                logger.info(f"Deep link connect: {user_id} already has phone {_existing[0]}, ignoring {digits}")
+                bot.send_message(chat_id=update.message.chat_id,
+                    text=f"Telegram вже підключено до номеру {_existing[0][-10:].replace('380','0',1)}",
+                    parse_mode=None)
+                return
+            from user_db import store_user
+            store_user(user_id, digits, username, first_name)
+            logger.info(f"Deep link connect: {user_id} -> {digits}")
+            bot.send_message(
+                chat_id=update.message.chat_id,
+                text=(
+                    f"Telegram підключено!\n\n"
+                    f"Тепер ви отримуватимете нагадування про записи, "
+                    f"акції та персональні рекомендації.\n\n"
+                    f"/app - Наш застосунок, який точно Вам допоможе\n"
+                    f"/my_services - Ваші минулі і майбутні записи\n"
+                    f"/map - Знайти нас на мапі\n"
+                    f"/scheme - Побачити будівлю на фото\n"
+                    f"/channel - Актуальні новини та акції в ТГ каналі\n"
+                    f"/call - Зателефонувати лікарю Вікторії\n\n"
+                    f"Швидкий доступ: кнопка ☰ (меню) зліва внизу"
+                ),
+                parse_mode=None
+            )
+            return
+        else:
+            logger.warning(f"⚠️ Deep link connect: invalid phone '{phone}' from {user_id}")
+
     try:
         if is_authenticated(user_id):
             welcome_message = (
-                f"🎉 Вітаємо, {first_name}!\n\n"
-                "✅ Ви авторизовані в системі Dr. Gomon Cosmetology\n\n"
-                "🔓 Доступні дії:\n"
-                "📱 /app - Особистий кабінет (PWA)\n"
-                "📞 /call - Зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - Розташування на мапі\n"
-                "🧭 /scheme - Схема проїзду (фото)\n"
-                "📢 /channel - Наш Telegram-канал\n"
-                "❓ /help - Довідка по командах\n\n"
-                "💡 Швидкий доступ: Меню ☰ зліва внизу"
+                f"Вітаємо, {first_name}!\n\n"
+                "Ви авторизовані в системі Dr. Gomon Cosmetology\n\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/my_services - Ваші минулі і майбутні записи\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
-            
+
             bot.send_message(chat_id=update.message.chat_id, text=welcome_message, parse_mode=None)
         else:
             unauthorized_message = (
-                f"👋 Вітаємо, {first_name}!\n\n"
-                "❌ Ви не авторизовані в системі\n\n"
-                "📱 Для авторизації поділіться номером телефону"
+                f"Вітаємо, {first_name}!\n\n"
+                "Для авторизації поділіться номером телефону"
             )
-            
+
             bot.send_message(chat_id=update.message.chat_id, text=unauthorized_message, parse_mode=None)
-            
+
             try:
                 from telegram import KeyboardButton, ReplyKeyboardMarkup
-                
-                keyboard = [[KeyboardButton("📱 Поділитися номером", request_contact=True)]]
+
+                keyboard = [[KeyboardButton("Поділитися номером", request_contact=True)]]
                 reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-                button_message = "Натисніть кнопку '📱 Поділитися номером' нижче для авторизації 👇:"
+                button_message = "Натисніть кнопку нижче для авторизації:"
                 
                 # Відправляємо зображення з текстом і кнопкою
                 try:
@@ -167,38 +213,35 @@ def contact_handler(bot, update):
             parse_mode=None
         )
         
-        time.sleep(2)
-        
         if is_authenticated(user_id):
             authorized_message = (
-                f"🎉 Вітаємо, {first_name}!\n\n"
-                "✅ Ви авторизовані в системі і маєте доступ до всіх функцій Dr. Gomon Concierge\n\n"
-                "🔓 Доступні дії:\n"
-                "📱 /app - Особистий кабінет (PWA)\n"
-                "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - розташування на мапі\n"
-                "🧭 /scheme - схема проїзду (фото)\n"
-                "❓ /help - довідка по командах\n\n"
-                "💡 Підказка: для швидкого доступу до команд\n"
-                "   натисніть кнопку \"Меню\" ☰ зліва внизу"
+                f"Вітаємо, {first_name}!\n\n"
+                "Ви авторизовані в системі Dr. Gomon Cosmetology\n\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/my_services - Ваші минулі і майбутні записи\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
-            
+
             bot.send_message(chat_id=update.message.chat_id, text=authorized_message, parse_mode=None)
         else:
             denied_message = (
-                "⚠️ Доступ обмежено!\n\n"
-                "❌ Ваш номер не зареєстровано в системі Dr. Gomon Cosmetology\n\n"
-                "📞 Для реєстрації зверніться:\n"
-                "📱 +380733103110 - телефонуйте\n"
-                "💬 <a href=\"https://instagram.com/dr.gomon\">Instagram</a> - пишіть в Direct\n\n"
-                "🔓 Доступні функції:\n"
-                "📱 /app - Особистий кабінет\n"
-                "📞 /call - Зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - Розташування на мапі\n"
-                "🧭 /scheme - Схема проїзду (фото)\n"
+                "Ваш номер не зареєстровано в системі Dr. Gomon Cosmetology\n\n"
+                "Для реєстрації зверніться:\n"
+                "- Телефон: +380733103110\n"
+                "- Instagram Direct: ig.me/m/dr.gomon\n\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/start - Авторизуватись для отримання сповіщень\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії"
             )
-            
-            bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode='HTML')
+
+            bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode=None)
             
     except Exception as e:
         logger.exception(f"❌ Помилка в contact_handler: {e}")
@@ -253,9 +296,9 @@ def scheme_command(bot, update):
     AERIAL   = '/home/gomoncli/public_html/sitepro/location-aerial.jpg'
     ENTRANCE = '/home/gomoncli/public_html/sitepro/location-entrance.jpg'
 
+    media = []
     try:
         from telegram import InputMediaPhoto
-        media = []
         for path in (AERIAL, ENTRANCE):
             try:
                 media.append(open(path, 'rb'))
@@ -284,13 +327,14 @@ def scheme_command(bot, update):
                 parse_mode=None
             )
 
-        for f in media:
-            f.close()
         logger.info(f"🧭 Схема ({len(media)} фото) відправлена користувачу {user_id}")
 
     except Exception as e:
         logger.exception(f"❌ Помилка в scheme_command: {e}")
         bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання схеми", parse_mode=None)
+    finally:
+        for f in media:
+            f.close()
 
 
 def app_command(bot, update):
@@ -299,7 +343,7 @@ def app_command(bot, update):
     try:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="📱 Особистий кабінет Dr. Gómon\n\nhttps://www.gomonclinic.com/app/",
+            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://www.gomonclinic.com/app/",
             parse_mode=None
         )
     except Exception as e:
@@ -313,13 +357,13 @@ def channel_command(bot, update):
     try:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         keyboard = [[InlineKeyboardButton(
-            text="📢 Dr.Gomon. Косметологічні будні",
+            text="Dr.Gomon. Косметологічні будні",
             url="https://t.me/+amEiOBPDbv04MDcy"
         )]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="📢 Наш Telegram-канал з актуальними новинами, акціями та знижками:",
+            text="Актуальні новини та акції в нашому ТГ каналі:",
             reply_markup=reply_markup,
             parse_mode=None
         )
@@ -447,66 +491,40 @@ def help_command(bot, update):
     try:
         if user_id in ADMIN_USER_IDS:
             help_message = (
-                "🤖 ДОВІДКА ДЛЯ АДМІНІСТРАТОРА\n\n"
-                "👥 КОРИСТУВАЦЬКІ КОМАНДИ:\n"
-                "📱 /app - Особистий кабінет (PWA)\n"
-                "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - розташування на мапі\n"
-                "🧭 /scheme - схема проїзду (фото)\n"
-                "📢 /channel - Telegram-канал з новинами\n"
-                "🧪 /test - Тест роботи бота\n"
-                "📊 /status - Статус користувача\n\n"
-                "👑 АДМІНІСТРАТИВНІ КОМАНДИ:\n"
-                "📊 /monitor - Моніторинг всіх API сервісів\n"
-                "🔧 /diagnostic - Системна діагностика\n"
-                "📋 /logs - Останні записи логів\n"
-                "🔄 /sync - Ручна синхронізація клієнтів\n"
-                "📊 /sync_status - Статус синхронізації\n"
-                "🧹 /sync_clean - Очистити дублікати\n"
-                "🔄 /sync_full - Повна синхронізація\n"
-                "🧪 /sync_test - Тест API підключень\n"
-                "👤 /sync_user - Синхронізувати користувача\n"
-                "❓ /sync_help - Довідка по синхронізації\n"
-                "🔄 /restart - Перезапуск бота\n"
-                "❓ /help - Ця довідка\n\n"
-                "📱 КОНТАКТИ ПІДТРИМКИ:\n"
-                "+380733103110"
+                "Команди:\n\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/my_services - Ваші минулі і майбутні записи\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "Адмін:\n"
+                "/monitor - Моніторинг API\n"
+                "/diagnostic - Системна діагностика\n"
+                "/logs - Останні записи логів\n"
+                "/sync - Синхронізація клієнтів\n"
+                "/restart - Перезапуск бота"
             )
         elif is_authenticated(user_id):
             help_message = (
-                "🤖 ДОВІДКА ПО КОМАНДАХ\n\n"
-                "🔓 ДОСТУПНІ ДІЇ:\n"
-                "📱 /app - Особистий кабінет (PWA)\n"
-                "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - розташування на мапі\n"
-                "🧭 /scheme - схема проїзду (фото)\n"
-                "📢 /channel - Telegram-канал з новинами\n"
-                "ℹ️ ІНФОРМАЦІЙНІ:\n"
-                "🧪 /test - Перевірити роботу бота\n"
-                "📊 /status - Ваш статус в системі\n"
-                "❓ /help - Ця довідка\n\n"
-                "💡 ПІДКАЗКИ:\n"
-                "• Використовуйте меню для швидкого доступу\n"
-                "• Для підтримки дзвоніть: +380733103110"
+                "Команди:\n\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/my_services - Ваші минулі і майбутні записи\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії"
             )
         else:
             help_message = (
-                "🤖 ДОВІДКА\n\n"
-                "❌ Ви не авторизовані в системі\n\n"
-                "📱 Для авторизації:\n"
-                "1. Натисніть /start\n"
-                "2. Поділіться номером телефону\n"
-                "3. Дочекайтеся підтвердження доступу\n\n"
-                "🔓 ДОСТУПНІ КОМАНДИ:\n"
-                "📱 /app - Особистий кабінет (PWA)\n"
-                "📞 /call - зателефонувати лікарю Вікторії\n"
-                "🗺️ /map - розташування на мапі\n"
-                "🧭 /scheme - схема проїзду (фото)\n"
-                "📢 /channel - Telegram-канал з новинами\n"
-                "❓ /help - Ця довідка\n\n"
-                "📞 ДЛЯ РЕЄСТРАЦІЇ ЗВЕРНІТЬСЯ:\n"
-                "+380733103110 - телефонуйте\n"
-                "💬 Instagram: @dr.gomon - пишіть в Direct"
+                "Ви не авторизовані.\n\n"
+                "/start - Авторизуватись для отримання сповіщень\n"
+                "/app - Наш застосунок, який точно Вам допоможе\n"
+                "/map - Знайти нас на мапі\n"
+                "/scheme - Побачити будівлю на фото\n"
+                "/channel - Актуальні новини та акції в ТГ каналі\n"
+                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "Для реєстрації: +380733103110 або ig.me/m/dr.gomon"
             )
         
         bot.send_message(
@@ -546,7 +564,8 @@ def monitor_command(bot, update):
         )
         
         # Запустити api_monitor.py та зберегти результат у файл
-        os.system("cd /home/gomoncli/zadarma && python3 api_monitor.py > /tmp/monitor_result.txt 2>&1")
+        with open("/tmp/monitor_result.txt", "w") as _mf:
+            subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT)
         
         # Прочитати результат
         try:
@@ -774,7 +793,8 @@ def admin_command(bot, update):
 
 def _do_monitor(bot, chat_id):
     bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...")
-    os.system("cd /home/gomoncli/zadarma && python3 api_monitor.py > /tmp/monitor_result.txt 2>&1")
+    with open("/tmp/monitor_result.txt", "w") as _mf:
+        subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT)
     try:
         with open("/tmp/monitor_result.txt", "r", encoding="utf-8") as f:
             output = f.read()
@@ -963,7 +983,7 @@ from sync_stubs import (
 
 
 # -- Channel post handler for news feed --
-def save_channel_post(update, context):
+def save_channel_post(bot, update):
     import sqlite3 as _sq
     FEED_DB = '/home/gomoncli/zadarma/feed.db'
     msg = update.channel_post
@@ -989,6 +1009,155 @@ def save_channel_post(update, context):
         logger.info(f'Channel post saved: {msg.message_id}')
     except Exception as e:
         logger.error(f'Feed save error: {e}')
+
+def my_services_command(bot, update):
+    user_id = update.effective_user.id
+    logger.info(f"my_services_command called by user: {user_id}")
+
+    import sqlite3
+    import json
+    from datetime import datetime
+
+    DB_PATH = "/home/gomoncli/zadarma/users.db"
+
+    SPECIALIST_NAMES = {
+        'victoria': 'Вікторія',
+        'anastasia': 'Анастасія',
+    }
+
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5.0)
+        row = conn.execute(
+            "SELECT phone FROM users WHERE telegram_id=?", (user_id,)
+        ).fetchone()
+
+        if not row:
+            conn.close()
+            bot.send_message(
+                chat_id=update.message.chat_id,
+                text=(
+                    "Номер телефону не прив'язаний. "
+                    "Поділіться номером через кнопку нижче "
+                    "або відкрийте додаток: gomonclinic.com/app/"
+                ),
+                parse_mode=None
+            )
+            return
+
+        phone = row[0]
+
+        # --- collect appointments from clients.services_json ---
+        appointments = []
+        client_row = conn.execute(
+            "SELECT services_json FROM clients WHERE phone=?", (phone,)
+        ).fetchone()
+        if client_row and client_row[0]:
+            try:
+                services = json.loads(client_row[0])
+                for s in services:
+                    if s.get('status', '').upper() == 'CANCELLED':
+                        continue
+                    appointments.append({
+                        'date': s.get('date', ''),
+                        'time': '{:02d}:00'.format(int(s['hour'])) if s.get('hour') is not None else '',
+                        'procedure': s.get('service', ''),
+                        'specialist': SPECIALIST_NAMES.get(
+                            (s.get('specialist') or '').lower(), ''
+                        ),
+                    })
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # --- collect from manual_appointments ---
+        manual_rows = conn.execute(
+            "SELECT date, time, procedure_name, specialist FROM manual_appointments "
+            "WHERE client_phone=? AND status != 'CANCELLED'",
+            (phone,)
+        ).fetchall()
+        for mr in manual_rows:
+            appointments.append({
+                'date': mr[0] or '',
+                'time': mr[1] or '',
+                'procedure': mr[2] or '',
+                'specialist': SPECIALIST_NAMES.get(
+                    (mr[3] or '').lower(), ''
+                ),
+            })
+
+        conn.close()
+
+        # --- split into upcoming / done ---
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        upcoming = []
+        done = []
+        for a in appointments:
+            if a['date'] >= today_str:
+                upcoming.append(a)
+            else:
+                done.append(a)
+
+        upcoming.sort(key=lambda x: x['date'])
+        done.sort(key=lambda x: x['date'], reverse=True)
+
+        # --- format message ---
+        def fmt_date(d):
+            try:
+                dt = datetime.strptime(d, '%Y-%m-%d')
+                return dt.strftime('%d.%m.%Y')
+            except (ValueError, TypeError):
+                return d
+
+        lines = []
+
+        if not upcoming and not done:
+            lines.append("Записів не знайдено")
+        else:
+            lines.append("Ваші записи:")
+            lines.append("")
+
+            if upcoming:
+                lines.append("Заплановані:")
+                for a in upcoming:
+                    parts = []
+                    parts.append(fmt_date(a['date']))
+                    if a['time']:
+                        parts.append('о {}'.format(a['time']))
+                    line = '- ' + ' '.join(parts)
+                    if a['procedure']:
+                        line += ' -- {}'.format(a['procedure'])
+                    if a['specialist']:
+                        line += ' ({})'.format(a['specialist'])
+                    lines.append(line)
+                lines.append("")
+
+            if done:
+                lines.append("Останні:")
+                for a in done[:5]:
+                    line = '- {}'.format(fmt_date(a['date']))
+                    if a['procedure']:
+                        line += ' -- {}'.format(a['procedure'])
+                    lines.append(line)
+                lines.append("")
+
+            lines.append("Записатись:")
+            lines.append("- Додаток: gomonclinic.com/app/")
+            lines.append("- Telegram: t.me/DrGomonCosmetology")
+            lines.append("- Instagram Direct: ig.me/m/dr.gomon")
+
+        bot.send_message(
+            chat_id=update.message.chat_id,
+            text='\n'.join(lines),
+            parse_mode=None
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in my_services_command: {e}")
+        bot.send_message(
+            chat_id=update.message.chat_id,
+            text="Помилка при завантаженні записів. Спробуйте пізніше.",
+            parse_mode=None
+        )
+
 
 def main():
     logger.info("🚀 Бот запускається...")
@@ -1022,6 +1191,8 @@ def main():
     dp.add_handler(CommandHandler("status", status_command))
     dp.add_handler(CommandHandler("sync", sync_command))
     dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("my_services", my_services_command))
+    dp.add_handler(CommandHandler("services", my_services_command))
     dp.add_handler(CommandHandler("monitor", monitor_command))
     dp.add_handler(CommandHandler("diagnostic", diagnostic_command))
     dp.add_handler(CommandHandler("logs", logs_command))
@@ -1051,39 +1222,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# Python 3.6 compatible sync functions
-try:
-    from sync_stubs import (
-        handle_sync_status_command, handle_sync_test_command, handle_sync_help_command,
-        handle_sync_clean_command, handle_sync_full_command, handle_sync_user_command
-    )
-    print("✅ Завантажено sync_stubs для Python 3.6")
-except ImportError as e:
-    print("❌ Помилка завантаження sync_stubs: {}".format(e))
-    
-    # Мінімальні заглушки
-    def handle_sync_status_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-    
-    def handle_sync_clean_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-        
-    def handle_sync_full_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-        
-    def handle_sync_test_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-        
-    def handle_sync_user_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-        
-    def handle_sync_help_command(bot, update):
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Модуль синхронізації недоступний")
-
-# Python 3.6 compatible sync functions
-from sync_stubs import handle_sync_status_command, handle_sync_test_command, handle_sync_help_command
-from sync_stubs import handle_sync_clean_command, handle_sync_full_command, handle_sync_user_command
-
-from sync_stubs import handle_sync_status_command, handle_sync_test_command, handle_sync_help_command
-from sync_stubs import handle_sync_clean_command, handle_sync_full_command, handle_sync_user_command

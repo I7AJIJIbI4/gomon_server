@@ -705,8 +705,10 @@
     text = escapeHtml(text);
     text = parseMarkdown(text);
     // markdown [text](url) -> clickable with original text
-    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)\"]+)\)/g, function(m, text, url) {
+      try { new URL(url); } catch(e) { return text; }
+      return '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">' + text + '</a>';
+    });
     // plain https://...
     text = text.replace(/(^|[\s,>])(https?:\/\/[^\s<,]+)/g,
       '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
@@ -871,6 +873,11 @@
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
+
+    // Google Ads conversion — перше повідомлення в чаті
+    if (history.length === 1 && typeof gtag === 'function') {
+      gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
+    }
 
     // Rate limit check
     if (gcIsRateLimited()) {

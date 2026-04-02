@@ -38,6 +38,8 @@ def init_push_tables():
         '    status    TEXT DEFAULT "sent"'
         ')'
     )
+    # Cleanup: delete inactive subscriptions older than 30 days
+    conn.execute("DELETE FROM push_subscriptions WHERE active=0 AND created_at < datetime('now', '-30 days')")
     conn.commit()
     conn.close()
 
@@ -141,7 +143,7 @@ def send_push(subscription_json_str, title, body, url='/app/', tag='gomon'):
         return True
     except WebPushException as e:
         err = str(e)
-        if '410' in err or '404' in err:
+        if '410' in err or '404' in err or ('403' in err and 'BadJwtToken' in err):
             endpoint = json.loads(subscription_json_str).get('endpoint', '')
             logger.warning('Subscription gone, deactivating: {}...'.format(endpoint[:50]))
             _deactivate_endpoint(endpoint)

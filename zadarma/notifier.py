@@ -64,6 +64,13 @@ def _fmt_date(date_str):
     except Exception:
         return date_str or '—'
 
+def _fmt_date_short(date_str):
+    """'2026-04-01' → '01.04'"""
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m')
+    except Exception:
+        return date_str or '—'
+
 def _fmt_time(time_str):
     """'11:30:00' або '11:30' → '11:30'"""
     return (time_str or '').strip()[:5] or '—'
@@ -88,7 +95,7 @@ def _init_notification_log():
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             phone           TEXT    NOT NULL,
             type            TEXT    NOT NULL,
-            -- типи: appt_reminder | feedback | cancel | appt_confirm
+            -- типи: appt_reminder | feedback | cancel | appt_confirm | spec_new
             reference       TEXT    NOT NULL,
             -- 'appt|2026-04-15'  'feedback|2026-04-15'  'cancel|{id}|2026-04-15'
             channel         TEXT    NOT NULL,   -- 'tg' | 'sms' | 'push'
@@ -98,6 +105,10 @@ def _init_notification_log():
             UNIQUE(phone, type, reference, channel)
         )
     ''')
+    # Очищення старих записів (старше 30 днів) — таблиця не має рости безмежно
+    conn.execute(
+        "DELETE FROM notification_log WHERE sent_at < datetime('now', '-30 days')"
+    )
     conn.commit()
     conn.close()
 
@@ -226,16 +237,14 @@ def notify_client(phone, tg_text, sms_text=None,
     if push_title and push_body:
         results['push'] = _send_push(phone, push_title, push_body, push_tag, push_url)
 
-    # 2. TG → SMS fallback (взаємовиключно)
+    # 2. TG → SMS fallback (Push не впливає на рішення по TG/SMS)
     tg_id = _get_tg_id(phone)
     if tg_id:
         ok = _send_tg(tg_id, tg_text)
         results['tg'] = ok
         if not ok:
-            # TG fail (заблоковано або мережева помилка) → SMS fallback
             results['sms'] = _send_sms(phone, sms_text or tg_text)
     else:
-        # TG ID невідомий → одразу SMS
         results['sms'] = _send_sms(phone, sms_text or tg_text)
 
     return results
@@ -265,10 +274,12 @@ def _appt_vars(appt):
     raw_time = appt.get('time') or (
         '{:02d}:00'.format(appt['hour']) if appt.get('hour') is not None else ''
     )
+    date_str = appt.get('date', '')
     return {
         'first_name':  _first_name(appt.get('client_name') or appt.get('client_phone')),
         'service':     appt.get('procedure_name') or appt.get('service') or '—',
-        'date':        _fmt_date(appt.get('date', '')),
+        'date':        _fmt_date(date_str),
+        'date_short':  _fmt_date_short(date_str),
         'time':        _fmt_time(raw_time),
         'duration':    _fmt_duration(appt.get('duration_min', 60)),
         'spec_name':   spec['short_name'],
@@ -277,41 +288,57 @@ def _appt_vars(appt):
     }
 
 
+def fmt_appt_confirm(appt):
+    """Підтвердження створення запису клієнту. Повертає (tg, sms, push_title, push_body)."""
+    v = _appt_vars(appt)
+    tg = (
+        'Ваш запис підтверджено ✅\n\n'
+        '📅 {date}, {time}\n'
+        '💆 {service}\n'
+        '👩‍⚕️ {spec_name}\n'
+        '📍 БЦ Галерея, вхід "ЛІФТ", 6 поверх\n\n'
+        'Переглянути або скасувати: gomonclinic.com/app/'
+    ).format(**v)
+    sms = (
+        'Dr.Gomon: запис {date_short} о {time}, {service}. '
+        'Адреса: БЦ Галерея, "ЛІФТ", 6 пов. '
+        'Скасувати: gomonclinic.com/app/'
+    ).format(**v)
+    push_title = 'Запис підтверджено ✅'
+    push_body  = '{service}, {date_short} о {time}'.format(**v)
+    return tg, sms, push_title, push_body
+
+
 def fmt_reminder_24h(appt):
     """Нагадування клієнту за 24 години. Повертає (tg, sms, push_title, push_body)."""
     v = _appt_vars(appt)
     tg = (
-        '{first_name}, Ви записані на процедуру "{service}" Dr. Gomon Cosmetology '
-        'на {date} о {time}. Орієнтовна тривалість процедури {duration}. '
-        'Ваш спеціаліст {spec_name} (тел. {spec_phone}) чекатиме Вас за НОВОЮ адресою '
-        'в БЦ Галерея (чорня скляна будівля поруч з ТЦ Будинок Торгівлі), '
-        'вхід через двері з надписом "ЛІФТ", 6 поверх\n'
-        'https://flyl.link/map або дивіться в додатку https://flyl.link/app'
+        'Нагадуємо про ваш запис завтра 🌸\n\n'
+        '📅 {date_short}, {time}\n'
+        '💆 {service}\n'
+        '👩‍⚕️ {spec_name}\n\n'
+        'Чекаємо вас! Dr. Gómon Cosmetology\n'
+        'gomonclinic.com/app/'
     ).format(**v)
     sms = (
-        'Dr.Gomon: нагадуємо — {date} о {time} "{service}". '
-        'Адреса: БЦ Галерея, вхід "ЛІФТ", 6 пов. '
-        'https://flyl.link/map'
+        'Dr.Gomon: нагадуємо — завтра {date_short} о {time} {service}. '
+        'Скасувати: gomonclinic.com/app/'
     ).format(**v)
-    push_title = 'Нагадування про запис'
-    push_body  = '{service}, {date} о {time}'.format(**v)
+    push_title = 'Запис завтра 🌸'
+    push_body  = '{service}, {time}'.format(**v)
     return tg, sms, push_title, push_body
 
 
 def fmt_post_visit(appt):
-    """Подяка + прохання залишити відгук о 20:00 в день процедури. Повертає (tg, sms, push_title, push_body)."""
+    """Подяка + прохання залишити відгук о 20:00 в день процедури.
+    Push відкриває Google-відгуки напряму (не застосунок)."""
     v = _appt_vars(appt)
     tg = (
         '{first_name}, Dr. Gomon Cosmetology дякує за довіру! '
-        'Будемо вдячні і за Ваш відгук:\nhttps://flyl.link/google\n\n'
-        'А ще в нас з\'явився додаток для зручного відстеження записів, новин і акцій:\n'
-        'https://flyl.link/app'
+        'Будемо вдячні за ваш відгук:\n'
+        'https://flyl.link/google'
     ).format(**v)
-    sms = (
-        'Dr.Gomon дякує за візит! '
-        'Відгук: https://flyl.link/google  '
-        'Додаток: https://flyl.link/app'
-    )
+    sms = 'Dr.Gomon дякує за візит! Відгук: https://flyl.link/google'
     push_title = 'Дякуємо за візит!'
     push_body  = 'Залиште відгук — нам важлива ваша думка'
     return tg, sms, push_title, push_body
@@ -321,16 +348,18 @@ def fmt_cancel_client(appt):
     """Підтвердження скасування для клієнта. Повертає (tg, sms, push_title, push_body)."""
     v = _appt_vars(appt)
     tg = (
-        '{first_name}, Ваш запис на {date} о {time} скасовано. '
-        'Якщо виникнуть питання, спеціаліст {spec_name} з радістю відповість '
-        'на них за тел. {spec_phone} або в Instagram {spec_insta}'
+        'Ваш запис скасовано\n\n'
+        '📅 {date}\n'
+        '💆 {service}\n\n'
+        'Записатись знову: gomonclinic.com/app/\n'
+        'або ig.me/m/dr.gomon'
     ).format(**v)
     sms = (
-        'Dr.Gomon: запис {date} о {time} скасовано. '
-        'Питання: тел. {spec_phone} або Instagram {spec_insta}'
+        'Dr.Gomon: запис {date_short} скасовано. '
+        'Записатись: gomonclinic.com/app/ або ig.me/m/dr.gomon'
     ).format(**v)
     push_title = 'Запис скасовано'
-    push_body  = '{service}, {date}'.format(**v)
+    push_body  = '{service}, {date_short}'.format(**v)
     return tg, sms, push_title, push_body
 
 
@@ -378,9 +407,84 @@ def fmt_specialist_new_appt(appt):
     else:
         price_part = 'Орієнтовна тривалість процедури — {duration}.'.format(**v)
     return (
-        '{spec_name}, до тебе записаний клієнт {first_name} '
-        'на процедуру «{service}» на {date} о {time}. {price_part}'
+        '{spec_name}, до тебе на завтра {date} о {time} '
+        'записаний клієнт {first_name} на процедуру "{service}". {price_part}'
     ).format(price_part=price_part, **v)
+
+
+def fmt_admin_tomorrow_line(appt):
+    """Один рядок для адмін-дайджесту завтрашніх записів.
+    Формат: {date} о {time} «{service}». {name}, {phone}, {notes}"""
+    v = _appt_vars(appt)
+    phone_display = (appt.get('client_phone') or '').replace('380', '0', 1) if appt.get('client_phone') else ''
+    notes = (appt.get('notes') or '').strip()
+    line = '{date_short} о {time} «{service}». {first_name}, {phone}'.format(
+        phone=phone_display, **v)
+    if notes:
+        line += ', {}'.format(notes)
+    return line
+
+
+def fmt_specialist_tomorrow(appt):
+    """Один рядок для спеціаліста — завтрашній запис з ціною і тривалістю.
+    Формат: {spec_name}, до тебе на завтра {date} о {time} записаний клієнт {name}
+    на процедуру "{service}". Вартість {price}, тривалість {duration}."""
+    v = _appt_vars(appt)
+    price = _lookup_price(v['service'])
+    if price:
+        price_part = 'Нагадаю, що вартість процедури «{service}» {price}, а орієнтовна тривалість {duration}.'.format(
+            price=price, **v)
+    else:
+        price_part = 'Орієнтовна тривалість процедури — {duration}.'.format(**v)
+    return (
+        '{spec_name}, до тебе на завтра {date_short} о {time} '
+        'записаний клієнт {first_name} на процедуру "{service}". {price_part}'
+    ).format(price_part=price_part, **v)
+
+
+def send_tomorrow_briefing(appts_by_specialist, admin_phones=None):
+    """
+    Надсилає о 20:00 зведення завтрашніх записів:
+    1. Адміну (Victoria) — повний список всіх записів
+    2. Кожному спеціалісту — його записи з цінами
+
+    appts_by_specialist: {'victoria': [appt, ...], 'anastasia': [...]}
+    admin_phones: список номерів адмінів для дайджесту (за замовч. SPECIALIST_INFO['victoria'])
+    """
+    results = {'admin': False, 'specialists': {}}
+
+    # 1. Адмін-дайджест (всі записи одним повідомленням)
+    all_appts = []
+    for spec, appts in appts_by_specialist.items():
+        all_appts.extend(appts)
+    all_appts.sort(key=lambda a: (a.get('time') or ''))
+
+    if not all_appts:
+        return results
+
+    lines = [fmt_admin_tomorrow_line(a) for a in all_appts]
+    admin_text = 'Записи на завтра ({}):\n\n{}'.format(
+        len(all_appts), '\n'.join(lines))
+
+    # Надіслати адміну (Victoria = головний лікар)
+    admin_phone = (admin_phones or [SPECIALIST_INFO['victoria']['phone_norm']])[0]
+    tg_id = _get_tg_id(admin_phone)
+    if tg_id:
+        results['admin'] = _send_tg(tg_id, admin_text)
+    logger.info('tomorrow_briefing admin → {}'.format(results['admin']))
+
+    # 2. Кожному спеціалісту — його записи
+    for spec, appts in appts_by_specialist.items():
+        if not appts:
+            continue
+        appts_sorted = sorted(appts, key=lambda a: (a.get('time') or ''))
+        lines = [fmt_specialist_tomorrow(a) for a in appts_sorted]
+        spec_text = '\n\n'.join(lines)
+        ok = notify_specialist(spec, spec_text)
+        results['specialists'][spec] = ok
+        logger.info('tomorrow_briefing {} ({} appts) → {}'.format(spec, len(appts), ok))
+
+    return results
 
 
 def send_specialist_new_appt(appt):
@@ -426,7 +530,7 @@ def send_reminder_24h(appt):
         return {'skipped': True}
 
     tg, sms, push_title, push_body = fmt_reminder_24h(appt)
-    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='reminder')
+    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='reminder', push_url='/app/#appointments')
 
     for ch, ok in results.items():
         if ok is not None:
@@ -440,25 +544,21 @@ def send_post_visit(appt):
     """
     Відгук після процедури. Надсилати о 20:00 у день запису.
     Дедуплікація: один раз на (phone, date).
+    Push only — TG/SMS handled by WLaunch.
     """
     phone = appt.get('client_phone', '')
-    ref   = 'feedback|{}'.format(appt.get('date', ''))
+    ref = 'feedback|{}'.format(appt.get('date', ''))
     if not phone:
         return {}
-
-    if _already_sent(phone, 'feedback', ref, 'tg') or \
-       _already_sent(phone, 'feedback', ref, 'sms'):
+    if _already_sent(phone, 'feedback', ref, 'push'):
         return {'skipped': True}
-
     tg, sms, push_title, push_body = fmt_post_visit(appt)
-    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='feedback')
-
-    for ch, ok in results.items():
-        if ok is not None:
-            _log(phone, 'feedback', ref, ch, 'sent' if ok else 'failed', tg)
-
-    logger.info('post_visit phone={} date={} → {}'.format(phone, appt.get('date'), results))
-    return results
+    # Push only — TG/SMS handled by WLaunch
+    push_ok = _send_push(phone, push_title, push_body, 'feedback', 'https://flyl.link/google')
+    if push_ok is not None:
+        _log(phone, 'feedback', ref, 'push', 'sent' if push_ok else 'failed', push_title)
+    logger.info('post_visit (push only) phone={} date={} → push={}'.format(phone, appt.get('date'), push_ok))
+    return {'push': push_ok}
 
 
 def send_cancellation(appt):
@@ -474,7 +574,7 @@ def send_cancellation(appt):
 
     if phone:
         tg, sms, push_title, push_body = fmt_cancel_client(appt)
-        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel')
+        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel', push_url='/app/#appointments')
         for ch, ok in results['client'].items():
             if ok is not None:
                 _log(phone, 'cancel', ref, ch, 'sent' if ok else 'failed', tg)
@@ -485,4 +585,33 @@ def send_cancellation(appt):
         results['specialist'] = notify_specialist(spec, spec_text)
 
     logger.info('cancellation phone={} date={} → {}'.format(phone, appt.get('date'), results))
+    return results
+
+
+def send_appt_confirm(appt):
+    """
+    Підтвердження запису клієнту одразу після створення адміном.
+    Дедуплікація за appt id — не надсилає повторно.
+    appt повинен містити: client_phone, client_name, procedure_name,
+                          specialist, date, time, duration_min, id
+    """
+    phone   = appt.get('client_phone', '')
+    appt_id = appt.get('id', '')
+    ref     = 'confirm|{}'.format(appt_id)
+    if not phone:
+        return {}
+
+    if _already_sent(phone, 'appt_confirm', ref, 'tg') or \
+       _already_sent(phone, 'appt_confirm', ref, 'sms') or \
+       _already_sent(phone, 'appt_confirm', ref, 'push'):
+        return {'skipped': True}
+
+    tg, sms, push_title, push_body = fmt_appt_confirm(appt)
+    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='confirm', push_url='/app/#appointments')
+
+    for ch, ok in results.items():
+        if ok is not None:
+            _log(phone, 'appt_confirm', ref, ch, 'sent' if ok else 'failed', tg)
+
+    logger.info('appt_confirm phone={} id={} → {}'.format(phone, appt_id, results))
     return results

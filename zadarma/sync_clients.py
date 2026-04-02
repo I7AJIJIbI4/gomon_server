@@ -112,16 +112,32 @@ def fetch_all_clients_first_time():
     
     return result
 
+LAST_SYNC_FILE = "/home/gomoncli/zadarma/.last_sync_ts"
+
+def _read_last_sync():
+    """Повертає timestamp останньої синхронізації або now-24h."""
+    try:
+        with open(LAST_SYNC_FILE, 'r') as f:
+            return f.read().strip()
+    except Exception:
+        return (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+def _write_last_sync(ts):
+    try:
+        with open(LAST_SYNC_FILE, 'w') as f:
+            f.write(ts)
+    except Exception:
+        pass
+
 def fetch_recent_clients():
-    """Завантажує клієнтів за останню добу"""
-    logger.info("🔄 Оновлення клієнтів за останню добу...")
-    
+    """Завантажує ТІЛЬКИ нових клієнтів з моменту попередньої синхронізації."""
+    logger.info("🔄 Оновлення клієнтів з останньої синхронізації...")
+
     result = {"status": "ok", "count": 0, "clients": [], "errors": []}
-    
+
     try:
         now = datetime.utcnow()
-        yesterday = now - timedelta(days=1)
-        created_start = yesterday.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        created_start = _read_last_sync()
         created_end = now.strftime('%Y-%m-%dT%H:%M:%S.999Z')
         
         logger.info(f"📅 Період: {created_start} - {created_end}")
@@ -160,12 +176,14 @@ def fetch_recent_clients():
         
         if result["errors"]:
             result["status"] = "warning"
-        
+
+        # Зберегти час синхронізації (щоб наступний запуск не дублював)
+        _write_last_sync(created_end)
+
         if result["count"] > 0:
-            logger.info(f"✅ Оновлено {result['count']} клієнтів за останню добу")
-            send_admin_error(f"✅ Оновлено {result['count']} клієнтів за останню добу")
+            logger.info(f"Оновлено {result['count']} клієнтів")
         else:
-            logger.info("ℹ️  Нових клієнтів за останню добу не знайдено")
+            logger.info("Нових клієнтів не знайдено")
             
     except Exception as e:
         logger.exception(f"❌ Помилка оновлення клієнтів: {e}")

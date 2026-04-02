@@ -161,10 +161,8 @@
   gtag('js', new Date());
   gtag('config', 'AW-719653819');
   gtag('config', 'G-8FC2X4SHKE');
-  function gtag_report_conversion() {
-    gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
-    return false;
-  }
+  /* Chat conversion (WaavCKa45JAcELuXlNcC) тепер викликається з gomon-chat.js і gomon-widget.js
+     при першому повідомленні користувача */
 </script>
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -462,7 +460,7 @@
     <a href="tel:+380733103110">073-310-31-10</a>
     <a href="//ig.me/m/dr.gomon" target="_blank" rel="noopener">Instagram</a>
     <a href="https://t.me/DrGomonCosmetology" target="_blank" rel="noopener">Telegram</a>
-    <a href="https://gomonclinic.com/app" target="_blank" rel="noopener">Наш APP</a>
+    <a href="https://gomonclinic.com/app" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Наш APP</a>
   </div>
 </div>
 
@@ -523,6 +521,11 @@
         <p class="deal-tag">Постійним клієнтам</p>
         <p class="deal-title">DrumRoll масаж тіла</p>
         <p class="deal-desc">Кожна 5-та процедура — безкоштовно</p>
+      </div>
+      <div class="deal-tile reveal" onclick='openDealModal(3)'>
+        <p class="deal-tag">Косметика</p>
+        <p class="deal-title">Професійна косметика зі знижками</p>
+        <p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p>
       </div>
     </div>
   </div>
@@ -979,10 +982,10 @@ document.addEventListener('keydown', function(e) {
     <p class="deal-modal-tag" id="dealModalTag"></p>
     <p class="deal-modal-title" id="dealModalTitle"></p>
     <div class="deal-modal-desc" id="dealModalDesc" style="font-size:14px;line-height:1.7;margin-bottom:0"></div>
-    <a class="deal-modal-btn" href="//ig.me/m/dr.gomon" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">Записатись у Direct</a>
+    <a class="deal-modal-btn" href="https://www.gomonclinic.com/app/" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">До додатку</a>
   </div>
 </div>
 
-<script src="/gomon-widget.js?v=20260326h"></script>
+<script src="/gomon-widget.js?v=20260402a"></script>
 </body>
 </html>

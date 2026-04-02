@@ -74,7 +74,7 @@ def _get_manual_appts(for_date_str):
     conn = _db()
     rows = conn.execute(
         "SELECT id, client_phone, client_name, procedure_name, specialist, "
-        "date, time, duration FROM manual_appointments "
+        "date, time, duration, notes FROM manual_appointments "
         "WHERE date=? AND status='CONFIRMED'",
         (for_date_str,)
     ).fetchall()
@@ -90,6 +90,7 @@ def _get_manual_appts(for_date_str):
             'date':           r['date'],
             'time':           r['time'] or '',
             'duration_min':   r['duration'] or 60,
+            'notes':          r['notes'] or '',
             'source':         'manual',
         })
     return result
@@ -259,15 +260,23 @@ def run_feedback(dry_run=False):
 
 def run_specialist_notifications(dry_run=False):
     """
-    Знаходить всі записи у manual_appointments, створені сьогодні (status != CANCELLED,
-    date >= today), і надсилає спеціалісту сповіщення про новий запис.
-    Запускати о 20:00 разом з --feedback.
-    """
-    today = date.today().strftime('%Y-%m-%d')
-    logger.info('=== SPECIALIST NOTIFY: перевіряємо записи створені {} ==='.format(today))
+    Збирає всі записи (manual + WLaunch) і надсилає спеціалісту сповіщення про кожен,
+    якого ще не було надіслано (дедуплікація через notification_log).
 
+    manual_appointments: тільки ті, що створені сьогодні (date >= today).
+    WLaunch (services_json): всі майбутні у вікні today..+30 днів — нові знаходяться
+    через відсутність запису в notification_log (деdup via send_specialist_new_appt).
+
+    Запускати о 20:00.
+    """
+    today    = date.today().strftime('%Y-%m-%d')
+    max_date = (date.today() + timedelta(days=30)).strftime('%Y-%m-%d')
+    logger.info('=== SPECIALIST NOTIFY: перевіряємо записи (manual created={}, WL range {}..{}) ==='.format(
+        today, today, max_date))
+
+    # 1. Manual: лише створені сьогодні
     conn = _db()
-    rows = conn.execute(
+    manual_rows = conn.execute(
         "SELECT id, client_phone, client_name, procedure_name, specialist, "
         "date, time, duration FROM manual_appointments "
         "WHERE DATE(created_at) = ? AND status != 'CANCELLED' AND date >= ?",
@@ -276,7 +285,7 @@ def run_specialist_notifications(dry_run=False):
     conn.close()
 
     appts = []
-    for r in rows:
+    for r in manual_rows:
         appts.append({
             'id':             r['id'],
             'client_phone':   r['client_phone'] or '',
@@ -289,7 +298,40 @@ def run_specialist_notifications(dry_run=False):
             'source':         'manual',
         })
 
-    logger.info('Знайдено {} нових записів'.format(len(appts)))
+    # 2. WLaunch: майбутні записи у вікні today..+30 днів (нові — через відсутність в notification_log)
+    conn = _db()
+    clients = conn.execute(
+        'SELECT phone, first_name, last_name, services_json FROM clients'
+    ).fetchall()
+    conn.close()
+    for row in clients:
+        try:
+            items = json.loads(row['services_json'] or '[]')
+        except Exception:
+            continue
+        for it in items:
+            appt_date = it.get('date', '')
+            if not (today <= appt_date <= max_date):
+                continue
+            status = (it.get('status') or '').upper()
+            if status in ('CANCELLED', 'NO_SHOW'):
+                continue
+            name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
+            hour = it.get('hour')
+            appts.append({
+                'id':             it.get('appt_id', ''),
+                'client_phone':   row['phone'] or '',
+                'client_name':    name,
+                'procedure_name': it.get('service') or '',
+                'specialist':     it.get('specialist') or '',
+                'date':           appt_date,
+                'time':           '{:02d}:00'.format(hour) if hour is not None else '',
+                'duration_min':   it.get('duration_min') or 60,
+                'source':         'wlaunch',
+            })
+
+    logger.info('Знайдено {} записів (manual={}, wlaunch перевірено через dedup)'.format(
+        len(appts), len(manual_rows)))
 
     sent = skipped = failed = 0
 
@@ -328,11 +370,62 @@ def run_specialist_notifications(dry_run=False):
     return sent, skipped, failed
 
 
+# ─── Режим --tomorrow (зведення записів на завтра, о 20:00) ─────────────────
+
+def run_tomorrow_briefing(dry_run=False):
+    """
+    Збирає всі записи на завтра (manual + WLaunch) і надсилає:
+    1. Адміну (Victoria) — повний список
+    2. Кожному спеціалісту — його записи з цінами
+
+    Шаблон адміну: "{date} о {time} «{service}». {name}, {phone}"
+    Шаблон спеціалісту: "{spec}, до тебе на завтра {date} о {time}
+        записаний клієнт {name} на процедуру "{service}". Вартість {price}, тривалість {duration}."
+    """
+    tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    logger.info('=== TOMORROW BRIEFING: записи на {} ==='.format(tomorrow))
+
+    appts = _collect_appts(tomorrow)
+    logger.info('Знайдено {} записів на завтра'.format(len(appts)))
+
+    if not appts:
+        logger.info('Записів на завтра немає — не надсилаємо')
+        return 0, 0, 0
+
+    # Групуємо за спеціалістом
+    by_spec = {}
+    for a in appts:
+        spec = a.get('specialist', '') or 'other'
+        if spec not in by_spec:
+            by_spec[spec] = []
+        by_spec[spec].append(a)
+
+    for spec, spec_appts in by_spec.items():
+        logger.info('  {} — {} записів'.format(spec, len(spec_appts)))
+        for a in spec_appts:
+            logger.info('    {} о {} | {} | {}'.format(
+                a.get('date'), a.get('time', '?'), a.get('client_name', '—'),
+                a.get('procedure_name', '—')))
+
+    if dry_run:
+        logger.info('[DRY-RUN] не надсилаємо')
+        return len(appts), 0, 0
+
+    try:
+        from notifier import send_tomorrow_briefing
+        results = send_tomorrow_briefing(by_spec)
+        logger.info('=== TOMORROW BRIEFING done: admin={} specialists={} ==='.format(
+            results.get('admin'), results.get('specialists')))
+        return len(appts), 1 if results.get('admin') else 0, 0
+    except Exception as e:
+        logger.error('tomorrow briefing error: {}'.format(e))
+        return len(appts), 0, 1
+
+
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     if not _acquire_lock():
-        # Попередній екземпляр ще виконується — тихо виходимо
         logging.basicConfig(level=logging.WARNING)
         logging.getLogger('appt_reminder').warning(
             'appt_reminder вже запущено (lock зайнятий). Пропускаємо.')
@@ -340,10 +433,12 @@ if __name__ == '__main__':
 
     try:
         dry_run  = '--dry-run' in sys.argv
-        no_flags = not any(f in sys.argv for f in ('--reminder', '--feedback', '--specialist'))
+        all_flags = ('--reminder', '--feedback', '--specialist', '--tomorrow')
+        no_flags = not any(f in sys.argv for f in all_flags)
         do_rem   = '--reminder'   in sys.argv or no_flags
         do_fb    = '--feedback'   in sys.argv or no_flags
         do_spec  = '--specialist' in sys.argv or no_flags
+        do_tmrw  = '--tomorrow'   in sys.argv or no_flags
 
         if dry_run:
             logger.info('*** DRY-RUN MODE — відправки не буде ***')
@@ -356,5 +451,8 @@ if __name__ == '__main__':
 
         if do_spec:
             run_specialist_notifications(dry_run=dry_run)
+
+        if do_tmrw:
+            run_tomorrow_briefing(dry_run=dry_run)
     finally:
         _release_lock()

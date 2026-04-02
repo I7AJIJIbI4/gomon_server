@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+<channel>
+<title>Dr. Gomon Cosmetology — Послуги</title>
+<link>https://www.gomonclinic.com</link>
+<description>Професійна косметологія у Черкасах</description>
+
+<item>
+  <g:id>svc-injection</g:id>
+  <g:title>Ін'єкційна косметологія — ботулінотерапія, контурна пластика, біоревіталізація</g:title>
+  <g:description>Ботулінотерапія (Neuronox, Nabota, Xeomin), контурна пластика губ та обличчя (Neuramis, Saypha, Neauvia), біоревіталізація, мезотерапія. Лікар-косметолог Вікторія Гомон. Сертифіковані препарати, індивідуальний підхід.</g:description>
+  <g:link>https://www.gomonclinic.com/app/#price</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>2200 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Ін'єкційні процедури</g:product_type>
+</item>
+
+<item>
+  <g:id>svc-cleaning</g:id>
+  <g:title>Апаратна косметологія — WOW-чистка, киснева терапія, пілінги</g:title>
+  <g:description>WOW-чистка обличчя, кисневий догляд, хімічні та біоревіталізантні пілінги (KEMIKUM, Simildiet). Глибоке очищення, зволоження, омолодження шкіри. Клініка Dr. Gomon у Черкасах.</g:description>
+  <g:link>https://www.gomonclinic.com/app/#price</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>1400 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Апаратна косметологія</g:product_type>
+</item>
+
+<item>
+  <g:id>svc-body</g:id>
+  <g:title>DrumRoll масаж та моделювання тіла — апаратний вакуумно-роликовий масаж</g:title>
+  <g:description>DrumRoll — моделювання фігури, антицелюлітний масаж, лімфодренаж. Релакс-масаж всього тіла. Пресотерапія. Видимий результат з першої процедури. Клініка Dr. Gomon, Черкаси.</g:description>
+  <g:link>https://www.gomonclinic.com/app/#price</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>600 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Масаж та моделювання тіла</g:product_type>
+</item>
+
+<item>
+  <g:id>svc-care</g:id>
+  <g:title>Доглядові процедури — SPA-догляд Christina, карбокситерапія, ферментотерапія</g:title>
+  <g:description>Професійний SPA-догляд від Christina (Ізраїль), карбокситерапія "72 години зволоження", ферментотерапія обличчя та тіла. Підбір домашнього догляду. Клініка Dr. Gomon, Черкаси.</g:description>
+  <g:link>https://www.gomonclinic.com/app/#price</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>1200 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Доглядові процедури</g:product_type>
+</item>
+
+<item>
+  <g:id>svc-teeth</g:id>
+  <g:title>Відбілювання зубів Magic Smile — професійне відбілювання у Черкасах</g:title>
+  <g:description>Професійне відбілювання зубів Magic Smile: Light (30 хв), Medium (45 хв), Full (60 хв). Безболісно, безпечно для емалі, результат одразу. Клініка Dr. Gomon, Черкаси.</g:description>
+  <g:link>https://www.gomonclinic.com/app/#price</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>1400 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Відбілювання зубів</g:product_type>
+</item>
+
+<item>
+  <g:id>svc-consult</g:id>
+  <g:title>Консультація лікаря-косметолога — AI-підбір процедури онлайн</g:title>
+  <g:description>Безкоштовна онлайн-консультація через AI-асистент або особистий прийом лікаря-косметолога Вікторії Гомон. Індивідуальний план догляду, підбір процедур та косметики. Клініка Dr. Gomon, Черкаси.</g:description>
+  <g:link>https://www.gomonclinic.com/app/</g:link>
+  <g:image_link>https://www.gomonclinic.com/app/icons/icon-512-gomon.png</g:image_link>
+  <g:price>500 UAH</g:price>
+  <g:availability>in_stock</g:availability>
+  <g:condition>new</g:condition>
+  <g:brand>Dr. Gomon Cosmetology</g:brand>
+  <g:google_product_category>Health &amp; Beauty &gt; Health Care &gt; Medical Services</g:google_product_category>
+  <g:product_type>Косметологія &gt; Консультація</g:product_type>
+</item>
+
+</channel>
+</rss>

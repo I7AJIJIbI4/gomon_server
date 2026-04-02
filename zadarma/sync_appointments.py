@@ -7,12 +7,25 @@
 import sys
 import json
 import logging
+import calendar as _cal
 from datetime import datetime, timedelta
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
 from user_db import add_or_update_client
 from config import WLAUNCH_API_KEY, COMPANY_ID
+from wlaunch_api import get_specialist, get_branch_id
 import requests
+
+
+def _kyiv_offset():
+    """UTC offset для Europe/Kyiv: +2 (зима) або +3 (літо/DST)."""
+    now = datetime.utcnow()
+    year = now.year
+    mar_last_sun = 31 - _cal.weekday(year, 3, 31)
+    oct_last_sun = 31 - _cal.weekday(year, 10, 31)
+    dst_start = datetime(year, 3, mar_last_sun, 1, 0)
+    dst_end = datetime(year, 10, oct_last_sun, 1, 0)
+    return 3 if dst_start <= now < dst_end else 2
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,45 +39,10 @@ logger = logging.getLogger(__name__)
 
 WLAUNCH_API_URL = 'https://api.wlaunch.net/v1'
 
-# Маппінг телефону ресурсу → ім'я спеціаліста
-RESOURCE_SPECIALIST_MAP = {
-    '380996093860': 'victoria',
-    '380685129121': 'anastasia',
-}
-
-def get_specialist(resources):
-    """Витягує ім'я спеціаліста з поля resources апоінтменту."""
-    for r in (resources or []):
-        phone = ''.join(filter(str.isdigit, r.get('phone', '') or ''))
-        if phone in RESOURCE_SPECIALIST_MAP:
-            return RESOURCE_SPECIALIST_MAP[phone]
-        name = (r.get('name') or '').lower()
-        if 'вікторі' in name or 'viktor' in name:
-            return 'victoria'
-        if 'анастасі' in name or 'anasta' in name:
-            return 'anastasia'
-    return None
 HEADERS = {
     'Authorization': f'Bearer {WLAUNCH_API_KEY}',
     'Accept': 'application/json'
 }
-
-
-def get_branch_id():
-    """Отримує ID першої активної філії"""
-    try:
-        url = f'{WLAUNCH_API_URL}/company/{COMPANY_ID}/branch/'
-        params = {'active': 'true', 'sort': 'ordinal', 'page': 0, 'size': 1}
-        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        branches = data.get('content', [])
-        if branches:
-            return branches[0]['id']
-        return None
-    except Exception as e:
-        logger.error(f'Помилка отримання branch_id: {e}')
-        return None
 
 
 def sync_recent_appointments(days_back=7, days_forward=90):
@@ -136,17 +114,24 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             services_list_appt = appt.get('services', [])
             service_name = ', '.join(s.get('name', '') for s in services_list_appt if s.get('name'))
 
-            # Дата, година та статус запису
+            # Дата, година та статус запису (WLaunch повертає UTC → конвертуємо в Київ)
             visit_date = ''
             visit_hour = None
             start_time = appt.get('start_time', '')
             if start_time:
                 try:
+                    # Parse UTC datetime and convert to Kyiv
+                    utc_dt = datetime.strptime(start_time[:19], '%Y-%m-%dT%H:%M:%S')
+                    kyiv_dt = utc_dt + timedelta(hours=_kyiv_offset())
+                    visit_date = kyiv_dt.strftime('%Y-%m-%d')
+                    visit_hour = kyiv_dt.hour
+                except Exception:
                     visit_date = start_time[:10]
                     if len(start_time) >= 13:
-                        visit_hour = int(start_time[11:13])
-                except Exception:
-                    pass
+                        try:
+                            visit_hour = int(start_time[11:13])
+                        except Exception:
+                            pass
 
             appt_status = (appt.get('status') or '').upper()
             specialist = get_specialist(appt.get('resources', []))

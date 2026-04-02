@@ -467,7 +467,10 @@
       div.innerHTML = content
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)\"]+)\)/g, function(m, text, url) {
+          try { new URL(url); } catch(e) { return text; }
+          return '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+        })
         .replace(/\n/g, '<br>');
     } else {
       div.textContent = content;
@@ -701,8 +704,7 @@
     function openModal() {
       if (isOpen) return;
       isOpen = true;
-      if (typeof gtag === 'function' && !sessionStorage.getItem('gw_conv_fired')) {
-        sessionStorage.setItem('gw_conv_fired', '1');
+      if (typeof gtag === 'function') {
         gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
       }
       document.body.style.overflow = 'hidden';
@@ -759,6 +761,10 @@
       els.textarea.style.height = 'auto';
       messages.push({ role: 'user', content: text });
       saveMessages(messages);
+      // Google Ads conversion — перше повідомлення
+      if (messages.filter(function(m){return m.role==='user'}).length === 1 && typeof gtag === 'function') {
+        gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
+      }
       renderBubble('user', text, els.messagesEl);
       if (gwIsRateLimited()) {
         renderConsultCard(els.messagesEl);

@@ -181,7 +181,6 @@ def send_repeat_push_reminders(dry_run=False):
 
             if dry_run:
                 logger.info('[repeat] DRY RUN: title="{}" body="{}"'.format(title, body))
-                log_push(phone, 'repeat', reference, title, status='dry_run')
                 stats['sent'] += 1
             else:
                 ok = False
@@ -272,7 +271,8 @@ def send_appt_push_reminders(dry_run=False):
 
             # Формуємо час у повідомленні
             if appt_hour_utc is not None:
-                kyiv_hour = appt_hour_utc + 2
+                from sms_reminder import _kyiv_offset
+                kyiv_hour = appt_hour_utc + _kyiv_offset()
                 time_str = ' \u043e {:02d}:00'.format(kyiv_hour)
             else:
                 time_str = ''
@@ -286,7 +286,6 @@ def send_appt_push_reminders(dry_run=False):
 
             if dry_run:
                 logger.info('[appt] DRY RUN: title="{}" body="{}"'.format(title, body))
-                log_push(phone, 'appt', reference, title, status='dry_run')
                 stats['sent'] += 1
             else:
                 ok = False
