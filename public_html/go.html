@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dr. Gomon Cosmetology — Завантажити додаток</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111010;color:#f5f1ea;font-family:'Jost',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.logo{width:80px;height:80px;margin-bottom:16px;border-radius:16px}
+h1{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:#e8d5b0;margin-bottom:6px}
+.sub{font-size:14px;color:#a09890;margin-bottom:32px}
+.buttons{display:flex;flex-direction:column;gap:14px;width:100%;max-width:320px}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 20px;border-radius:12px;font-size:15px;font-weight:500;text-decoration:none;transition:opacity .15s}
+.btn:active{opacity:.85}
+.btn-android{background:#c9a96e;color:#1a1510}
+.btn-ios{background:transparent;border:1px solid rgba(201,169,110,.4);color:#c9a96e}
+.btn svg{width:22px;height:22px;flex-shrink:0}
+.or{font-size:12px;color:#6a6460;margin:8px 0}
+.web-link{font-size:13px;color:#a09890;margin-top:20px}
+.web-link a{color:#c9a96e;text-decoration:none}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- ═══════════════════════════════════════════════════════════════
+  АВТОМАТИЧНИЙ REDIRECT (ЗАКОМЕНТОВАНО)
+
+  Розкоментувати коли додаток буде в Production в Google Play.
+  Логіка: Android → Google Play, iOS → PWA install, Desktop → /app/
+
+  Для активації:
+  1. Замінити PLAY_STORE_URL на реальний лінк з Play Store
+  2. Розкоментувати блок <script> нижче
+  3. Сторінка стане проміжною — авторедірект за 1.5с з fallback кнопками
+═══════════════════════════════════════════════════════════════ -->
+
+<!--
+<script>
+var ua = navigator.userAgent;
+var PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.gomonclinic.www.twa';
+var PWA_URL = 'https://www.gomonclinic.com/app/';
+var INTENT_URL = 'intent://www.gomonclinic.com/app/#Intent;scheme=https;package=com.gomonclinic.www.twa;end';
+
+if (/android/i.test(ua)) {
+  // Android: спробувати відкрити встановлений додаток, fallback → Play Store
+  window.location = INTENT_URL;
+  setTimeout(function() { window.location = PLAY_STORE_URL; }, 1500);
+} else if (/iPhone|iPad|iPod/i.test(ua)) {
+  // iOS: одразу PWA (немає нативного додатку)
+  window.location = PWA_URL;
+} else {
+  // Desktop: веб-версія
+  window.location = PWA_URL;
+}
+</script>
+-->
+
+</head>
+<body>
+
+<img class="logo" src="/app/icons/icon-192-gomon.png" alt="Dr. Gomon">
+<h1>Dr. Gomon Cosmetology</h1>
+<p class="sub">Особистий кабінет клієнта</p>
+
+<div class="buttons">
+  <!-- TODO: замінити href на реальний Play Store URL коли в Production -->
+
+  <!-- Android — Google Play (основна) + веб-версія -->
+  <!-- TODO: замінити href на Play Store URL коли буде в Production -->
+  <a class="btn btn-android" href="https://www.gomonclinic.com/app/" id="btn-android">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.04L14.29 12 3.18.96a1.22 1.22 0 00-.18.66v20.76c0 .24.06.46.18.66zm1.44.84L16.4 13.5l-2.62-2.63L5.04 2.12l-.42.24zm13.22-7.74l3.14-1.8c.6-.34.6-.88 0-1.22l-3.14-1.8-2.88 2.88 2.88 2.94zM4.62.12L16.4 10.5l-2.62 2.63L4.62.12z"/></svg>
+    Android
+  </a>
+
+  <!-- iOS — PWA через Safari -->
+  <a class="btn btn-ios" href="https://www.gomonclinic.com/app/" id="btn-ios">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+    iPhone / iPad
+  </a>
+
+  <p class="or">або</p>
+
+  <!-- Веб-версія в браузері (для всіх) -->
+  <a class="btn btn-ios" href="https://www.gomonclinic.com/app/" id="btn-web">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+    Відкрити в браузері
+  </a>
+</div>
+
+<script>
+(function() {
+  var ua = navigator.userAgent;
+  var isAndroid = /android/i.test(ua);
+  var isIOS = /iPhone|iPad|iPod/i.test(ua);
+  var isDesktop = !isAndroid && !isIOS;
+
+  if (isAndroid) {
+    // Android: показати Play Store + браузер, сховати iOS
+    document.getElementById('btn-ios').style.display = 'none';
+  } else if (isIOS) {
+    // iOS: показати iPhone кнопку + браузер, сховати Android
+    document.getElementById('btn-android').style.display = 'none';
+    document.getElementById('btn-ios').className = 'btn btn-android';
+  } else {
+    // Desktop: тільки веб-версія
+    document.getElementById('btn-android').style.display = 'none';
+    document.getElementById('btn-ios').style.display = 'none';
+    document.getElementById('btn-web').className = 'btn btn-android';
+  }
+})();
+</script>
+
+</body>
+</html>

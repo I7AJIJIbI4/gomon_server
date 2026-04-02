@@ -10,6 +10,7 @@ import secrets
 import time
 import json
 import logging
+import logging.handlers
 import os
 import sys
 from functools import wraps
@@ -31,6 +32,10 @@ app = Flask(__name__)
 CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com'])
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+_log_handler = logging.handlers.RotatingFileHandler(
+    '/home/gomoncli/zadarma/pwa_api.log', maxBytes=10*1024*1024, backupCount=5)
+_log_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+logging.getLogger().addHandler(_log_handler)
 logger = logging.getLogger('pwa_api')
 
 # ── Startup: перевірка що notifier.py імпортується без помилок ──
@@ -90,6 +95,14 @@ def init_otp_db():
         created_at INTEGER NOT NULL,
         expires_at INTEGER NOT NULL
     )''')
+    c.execute('CREATE TABLE IF NOT EXISTS otp_rate (phone TEXT PRIMARY KEY, count INT, window_start INT)')
+    conn.commit()
+    # Cleanup expired sessions (older than 30 days)
+    conn.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
+    # Cleanup expired OTP codes
+    conn.execute("DELETE FROM otp_codes WHERE expires_at < ?", (int(time.time()),))
+    # Cleanup old rate limit entries (older than 2 hours)
+    conn.execute("DELETE FROM otp_rate WHERE window_start < ?", (int(time.time()) - 7200,))
     conn.commit()
     conn.close()
 
@@ -323,7 +336,6 @@ def require_auth(f):
 
 # ── AUTH ──
 
-_otp_rate = {}  # phone -> (count, first_request_ts)
 OTP_RATE_LIMIT = 3  # max OTPs per hour
 OTP_RATE_WINDOW = 3600  # 1 hour
 _magic_tokens = {}  # magic_token -> (phone, expires_at)
@@ -335,15 +347,24 @@ def send_otp():
     if len(phone) < 11:
         return jsonify({'error': 'invalid_phone'}), 400
 
-    # Rate limit: max 3 OTPs per phone per hour
+    # Rate limit: max 3 OTPs per phone per hour (persistent, survives restart)
     now_ts = int(time.time())
-    rate = _otp_rate.get(phone, (0, now_ts))
-    if now_ts - rate[1] < OTP_RATE_WINDOW:
-        if rate[0] >= OTP_RATE_LIMIT:
-            return jsonify({'error': 'rate_limited'}), 429
-        _otp_rate[phone] = (rate[0] + 1, rate[1])
+    otp_conn = sqlite3.connect(OTP_DB)
+    otp_conn.execute('CREATE TABLE IF NOT EXISTS otp_rate (phone TEXT PRIMARY KEY, count INT, window_start INT)')
+    row = otp_conn.execute('SELECT count, window_start FROM otp_rate WHERE phone=?', (phone,)).fetchone()
+    if row:
+        count, window_start = row
+        if now_ts - window_start < OTP_RATE_WINDOW:
+            if count >= OTP_RATE_LIMIT:
+                otp_conn.close()
+                return jsonify({'error': 'rate_limited'}), 429
+            otp_conn.execute('UPDATE otp_rate SET count=count+1 WHERE phone=?', (phone,))
+        else:
+            otp_conn.execute('UPDATE otp_rate SET count=1, window_start=? WHERE phone=?', (now_ts, phone))
     else:
-        _otp_rate[phone] = (1, now_ts)
+        otp_conn.execute('INSERT INTO otp_rate VALUES (?,1,?)', (phone, now_ts))
+    otp_conn.commit()
+    otp_conn.close()
 
     # Не клієнт → гостьовий режим (без OTP)
     if not get_client(phone) and phone not in ADMIN_ROLES:
@@ -1707,7 +1728,7 @@ def admin_ai_intent():
     )
 
     system_prompt = (
-        'Ти — асистент адміністратора косметологічної клініки Dr. Gómon.\n'
+        'Ти — асистент адміністратора студії краси Dr. Gómon.\n'
         'Сьогодні: {today} ({wd}).\n\n'
         '== КЛІЄНТИ КЛІНІКИ ==\n'
         'Формат: Ім\'я Прізвище [телефон]\n'

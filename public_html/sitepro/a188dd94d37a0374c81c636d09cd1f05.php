@@ -159,7 +159,7 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'AW-719653819');
+  gtag('config', 'AW-719653819', {'allow_enhanced_conversions': true});
   gtag('config', 'G-8FC2X4SHKE');
   /* Chat conversion (WaavCKa45JAcELuXlNcC) тепер викликається з gomon-chat.js і gomon-widget.js
      при першому повідомленні користувача */
@@ -460,7 +460,7 @@
     <a href="tel:+380733103110">073-310-31-10</a>
     <a href="//ig.me/m/dr.gomon" target="_blank" rel="noopener">Instagram</a>
     <a href="https://t.me/DrGomonCosmetology" target="_blank" rel="noopener">Telegram</a>
-    <a href="https://gomonclinic.com/app" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Наш APP</a>
+    <a href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Наш APP</a>
   </div>
 </div>
 
@@ -982,7 +982,7 @@ document.addEventListener('keydown', function(e) {
     <p class="deal-modal-tag" id="dealModalTag"></p>
     <p class="deal-modal-title" id="dealModalTitle"></p>
     <div class="deal-modal-desc" id="dealModalDesc" style="font-size:14px;line-height:1.7;margin-bottom:0"></div>
-    <a class="deal-modal-btn" href="https://www.gomonclinic.com/app/" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">До додатку</a>
+    <a class="deal-modal-btn" href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">До додатку</a>
   </div>
 </div>
 

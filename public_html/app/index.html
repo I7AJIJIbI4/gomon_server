@@ -178,10 +178,10 @@ nav{
   min-height:44px;
 }
 .nav-btn:active{opacity:.7}
-.nav-icon{width:22px;height:22px;opacity:.45;transition:opacity .2s}
-.nav-label{font-size:10px;font-family:var(--sans);font-weight:400;color:var(--text3);transition:color .2s;letter-spacing:.3px}
+.nav-icon{width:22px;height:22px;opacity:.55;transition:opacity .2s}
+.nav-label{font-size:10px;font-family:var(--sans);font-weight:500;color:var(--text2);transition:color .2s;letter-spacing:.3px}
 .nav-btn.active .nav-icon{opacity:1}
-.nav-btn.active .nav-label{color:var(--gold)}
+.nav-btn.active .nav-label{color:var(--gold);font-weight:600}
 .nav-btn.active .nav-icon path,.nav-btn.active .nav-icon circle,.nav-btn.active .nav-icon rect{stroke:var(--gold)}
 
 /* ── AUTH SCREEN ── */
@@ -228,7 +228,7 @@ nav{
 .auth-back{background:none;border:none;color:var(--text2);font-size:13px;font-family:var(--sans);cursor:pointer;margin-top:16px;margin-bottom:16px;display:block;text-align:center;width:100%}
 #otp-timer{color:var(--gold)}
 
-.auth-bottom{width:100%;max-width:360px;padding:0;display:flex;flex-direction:column;gap:16px;flex-shrink:0;margin-top:auto}
+.auth-bottom{width:100%;max-width:360px;padding:16px 0 0;display:flex;flex-direction:column;gap:16px;flex-shrink:0}
 .auth-tg-link{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid var(--border-gold);border-radius:10px;background:var(--surface);color:var(--gold);font-size:14px;font-weight:500;font-family:var(--sans);text-decoration:none;transition:border-color .2s,background .2s}
 .auth-tg-link:hover{border-color:var(--gold);background:rgba(201,169,110,.06)}
 .auth-tg-link svg{flex-shrink:0}
@@ -971,6 +971,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
 }
 .adm-load-more{width:100%;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:var(--sans);font-size:14px;cursor:pointer;margin:12px 0}
 .search-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px 8px;z-index:1}
+.search-clear:hover{color:var(--gold)}
 .ai-loading{display:flex;gap:4px;padding:8px 0;justify-content:center}
 .ai-loading span{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:aiDot 1s ease-in-out infinite}
 .ai-loading span:nth-child(2){animation-delay:.15s}
@@ -1182,7 +1183,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
     </div>
     <p id="auth-bottom-hint" style="display:none;font-size:11px;color:var(--text3);text-align:center;margin:8px 0 0;letter-spacing:.3px;flex-shrink:0">Проблеми з кодом? Напишіть нам</p>
     <div class="auth-bottom">
-    <a id="auth-tg-link" href="https://t.me/DrGomonConciergeBot" target="_blank" rel="noopener" class="auth-tg-link" onclick="var p=(document.getElementById('phone-input').value||'').replace(/\D/g,'');if(p.length>=9){this.href='https://t.me/DrGomonConciergeBot?start=connect_380'+p.replace(/^0/,'')}">
+    <a id="auth-tg-link" href="https://t.me/DrGomonConciergeBot" target="_blank" rel="noopener" class="auth-tg-link" onclick="var p=(document.getElementById('phone-input').value||'').replace(/\D/g,'');if(p.length>=9){var norm=p;if(norm.length==10&&norm[0]==='0')norm='38'+norm;else if(norm.length==9)norm='380'+norm;this.href='https://t.me/DrGomonConciergeBot?start=connect_'+norm}">
       <svg width="20" height="20" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M20 3L1 10l6 2.5m13-9.5l-13 9.5m13-9.5l-5 16-8-6.5" stroke-linejoin="round"/></svg>
       <span>Telegram-бот<br><span style="font-weight:300;font-size:11px;color:var(--text2)">Акції, знижки, нагадування</span></span>
     </a>
@@ -1191,7 +1192,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
           <div class="ai-option-top">
             <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
             <div class="ai-option-top-text">
-              <h4>AI-асистент клініки</h4>
+              <h4>AI-асистент Dr. Gomon</h4>
               <p>Підбір процедури онлайн</p>
             </div>
           </div>
@@ -1337,9 +1338,9 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
       <div class="map-address-card">
         <h4>Dr. Gómon Cosmetology</h4>
         <p>вул. Смілянська, 23<br>БЦ Галерея, Черкаси<br><br>
-          ◈ Поряд з ТЦ Будинок Торгівлі<br>
-          ◈ Вхід з парковки KFC Drive<br>
-          ◈ Перехрестя бул. Шевченка та вул. Смілянської
+          Поруч з ТЦ Будинок Торгівлі, через дорогу від McDonald's<br>
+          Вхід з боку парковки KFC Drive<br>
+          Перехрестя бул. Шевченка та вул. Смілянської
         </p>
       </div>
       <button class="map-route-btn" onclick="openMap()">Прокласти маршрут</button>
@@ -1377,7 +1378,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
           <div class="ai-option-top">
             <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
             <div class="ai-option-top-text">
-              <h4>AI-асистент клініки</h4>
+              <h4>AI-асистент Dr. Gomon</h4>
               <p>Підбір процедури онлайн</p>
             </div>
           </div>
@@ -1553,8 +1554,11 @@ async function api(path, opts = {}) {
     return res.json();
   } catch(e) {
     clearTimeout(timeoutId);
-    if (e.name === 'AbortError') { console.warn('[api] request timed out:', path); return {}; }
-    throw e;
+    if (e.name === 'AbortError') {
+      var t = document.getElementById('adm-toast');
+      if (t) { t.textContent = 'Повільне з\'єднання. Спробуйте ще раз.'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
+    }
+    return {};
   }
 }
 
@@ -1569,7 +1573,7 @@ function formatPhone(el) {
 
 async function sendOtp() {
   const ph  = document.getElementById('phone-input').value.replace(/\D/g, '');
-  if (ph.length < 9) return;
+  if (ph.length < 10) return;
   const btn = document.getElementById('phone-btn');
   btn.disabled = true; btn.textContent = 'Надсилаємо...';
 
@@ -1603,15 +1607,8 @@ async function sendOtp() {
     }
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Отримати код';
-    var hint = document.querySelector('.auth-hint');
-    if (hint) {
-      hint.textContent = 'Не вдалось надіслати код. Перевірте з\'єднання і спробуйте ще раз.';
-      hint.style.color = 'var(--cancel-fg)';
-      setTimeout(function() {
-        hint.textContent = 'Для клієнтів — вхід в кабінет. Для нових — AI-підбір процедури';
-        hint.style.color = '';
-      }, 5000);
-    }
+    var t = document.getElementById('adm-toast');
+    if (t) { t.textContent = 'Не вдалось надiслати код'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
   }
 }
 
@@ -3163,9 +3160,9 @@ function renderHomeAppt() {
 function renderPromos() {
   document.getElementById('home-promos').innerHTML = PROMOS.map((p,i) => `
     <div class="promo-tile${p.featured ? ' featured' : ''}${p.details ? ' promo-tile-clickable' : ''}" ${p.details ? `onclick="openPromo(${i})"` : ''}>
-      <p class="promo-tag">${p.tag}</p>
-      <p class="promo-title">${p.title}</p>
-      <p class="promo-desc">${p.desc}</p>
+      <p class="promo-tag">${_esc(p.tag)}</p>
+      <p class="promo-title">${_esc(p.title)}</p>
+      <p class="promo-desc">${_esc(p.desc)}</p>
       ${p.details ? '<p class="promo-more">Детальніше →</p>' : ''}
     </div>`).join('');
 }
@@ -3390,12 +3387,15 @@ async function cancelAppointment(apptId, date, service) {
       renderAppointments();
       // Оновлюємо home-next-appt
       renderHomeAppt();
-      alert('Запис скасовано.');
+      var t = document.getElementById('adm-toast');
+      if (t) { t.textContent = 'Запис скасовано'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},2000); }
     } else {
-      alert('Не вдалося скасувати. ' + (r.error || r.detail || ''));
+      var t = document.getElementById('adm-toast');
+      if (t) { t.textContent = 'Не вдалося скасувати. ' + (r.error || r.detail || ''); t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
     }
   } catch(e) {
-    alert('Помилка: ' + e.message);
+    var t = document.getElementById('adm-toast');
+    if (t) { t.textContent = 'Помилка: ' + e.message; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
   }
 }
 
@@ -3458,7 +3458,7 @@ var _currentScreen = 'home';
 
 /* ── Drag-to-dismiss для bottom sheets ── */
 (function() {
-  var THRESHOLD = 80; // px drag down to dismiss
+  var THRESHOLD = 50; // px drag down to dismiss
   var sheets = [
     {modal: 'promo-modal', close: function() { closePromoModal(); }},
     {modal: 'news-modal', close: function() { closeNewsModal(); }},
@@ -3469,10 +3469,17 @@ var _currentScreen = 'home';
   ];
 
   document.addEventListener('touchstart', function(e) {
+    // Drag з handle АБО з верхньої зони sheet (перші 60px)
     var handle = e.target.closest('.sheet-handle,.promo-sheet-handle,.news-sheet-handle');
-    if (!handle) return;
-    var sheet = handle.closest('[class*="sheet"]');
-    if (!sheet) return;
+    var sheet = handle ? handle.closest('[class*="sheet"]') : null;
+    if (!sheet) {
+      // Спробувати знайти sheet напряму
+      sheet = e.target.closest('.promo-sheet,.news-sheet,.confirm-sheet,.adm-action-sheet,.install-sheet,.push-sheet');
+      if (!sheet) return;
+      // Дозволити drag тільки з верхніх 60px sheet
+      var rect = sheet.getBoundingClientRect();
+      if (e.touches[0].clientY - rect.top > 60) return;
+    }
     var modal = sheet.parentElement;
     var startY = e.touches[0].clientY;
     var dy = 0;
@@ -3524,32 +3531,54 @@ function go(id) {
   }
 }
 
-// Android back button → повертає на домашню або закриває модалки
-window.addEventListener('popstate', function(e) {
-  // Спочатку закриваємо модалки якщо відкриті
-  var apptDetail = document.getElementById('appt-detail-modal');
-  if (apptDetail && apptDetail.classList.contains('show')) { closeApptDetail(); history.pushState({}, '', '/app/'); return; }
-  var actionSheet = document.getElementById('adm-appt-action');
-  if (actionSheet && actionSheet.classList.contains('show')) { closeApptAction(); history.pushState({}, '', '/app/'); return; }
-  var promoModal = document.getElementById('promo-modal');
-  if (promoModal && promoModal.classList.contains('show')) { closePromoModal(); history.pushState({}, '', '/app/'); return; }
-
-  // Якщо не на домашній — повертаємось на домашню
-  if (_currentScreen !== 'home' && !user.is_admin) {
-    go('home');
-    history.pushState({screen: 'home'}, '', '/app/');
-  } else if (user && user.is_admin && _currentScreen !== 'admin-home') {
-    // Адмін → admin-home
-    adminGo('admin-home');
-    history.pushState({screen: 'admin-home'}, '', '/app/');
-  } else {
-    // Вже на домашній — не даємо закрити додаток, повертаємо state
-    history.pushState({screen: 'home'}, '', '/app/');
+// Android back button — ЗАВЖДИ перехоплюємо, ніколи не закриваємо додаток
+// Стратегія: тримаємо history.length > 1 постійно, pushState при кожному popstate
+(function() {
+  // Заповнюємо history щоб back не міг дістатись до початку
+  for (var i = 0; i < 5; i++) {
+    history.pushState({_guard: true}, '', '/app/');
   }
-});
 
-// Початковий state
-history.replaceState({screen: 'home'}, '', '/app/');
+  window.addEventListener('popstate', function(e) {
+    // Одразу повертаємо guard щоб наступне "назад" теж перехопилось
+    history.pushState({_guard: true}, '', '/app/');
+
+    // Закриваємо модалки
+    var apptDetail = document.getElementById('appt-detail-modal');
+    if (apptDetail && apptDetail.classList.contains('show')) { closeApptDetail(); return; }
+    var actionSheet = document.getElementById('adm-appt-action');
+    if (actionSheet && actionSheet.classList.contains('show')) { closeApptAction(); return; }
+    var promoModal = document.getElementById('promo-modal');
+    if (promoModal && promoModal.classList.contains('show')) { closePromoModal(); return; }
+    var newsModal = document.getElementById('news-modal');
+    if (newsModal && newsModal.classList.contains('show')) { closeNewsModal(); return; }
+
+    // Не на домашній → домашня
+    if (user && !user.is_admin && _currentScreen !== 'home') {
+      _currentScreen = 'home';
+      SCREENS.forEach(function(s) {
+        var sc = document.getElementById('screen-'+s);
+        if (sc) { sc.classList.remove('active'); sc.style.display=''; }
+      });
+      var h = document.getElementById('screen-home');
+      if (h) { h.classList.add('active'); h.style.display='flex'; }
+      return;
+    }
+    if (user && user.is_admin && _currentScreen !== 'admin-home') {
+      adminGo('admin-home');
+      _currentScreen = 'admin-home';
+      return;
+    }
+
+    // Вже на домашній — toast
+    var t = document.getElementById('adm-toast');
+    if (t) {
+      t.textContent = 'Ви на головній сторінці';
+      t.classList.add('show');
+      setTimeout(function() { t.classList.remove('show'); }, 1500);
+    }
+  });
+})();
 
 /* ── ACTIONS ── */
 function openMap() { window.open('https://maps.app.goo.gl/LqWgda1A5ZjK8QE76','_blank'); }
@@ -3569,19 +3598,22 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
+  // Поки Play Store недоступний — показуємо PWA prompt
+  // Коли буде Production — прибрати showBanner() і направляти в Play Store
   if (!isStandalone) showBanner();
 });
 
 function initInstall() {
   if (isStandalone) return;
-  // iOS Safari — показати хінт автоматично через 3 сек
+  // Desktop — не показувати banner взагалі
+  if (!isIOS && !isAndroid) return;
+  // iOS Safari — показати хінт одразу
   if (isIOS && isSafari) {
-    setTimeout(showBanner, 3000);
+    showBanner();
   }
-  // Android Chrome — чекаємо beforeinstallprompt
-  // Інші — показати через 5 сек
-  if (!isIOS && !isChrome && !isSamsungBrowser) {
-    setTimeout(showBanner, 5000);
+  // Android — показати banner одразу
+  if (isAndroid) {
+    showBanner();
   }
 }
 
@@ -3596,15 +3628,20 @@ function closeBanner() {
   document.getElementById('app').classList.remove('banner-open');
 }
 
+// TODO: замінити на реальний Play Store URL коли додаток буде в Production
+// var PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.gomonclinic.www.twa';
+
 function showInstallModal() {
   closeBanner();
-  // Android Chrome — нативний prompt
+  // Android Chrome — нативний PWA prompt (поки Play Store недоступний)
+  // Коли буде в Production — розкоментувати PLAY_STORE_URL і замінити на:
+  // if (isAndroid) { window.open(PLAY_STORE_URL, '_blank'); return; }
   if (deferredPrompt) {
     deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(r => { deferredPrompt = null; });
+    deferredPrompt.userChoice.then(function(r) { deferredPrompt = null; });
     return;
   }
-  // Інакше — інструкції
+  // iOS та інші — інструкції по встановленню
   const modal = document.getElementById('install-modal');
   const content = document.getElementById('install-modal-content');
   content.innerHTML = getInstallInstructions();
@@ -3788,6 +3825,14 @@ document.addEventListener('keydown', function(e) {
     if (promoModal && promoModal.classList.contains('show')) { closePromoModal(); return; }
     var apptOverlay = document.getElementById('adm-new-appt-overlay');
     if (apptOverlay && apptOverlay.classList.contains('show')) { apptOverlay.classList.remove('show'); return; }
+    var newsModal = document.getElementById('news-modal');
+    if (newsModal && newsModal.classList.contains('show')) { closeNewsModal(); return; }
+    var notClientModal = document.getElementById('not-client-modal');
+    if (notClientModal && notClientModal.classList.contains('show')) { closeNotClientModal(); return; }
+    var confirmModal = document.getElementById('confirm-modal');
+    if (confirmModal && confirmModal.classList.contains('show')) { confirmModal.classList.remove('show'); return; }
+    var installModal = document.getElementById('install-modal');
+    if (installModal && installModal.classList.contains('show')) { installModal.classList.remove('show'); return; }
   }
 });
 </script>
@@ -3802,7 +3847,7 @@ document.addEventListener('keydown', function(e) {
           <div class="ai-option-top">
             <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
             <div class="ai-option-top-text">
-              <h4>AI-асистент клініки</h4>
+              <h4>AI-асистент Dr. Gomon</h4>
               <p>Підбір процедури онлайн</p>
             </div>
           </div>
@@ -3971,7 +4016,7 @@ document.addEventListener('keydown', function(e) {
         <div class="ai-option-top">
           <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg></span>
           <div class="ai-option-top-text">
-            <h4>AI-асистент клініки</h4>
+            <h4>AI-асистент Dr. Gomon</h4>
             <p>Підбір процедури онлайн</p>
           </div>
         </div>

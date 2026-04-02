@@ -296,7 +296,7 @@ def fmt_appt_confirm(appt):
         '📅 {date}, {time}\n'
         '💆 {service}\n'
         '👩‍⚕️ {spec_name}\n'
-        '📍 БЦ Галерея, вхід "ЛІФТ", 6 поверх\n\n'
+        '📍 БЦ Галерея, 6 поверх (поруч з ТЦ Будинок Торгівлі, через дорогу від McDonald\'s)\n\n'
         'Переглянути або скасувати: gomonclinic.com/app/'
     ).format(**v)
     sms = (

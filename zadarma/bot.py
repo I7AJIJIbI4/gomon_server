@@ -139,7 +139,10 @@ def start_command(bot, update):
         else:
             unauthorized_message = (
                 f"Вітаємо, {first_name}!\n\n"
-                "Для авторизації поділіться номером телефону"
+                "Для авторизації поділіться номером телефону\n\n"
+                "Після авторизації ви зможете отримувати OTP-коди "
+                "для входу в застосунок через цей бот.\n"
+                "Якщо код не приходить у Telegram -- перевiрте SMS."
             )
 
             bot.send_message(chat_id=update.message.chat_id, text=unauthorized_message, parse_mode=None)
@@ -232,13 +235,17 @@ def contact_handler(bot, update):
                 "Ваш номер не зареєстровано в системі Dr. Gomon Cosmetology\n\n"
                 "Для реєстрації зверніться:\n"
                 "- Телефон: +380733103110\n"
-                "- Instagram Direct: ig.me/m/dr.gomon\n\n"
+                "- Instagram Direct: https://ig.me/m/dr.gomon\n\n"
+                "Якщо ви наш клiєнт i код не приходить:\n"
+                "- Перевiрте папку Спам в SMS\n"
+                "- Введiть gomon в пошуку повiдомлень\n"
+                "- Або напишiть нам: https://ig.me/m/dr.gomon\n\n"
                 "/app - Наш застосунок, який точно Вам допоможе\n"
-                "/start - Авторизуватись для отримання сповіщень\n"
-                "/map - Знайти нас на мапі\n"
-                "/scheme - Побачити будівлю на фото\n"
-                "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії"
+                "/start - Авторизуватись для отримання сповiщень\n"
+                "/map - Знайти нас на мапi\n"
+                "/scheme - Побачити будiвлю на фото\n"
+                "/channel - Актуальнi новини та акцiї в ТГ каналi\n"
+                "/call - Зателефонувати лiкарю Вiкторiї"
             )
 
             bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode=None)
@@ -343,7 +350,7 @@ def app_command(bot, update):
     try:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://www.gomonclinic.com/app/",
+            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://www.gomonclinic.com/go.html",
             parse_mode=None
         )
     except Exception as e:
@@ -524,7 +531,10 @@ def help_command(bot, update):
                 "/scheme - Побачити будівлю на фото\n"
                 "/channel - Актуальні новини та акції в ТГ каналі\n"
                 "/call - Зателефонувати лікарю Вікторії\n\n"
-                "Для реєстрації: +380733103110 або ig.me/m/dr.gomon"
+                "Якщо код для входу не приходить:\n"
+                "- Перевiрте папку Спам в SMS\n"
+                "- Введiть gomon в пошуку повiдомлень\n\n"
+                "Для реєстрації: +380733103110 або https://ig.me/m/dr.gomon"
             )
         
         bot.send_message(
@@ -1038,7 +1048,7 @@ def my_services_command(bot, update):
                 text=(
                     "Номер телефону не прив'язаний. "
                     "Поділіться номером через кнопку нижче "
-                    "або відкрийте додаток: gomonclinic.com/app/"
+                    "або відкрийте додаток: https://www.gomonclinic.com/go.html"
                 ),
                 parse_mode=None
             )
@@ -1140,9 +1150,9 @@ def my_services_command(bot, update):
                 lines.append("")
 
             lines.append("Записатись:")
-            lines.append("- Додаток: gomonclinic.com/app/")
-            lines.append("- Telegram: t.me/DrGomonCosmetology")
-            lines.append("- Instagram Direct: ig.me/m/dr.gomon")
+            lines.append("- Додаток: https://www.gomonclinic.com/go.html")
+            lines.append("- Telegram: https://t.me/DrGomonCosmetology")
+            lines.append("- Instagram Direct: https://ig.me/m/dr.gomon")
 
         bot.send_message(
             chat_id=update.message.chat_id,
