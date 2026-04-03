@@ -43,7 +43,7 @@
   ];
 
   const WELCOME_MESSAGE =
-    'Вітаю! 🌸 Я AI-асистент клініки Dr. Gomon.\n' +
+    'Вітаю! Я AI-асистент Dr. Gomon Cosmetology.\n' +
     'Розкажіть, що вас турбує або яка процедура вас цікавить — ' +
     'і я підберу найкращий варіант догляду.';
 
@@ -529,7 +529,7 @@
         <div id="gc-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#c9a96e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg></div>
         <div id="gc-header-text">
           <div id="gc-header-title">AI-консультант</div>
-          <div id="gc-header-subtitle">клініка Dr. Gomon</div>
+          <div id="gc-header-subtitle">Dr. Gomon Cosmetology</div>
         </div>
         <div id="gc-header-actions">
           <button class="gc-icon-btn" id="gc-close-btn" title="Закрити">✕</button>
@@ -758,7 +758,7 @@
     const banner = document.createElement('div');
     banner.id = 'gc-guest-banner';
     banner.innerHTML =
-      '<p>👋 Ви ще не клієнт клініки. <strong>AI підбере процедуру</strong> — а записатися можна одним повідомленням лікарю:</p>' +
+      '<p>Ви ще не наш клієнт. <strong>AI підбере процедуру</strong> — а записатися можна одним повідомленням лікарю:</p>' +
       '<div class="gc-guest-links">' +
         '<a class="gc-guest-link" href="https://t.me/DrGomonCosmetology" target="_blank" rel="noopener">✈ Telegram</a>' +
         '<a class="gc-guest-link" href="https://ig.me/m/dr.gomon" target="_blank" rel="noopener">◎ Instagram Direct</a>' +

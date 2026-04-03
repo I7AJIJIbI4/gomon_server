@@ -6,6 +6,7 @@
 LOGFILE="/home/gomoncli/zadarma/pwa_api.log"
 PIDFILE="/home/gomoncli/zadarma/flask.pid"
 WORKDIR="/home/gomoncli/zadarma"
+GUNICORN="/home/gomoncli/.local/bin/gunicorn"
 TS() { date '+%Y-%m-%d %H:%M:%S'; }
 
 start_flask() {
@@ -13,7 +14,7 @@ start_flask() {
   # Вбиваємо все що залишилось на порті
   fuser -k 5001/tcp 2>/dev/null
   sleep 1
-  nohup gunicorn \
+  nohup "$GUNICORN" \
     --bind 127.0.0.1:5001 \
     --workers 2 \
     --threads 2 \

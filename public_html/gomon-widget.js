@@ -9,7 +9,7 @@
   var API_URL = '/app/chat.php';
   var NOTIFY_URL = '/app/notify_procedure.php';
 
-  var GREETING = 'Привіт! Я GomonAI — асистент клініки Dr.\u00a0G\u00f3mon.\nЧим можу допомогти? Запитайте про процедури, ціни або підготовку — відповім одразу.';
+  var GREETING = 'Привіт! Я GomonAI — асистент Dr.\u00a0G\u00f3mon Cosmetology.\nЧим можу допомогти? Запитайте про процедури, ціни або підготовку — відповім одразу.';
   var TYPING_MSGS = [
     'Аналізую ваш запит…',
     'Підбираю процедуру…',

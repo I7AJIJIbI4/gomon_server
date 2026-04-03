@@ -701,7 +701,7 @@
   <div class="ai-section-inner">
     <div class="ai-section-badge reveal visible">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg>
-      <span>AI-асистент клініки</span>
+      <span>AI-асистент Dr. Gomon</span>
     </div>
     <p class="ai-section-sub reveal visible">Залишились питання?</p>
     <h2 class="ai-section-title reveal">Наш <em>ШІ асистент</em><br>радий допомогти</h2>

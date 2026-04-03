@@ -721,7 +721,7 @@ nav{
 .adm-ai-edit-btn{flex:1;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:15px;color:var(--text2);cursor:pointer}
 .adm-ai-cancel-btn{padding:10px 14px;background:none;border:none;font-family:var(--sans);font-size:14px;color:var(--text3);cursor:pointer}
 /* Toast */
-#adm-toast{position:fixed;bottom:calc(70px + var(--safe-bottom));left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:8px 18px;font-size:15px;color:var(--gold-pale);z-index:10500;opacity:0;transition:opacity .3s;white-space:nowrap;pointer-events:none}
+#adm-toast{position:fixed;top:calc(var(--safe-top) + 16px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:10px 20px;font-size:14px;color:var(--gold-pale);z-index:10500;opacity:0;transition:opacity .3s;white-space:nowrap;pointer-events:none;max-width:90%}
 #adm-toast.show{opacity:1}
 
 /* ── LOADING ── */
@@ -1177,7 +1177,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
         <p id="otp-sent" style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px"></p>
         <p id="otp-error" style="color:#e05050;font-size:12px;text-align:center;margin-top:8px;display:none"></p>
         <button class="auth-btn" id="otp-btn" onclick="verifyOtp()">Увійти</button>
-        <p class="otp-resend">Не отримали код у Telegram чи SMS? <button onclick="resendOtp()" id="resend-btn">Надіслати ще</button> <span id="otp-timer"></span></p>
+        <p class="otp-resend">Не отримали код? Перевірте Спам в SMS або введіть gomon в пошуку повідомлень. <button onclick="resendOtp()" id="resend-btn">Надіслати ще</button> <span id="otp-timer"></span></p>
         <button class="auth-back" onclick="backToPhone()">← Змінити номер</button>
       </div>
     </div>
@@ -1608,7 +1608,7 @@ async function sendOtp() {
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Отримати код';
     var t = document.getElementById('adm-toast');
-    if (t) { t.textContent = 'Не вдалось надiслати код'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
+    if (t) { t.textContent = 'Не вдалось надiслати код. Спробуйте ще раз.'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},5000); }
   }
 }
 
@@ -4470,7 +4470,7 @@ async function _admStatClick(type) {
     else _admRenderList(_admListData);
     document.getElementById('adm-list-modal').classList.add('show');
   } catch(e) {
-    alert('Помилка: ' + e.message);
+    var t = document.getElementById('adm-toast'); if (t) { t.textContent = 'Помилка завантаження'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show')},3000); }
   }
 }
 
