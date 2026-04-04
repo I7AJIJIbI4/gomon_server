@@ -20,8 +20,8 @@ start_flask() {
     --threads 2 \
     --timeout 120 \
     --graceful-timeout 30 \
-    --max-requests 1000 \
-    --max-requests-jitter 50 \
+    --max-requests 5000 \
+    --max-requests-jitter 500 \
     --access-logfile - \
     --error-logfile - \
     --pid "$PIDFILE" \

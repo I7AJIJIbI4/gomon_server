@@ -467,7 +467,8 @@
       div.innerHTML = content
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)\"]+)\)/g, function(m, text, url) {
+        .replace(/\[([^\]]+)\]\(((?:https?:\/\/|tel:)[^\s\)\"]+)\)/g, function(m, text, url) {
+          if (url.startsWith('tel:')) return '<a href="' + url.replace(/"/g, '&quot;') + '">' + text + '</a>';
           try { new URL(url); } catch(e) { return text; }
           return '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
         })

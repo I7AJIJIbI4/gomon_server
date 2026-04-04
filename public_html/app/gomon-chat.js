@@ -704,8 +704,11 @@
   function linkify(text) {
     text = escapeHtml(text);
     text = parseMarkdown(text);
-    // markdown [text](url) -> clickable with original text
-    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)\"]+)\)/g, function(m, text, url) {
+    // markdown [text](url) -> clickable (https + tel)
+    text = text.replace(/\[([^\]]+)\]\(((?:https?:\/\/|tel:)[^\s\)\"]+)\)/g, function(m, text, url) {
+      if (url.startsWith('tel:')) {
+        return '<a href="' + url.replace(/"/g, '&quot;') + '">' + text + '</a>';
+      }
       try { new URL(url); } catch(e) { return text; }
       return '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">' + text + '</a>';
     });
@@ -773,12 +776,17 @@
     setBadge(0);
     elToggle.innerHTML = '✕ <span id="gc-badge"></span>';
     document.body.style.overflow = 'hidden';
+    if (!_welcomeShown) {
+      _welcomeShown = true;
+      addMessage('assistant', WELCOME_MESSAGE);
+    }
     setTimeout(() => elInput.focus(), 350);
     scrollBottom();
   }
 
   function openAsGuest() {
     if (!localStorage.getItem('guest_phone')) return;
+    _welcomeShown = true; // Не показувати welcome — гостьовий банер достатній
     openChat();
     _showGuestBanner();
   }
@@ -1047,8 +1055,8 @@
     },
   };
 
-  // ── ПОЧАТКОВЕ ПОВІДОМЛЕННЯ ────────────────────────────────────────────────
+  // ── ПОЧАТКОВЕ ПОВІДОМЛЕННЯ — при першому відкритті чату ──────────────────
 
-  addMessage('assistant', WELCOME_MESSAGE);
+  var _welcomeShown = false;
 
 })();

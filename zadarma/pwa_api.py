@@ -772,24 +772,33 @@ def admin_stats():
     push_subs = c.fetchone()[0]
 
     # Записи за останні 30 днів
-    from datetime import datetime, timedelta
-    since = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    # Поточний календарний місяць (1-е число → кінець місяця), без CANCELLED
+    now = datetime.now()
+    month_start = now.strftime('%Y-%m-01')
+    if now.month == 12:
+        month_end = '{}-12-31'.format(now.year)
+    else:
+        month_end = (now.replace(month=now.month+1, day=1) - timedelta(days=1)).strftime('%Y-%m-%d')
     if request.admin_role == 'specialist':
         spec = request.admin_specialist
         c.execute("""
             SELECT COUNT(*) FROM (
                 SELECT json_each.value FROM clients, json_each(clients.services_json)
                 WHERE json_extract(json_each.value, '$.date') >= ?
+                  AND json_extract(json_each.value, '$.date') <= ?
                   AND json_extract(json_each.value, '$.specialist') = ?
+                  AND IFNULL(json_extract(json_each.value, '$.status'),'') != 'CANCELLED'
             )
-        """, (since, spec))
+        """, (month_start, month_end, spec))
     else:
         c.execute("""
             SELECT COUNT(*) FROM (
                 SELECT json_each.value FROM clients, json_each(clients.services_json)
                 WHERE json_extract(json_each.value, '$.date') >= ?
+                  AND json_extract(json_each.value, '$.date') <= ?
+                  AND IFNULL(json_extract(json_each.value, '$.status'),'') != 'CANCELLED'
             )
-        """, (since,))
+        """, (month_start, month_end))
     visits_month = c.fetchone()[0]
 
     # Останні 10 відвідувань
