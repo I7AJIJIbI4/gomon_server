@@ -2,7 +2,7 @@
 
 ## Загальна архітектура
 
-**Сайт:** https://www.gomonclinic.com
+**Сайт:** https://drgomon.beauty (redirect від https://www.gomonclinic.com)
 **Сервер:** 31.131.18.79:21098, user `gomoncli`, key `~/.ssh/id_rsa`
 **PWA:** `/home/gomoncli/public_html/app/` → доступна за `/app/`
 **API:** Flask Python, порт 5001 (127.0.0.1), проксі через LiteSpeed `/api/*`
@@ -17,30 +17,43 @@
 | Файл | Призначення |
 |------|-------------|
 | `zadarma/pwa_api.py` | **Головний Flask API** (порт 5001). Всі `/api/*` endpoints |
-| `zadarma/config.py` | Секрети: WLAUNCH_API_KEY, COMPANY_ID, TELEGRAM_TOKEN, ADMIN_USER_IDS |
+| `zadarma/config.py` | Секрети: WLAUNCH_API_KEY, COMPANY_ID, TELEGRAM_TOKEN, TG_BIZ_TOKEN, ANTHROPIC_KEY, ADMIN_USER_IDS |
 | `zadarma/user_db.py` | Функції роботи з SQLite: `add_or_update_client`, `get_client_by_phone` |
 | `zadarma/auth.py` | OTP генерація/верифікація |
 | `zadarma/push_sender.py` | Web Push: `save_subscription`, `send_push_to_phone`, `get_subscriptions` |
 | `zadarma/sms_fly.py` | SMS через sms.fly.ua API |
 | `zadarma/wlaunch_api.py` | WLaunch API wrapper |
 | `zadarma/bot.py` | Telegram бот (адмін-команди, /admin sync) |
+| `zadarma/tg_business_listener.py` | **TG Business Bot** — прийом DM + AI auto-reply через `@DrGomonCosmetologyBot` |
+| `zadarma/tz_utils.py` | DST-aware timezone: `kyiv_offset()`, `utc_to_kyiv()`, `kyiv_now()` |
+
+### Месенджер (Адмін + AI)
+| Файл | Призначення |
+|------|-------------|
+| `public_html/app/tg_media.php` | PHP-проксі для TG Business media (обхід LiteSpeed Content-Type) |
+| `public_html/app/msg_upload.php` | PHP-проксі для upload файлів у месенджері (обхід LiteSpeed multipart) |
+| `public_html/messenger/auth.php` | Instagram OAuth (code → short → long-lived token) |
+| `public_html/messenger/send.php` | Instagram Graph API v25.0 send proxy |
 
 ### Синхронізація
 | Файл | Призначення |
 |------|-------------|
 | `zadarma/sync_clients.py` | Нові клієнти з WLaunch за останні 24г → users.db |
-| `zadarma/sync_appointments.py` | Всі appointments (±7 днів + 90 вперед) → оновлює services_json |
+| `zadarma/sync_appointments.py` | Appointments sync: merge (не перезапис!) нових зі старими. `--deep` для повної історії |
 | `zadarma/sync_with_notification.sh` | Запускає sync_clients + надсилає Telegram-звіт адміну |
 | `zadarma/push_reminder.py` | Push/SMS нагадування про завтрашній запис |
 | `zadarma/sms_reminder.py` | SMS нагадування (TG-first, SMS fallback) |
 | `zadarma/notifier.py` | **Диспетчер сповіщень**: Push→TG→SMS. 4 типи: reminder_24h, post_visit, cancellation (client+spec), spec_new_appt |
 | `zadarma/appt_reminder.py` | Cron-скрипт: `--reminder` (10:00/18:00), `--feedback` (20:00), `--specialist` (20:00, активно) |
+| `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
+| `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
 ### Watchdog / DevOps
 | Файл | Призначення |
 |------|-------------|
-| `zadarma/check_flask.sh` | Перевіряє що Flask живий, перезапускає якщо ні |
+| `zadarma/check_flask.sh` | **Watchdog API** (*/2 cron): health check + auto-restart + graceful reload при зміні pwa_api.py (HUP) |
 | `zadarma/check_and_run_bot.sh` | Watchdog для Telegram бота |
+| `zadarma/check_tg_business.sh` | Watchdog для TG Business listener |
 
 ### Frontend (PWA)
 | Файл | Призначення |
@@ -56,8 +69,7 @@
 ### Основний сайт (sitepro — website builder)
 | Файл | Призначення |
 |------|-------------|
-| `public_html/sitepro/a188dd94d37a0374c81c636d09cd1f05.php` | Головна сторінка сайту (index) |
-| `public_html/sitepro/a19c9ec17aa700fbe3c8ab3f51a1f461.php` | Інша сторінка сайту |
+| `public_html/sitepro/a188dd94d37a0374c81c636d09cd1f05.php` | **Єдина сторінка сайту** (index). НЕ створювати додаткових сторінок! |
 | `public_html/sitepro/prices.php` | Повертає raw prices.json (origin-restricted) |
 | `public_html/sitepro/modal_prices.php` | **Трансформує prices.json** у формат `{1:[{title,rows}],...}` для модалок категорій послуг |
 
@@ -72,7 +84,7 @@ last_service TEXT, last_visit TEXT, visits_count INT,
 services_json TEXT  -- JSON масив [{appt_id, date, hour, service, status, specialist}]
 ```
 - `phone` — нормалізований номер (тільки цифри), напр. `380933297777`
-- `services_json` — топ-5 записів, відсортовано за датою (новіші першими)
+- `services_json` — топ-15 записів, відсортовано за датою (новіші першими)
 - Статуси: `CONFIRMED_BY_CLIENT`, `CANCELLED`, `CONFIRMED`, тощо
 - `specialist` — `'victoria'` або `'anastasia'` (заповнюється при sync через `resources[].phone`)
 
@@ -208,6 +220,7 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
 | `/api/admin/calendar/appointments/<id>` | PUT | Оновити статус/дані ручного запису |
 | `/api/admin/calendar/appointments/<id>` | DELETE | Скасувати ручний запис |
 | `/api/admin/clients-list` | GET | Список клієнтів для пошуку |
+| `/api/admin/client-card/<phone>` | GET | **Картка клієнта**: повна історія візитів (local DB + WLaunch API realtime) + manual appointments |
 | `/api/admin/clients/add` | POST | Додати нового клієнта в БД |
 | `/api/admin/appointments` | GET | Всі WLaunch записи (для старих звітів) |
 | `/api/admin/push-list` | GET | Push-підписники |
@@ -252,6 +265,10 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
 Категорія 4 ("Домашній догляд") — `noPrice: true`, не запитує ціни.
 
 ### services_json в clients (WLaunch дані)
+- Зберігає до **50 останніх** записів (було 15)
+- `sync_appointments.py` **мержить** нові записи зі старими по `appt_id` (не перезаписує!)
+- `--deep` flag для повної синхронізації всієї історії з WLaunch
+- `visits_count` = max(sync count, merged entries count)
 ```json
 [
   {
@@ -264,7 +281,7 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
   }
 ]
 ```
-- Топ-5 записів, нові першими
+- Топ-15 записів, нові першими
 - `specialist` — заповнюється `sync_appointments.py` через `resources[].phone`
 
 ---
@@ -287,7 +304,12 @@ Cron (09:00 і 21:00)
 └── sync_with_notification.sh → sync_clients
 ```
 
-**Важливо:** `sync_appointments.py` оновлює статуси (CONFIRMED, CANCELLED) і поле `specialist` в БД.
+**Важливо:**
+- `sync_appointments.py` **мержить** нові записи зі старими по `appt_id` (не перезаписує!)
+- Hourly sync: 7 днів назад + 90 вперед (оновлює статуси + нові записи)
+- `python3 sync_appointments.py --deep` — повна історія з 2020 (одноразово або при потребі)
+- `services_json` зберігає до 50 записів (найновіші)
+- **Картка клієнта** (`/api/admin/client-card/<phone>`) додатково підтягує ВСЮ історію з WLaunch API в реальному часі
 
 ---
 
@@ -442,12 +464,97 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ---
 
+## WLaunch API (недокументоване, знайдено reverse-engineering)
+
+**Base:** `https://api.wlaunch.net/v1`
+**Auth:** `Authorization: Bearer {WLAUNCH_API_KEY}` (config.py)
+**Company ID:** `3f3027ca-0b21-11ed-8355-65920565acdd`
+**Branch ID:** динамічний, отримується через GET /branch/
+
+### Офіційно задокументовані (специфікація v0.1.0 від 10.07.2025)
+
+| Endpoint | Метод | Опис |
+|----------|-------|------|
+| `/company/{cid}/branch/` | GET | Список філій |
+| `/company/{cid}/branch/{bid}/appointment` | GET | Записи по філії (з пагінацією, фільтрами start/end) |
+| `/company/{cid}/client` | GET | Клієнти (пагінація, фільтр по phone) |
+
+### Знайдені endpoints (працюють, не задокументовані)
+
+| Endpoint | Метод | Payload | Опис |
+|----------|-------|---------|------|
+| `/company/{cid}/branch/{bid}/appointment` | POST | `{"appointment":{...}}` | Створити запис |
+| `/company/{cid}/branch/{bid}/appointment/{aid}` | POST | `{"appointment":{"id":"..","status":"CANCELLED"}}` | Скасувати запис |
+| `/company/{cid}/branch/{bid}/resource` | GET | — | Список спеціалістів (resources) |
+| `/company/{cid}/branch/{bid}/service` | GET | `?page=0&size=200` | Список послуг |
+| `/company/{cid}/service` | POST | `{"company_service":{name,duration,type:"SERVICE",...}}` | **Створити послугу** |
+| `/company/{cid}/service/{sid}` | POST | `{"company_service":{"active":false}}` | Деактивувати послугу |
+| `/company/{cid}/client` | POST | `{"client":{first_name,last_name,phone}}` | Створити клієнта |
+| `/company/{cid}/branch/{bid}/resource/schedule` | GET | `?start=YYYY-MM-DD&end=YYYY-MM-DD` | **Читати розклад** (ON/OFF frames per resource) |
+| `/company/{cid}/branch/{bid}/resource/{rid}/schedule/day` | POST | `{"frame":{"date":"..","start_time":sec,"end_time":sec,"type":"OFF"}}` | **Створити перерву** |
+| `/company/{cid}/branch/{bid}/resource/{rid}/schedule/day/{fid}` | POST | `{"frame":{"active":false}}` | **Видалити перерву** |
+
+### Формати
+
+**Appointment payload:**
+```json
+{"appointment": {
+  "client": {"id": "uuid"},
+  "start_time": "2026-04-15T10:00:00.000Z",
+  "duration": 3600,
+  "status": "CONFIRMED",
+  "booking_type": "GENERAL",
+  "source": "BO",
+  "service_resource_settings": [{
+    "service": "service-uuid",
+    "resources": ["resource-uuid"],
+    "auto_selected_resources": false,
+    "ordinal": 1,
+    "duration": 3600
+  }]
+}}
+```
+
+**Schedule frame:**
+- `start_time` / `end_time` — **секунди від початку доби, local Kyiv time** (не UTC!)
+- `type: "ON"` = робочий час, `type: "OFF"` = перерва/вихідний
+- `cycle_frames` = регулярний графік (день тижня), `day_frames` = конкретні дні
+
+**Service creation:**
+```json
+{"company_service": {
+  "name": "Назва", "duration": 1800, "type": "SERVICE",
+  "booking_type": "GENERAL", "public": true, "capacity": 1,
+  "capacity_type": "CAPACITY_1"
+}}
+```
+
+### Service matching (fuzzy)
+
+`wlaunch_api.py` матчить послуги з prices.json через 3 рівні:
+1. **Exact** — `procedure_name.lower() == wl_service_name.lower()`
+2. **Substring** — назва містить/міститься (з нормалізацією лапок `«»""`)
+3. **Category map** — keyword → WLaunch generic service (напр. "1 зона" → "Ботулінотерапія")
+
+### Specialist breaks (sync)
+
+При створенні перерви через наш додаток:
+1. Зберігається локально в `specialist_breaks` таблицю
+2. Створюється OFF frame в WLaunch через `/resource/{rid}/schedule/day`
+3. WLaunch ID зберігається в полі `reason` як `wl:UUID`
+
+При видаленні: деактивується в WLaunch через `POST /schedule/day/{id}` з `{"frame":{"active":false}}`
+
+---
+
 ## Відомі особливості
 
 - **Python 3.6** на сервері — f-strings підтримуються, але деякі сучасні конструкції ні
 - **LiteSpeed** веб-сервер, без CDN/проксі
 - **WLaunch cancel**: `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
-- **Sync**: `sync_appointments.py` зберігає топ-5 записів по даті (новіші першими), включаючи CANCELLED
+- **WLaunch обов'язковий**: при створенні записів WLaunch повинен підтвердити. Якщо WLaunch відхиляє (unavailable, 422) — запис НЕ створюється. Fallback local тільки при network/500 помилках
+- **WLaunch breaks**: перерви синхронізуються через `/resource/{rid}/schedule/day` (type=OFF). Видалення через POST з `{frame:{active:false}}`
+- **Sync**: `sync_appointments.py` мержить нові записи зі старими по `appt_id` (до 50). `--deep` для повної історії
 - **Parse services**: `pwa_api.py::parse_services()` фільтрує CANCELLED при поверненні клієнту
 - **OTP доставка**: TG-first (plain text, без Viber-суфіксу) → SMS з `@www.gomonclinic.com #code` для Viber auto-fill
 - **Notification stack (notifier.py)**: Push (завжди, fire-and-forget) → TG (основний) → SMS (fallback тільки якщо TG fail/невідомий). Дедуплікація через `notification_log` (UNIQUE phone+type+reference+channel). АКТИВНО: cancellation клієнт+спеціаліст, spec_new_appt (о 20:00 дня створення). НЕ АКТИВНО: reminder_24h, post_visit.
@@ -617,17 +724,241 @@ var conversionMap = {
 - **Busy слоти** — відображаються напівпрозоро, не клікабельні
 - Адмін (`full`/`superadmin`) бачить ВСЕ як раніше
 
-### Cron (оновлено 2026-04-01)
+### Cron (оновлено 2026-04-11)
 
 ```cron
-*/5 * * * *     /home/gomoncli/zadarma/check_flask.sh
-*/5 * * * *     /home/gomoncli/zadarma/check_and_run_bot.sh
+*/2 * * * *     /home/gomoncli/zadarma/check_flask.sh        # API watchdog + auto-reload on code change
+*/5 * * * *     /home/gomoncli/zadarma/check_and_run_bot.sh   # TG bot watchdog
+*/5 * * * *     /home/gomoncli/zadarma/check_tg_business.sh   # TG Business listener watchdog
 @reboot         sleep 15 && /home/gomoncli/zadarma/check_flask.sh
 0 * * * *       python3 /home/gomoncli/zadarma/sync_appointments.py
 0 9,21 * * *    /home/gomoncli/zadarma/sync_with_notification.sh
 0 9 * * *       python3 /home/gomoncli/zadarma/sms_reminder.py
 */15 8-22 * * * python3 /home/gomoncli/zadarma/push_reminder.py
 0 17 * * *      python3 /home/gomoncli/zadarma/appt_reminder.py --specialist --tomorrow
-# 17:00 UTC = 20:00 Київ (DST, літо). Зимою буде 19:00 Київ — прийнятно.
-# Для точного 20:00 Київ цілий рік — потрібен wrapper з _kyiv_offset().
+30 18 * * *     python3 /home/gomoncli/zadarma/photo_reminder.py --create   # 21:30 Kyiv — Drive folders + TG specialists
+0 8 * * *       python3 /home/gomoncli/zadarma/photo_reminder.py --check    # 11:00 Kyiv — check uploads + TG admin
 ```
+
+---
+
+## GomonAI — AI-асистент (3 канали)
+
+### Архітектура
+
+GomonAI працює в **трьох незалежних каналах** з єдиним system prompt:
+
+| Канал | Endpoint | Модель | Rate limit | Історія | Ескалація |
+|-------|----------|--------|-----------|---------|-----------|
+| **Сайт** (gomon-widget.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 10/день (guest) | sessionStorage | Ні |
+| **Додаток** (gomon-chat.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 20/день (authed) | in-memory JS | Ні |
+| **Telegram Business** | `tg_business_listener.py` | claude-sonnet-4-5 | 20/день | БД messages | **Так** → адмін |
+
+### System prompt
+
+Єдиний файл: `/home/gomoncli/public_html/app/system_prompt.txt` (~22KB)
+
+Кожен канал додає свій контекст:
+- **Сайт**: "Ти спілкуєшся з відвідувачем сайту..." + пропонує записатись через IG/TG/додаток
+- **Додаток**: "Ти вбудований асистент у додатку..." + знижки через додаток
+- **Telegram**: "Ти спілкуєшся в Telegram бізнес-акаунті..." + правила ескалації
+
+Динамічні доповнення (при кожному запиті):
+- Дані клієнта (ім'я, телефон, попередні візити) — з `users.db`
+- Актуальний прайс — з `prices.json` (перше речення опису кожної процедури)
+- Поточні акції — з `promos.json`
+
+### chat.php — модель fallback chain
+
+```
+claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claude-haiku-4-5
+```
+- Кешована модель у `/home/gomoncli/private_data/active_model.txt`
+- 429 (rate limit) НЕ пробує наступну модель (key-level, не model-level)
+- Rate limit списується ПІСЛЯ успішної відповіді (не до)
+- Клієнтський timeout: 25с, серверний: 20с (primary) / 12с (fallback)
+
+### Telegram Business AI — tg_business_listener.py
+
+**Процес**: окремий Python-демон, polling через `getUpdates`
+
+**Потік обробки клієнтського повідомлення:**
+1. Повідомлення зберігається в `messages` таблицю
+2. Перевірка: чи не стікер, чи не від адміна
+3. **Медіа** (фото/відео/голосовушка/документ) → миттєва відповідь "працюю лише з текстом" (без AI)
+4. **Текст** → запуск `handle_ai_reply()` в окремому `threading.Thread(daemon=True)`:
+   - `_check_ai_should_reply()` — admin pause + rate limit
+   - `_build_system_prompt()` — prompt + клієнт + прайс + акції
+   - `_get_conversation_history()` — останні 20 повідомлень з БД, alternating roles
+   - `_call_anthropic()` → claude-sonnet-4-5
+   - Перевірка `<ESCALATE>` тегу
+   - `_send_ai_reply()` — через Business Bot API з `business_connection_id`
+   - `_save_ai_message()` — зберігає з `sender_id='ai_bot'`
+
+**Ескалація:**
+- AI додає `<ESCALATE>` тег у відповідь коли:
+  - Клієнт просить живу людину
+  - Скарга/претензія
+  - Медична проблема для лікаря
+  - Запис на конкретну дату/час
+  - Питання поза прайсом
+  - AI не впевнений
+- При ескалації: відповідь клієнту (ввічливий handoff) + TG-нотифікація адміну через основного бота
+
+**Admin pause (30 хв):**
+- Якщо реальний адмін відповідав протягом 30 хв — AI мовчить
+- Автопривітання TG (приходить <5с від повідомлення клієнта) НЕ вважається відповіддю адміна
+- AI-відповіді (`sender_id='ai_bot'`) НЕ вважаються відповіддю адміна
+
+**Thread limiter:** max 3 одночасних AI потоки (6 total threads)
+
+**Offset persistence:** зберігається в `.tg_business_offset` файлі, відновлюється після рестарту
+
+---
+
+## Адмін-месенджер
+
+### Архітектура
+
+Уніфікований inbox для **Telegram Business** + **Instagram** (IG поки read-only, App Review pending).
+
+**Backend endpoints** (pwa_api.py, всі `@require_admin`):
+| Endpoint | Метод | Опис |
+|----------|-------|------|
+| `/api/admin/messages` | GET | Список conversations (50 останніх) з unread count. Фільтри: `?unread_only=1`, `?platform=telegram` |
+| `/api/admin/messages/<conv_id>` | GET | Повідомлення треду (limit 50) |
+| `/api/admin/messages/send` | POST | Відправити відповідь (TG через Business Bot, IG через Graph API) |
+| `/api/admin/messages/read` | POST | Позначити прочитаним |
+| `/api/admin/messages/upload` | POST | Upload медіа |
+| `/api/admin/messages/tg-media/<fid>` | GET | Proxy TG media (без auth, file_ids unguessable) |
+| `/api/admin/messages/media/<fname>` | GET | Serve uploaded files |
+
+**Frontend** (index.html, screen-admin-chat):
+- Sidebar: список conversations з фільтрами (Всі/Непрочитані/TG/IG)
+- Thread: повідомлення з media display (фото/відео/аудіо)
+- 10с polling для conversations + **auto-refresh відкритого треду**
+- Відправка: текст + фото/відео upload + voice recording (MediaRecorder API)
+- Platform badges: TG (синій), IG (рожевий)
+
+**Telegram sending flow:**
+1. `_get_biz_connection_id(chat_id)` — з таблиці `biz_connections`
+2. `_send_tg_from_api()` — sendMessage/sendPhoto/sendVideo/sendVoice через Business Bot API
+3. Якщо `business_connection_id` присутній — надсилає від імені бізнес-акаунта
+4. Якщо відсутній — надсилає від імені бота (fallback, логується warning)
+
+**biz_connections таблиця:**
+```sql
+chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
+```
+- Оновлюється при кожному вхідному повідомленні від клієнта
+- Оновлюється при `business_connection` event (reconnect)
+
+---
+
+## Конфіденційні файли (НЕ в git)
+
+- `zadarma/config.py` — Python секрети: TG_TOKEN, TG_BIZ_TOKEN, ANTHROPIC_KEY, WLAUNCH_API_KEY, SMS_FLY_*
+- `public_html/app/config.php` — PHP секрети: ANTHROPIC_API_KEY, TG_BIZ_TOKEN, IG_APP_SECRET, IG_FALLBACK_TOKEN
+- `zadarma/vapid_private.key` — VAPID приватний ключ
+- `zadarma/vapid_public.txt` — VAPID публічний ключ
+- `private_data/prices.json` — прайс-лист
+- `private_data/promos.json` — акції
+- `private_data/gdrive_sa.json` — Google Drive Service Account key
+
+**ВАЖЛИВО:** Всі токени/секрети тільки в config.py та config.php. НІКОЛИ не хардкодити в інших файлах.
+
+---
+
+## Аудит стабільності (2026-04-10)
+
+### Виправлено (критичні + високі)
+
+**Auth (pwa_api.py):**
+- `BEGIN IMMEDIATE` транзакції для OTP rate limit, OTP verify, magic token pop — атомарність
+- Admin session sliding — `_get_session_phone()` тепер продовжує `expires_at`
+- Session cap — max 5 сесій на phone (видаляє старі при login)
+
+**Appointments (pwa_api.py):**
+- `BEGIN IMMEDIATE` для PUT overlap check — запобігає double-booking
+- WLaunch rollback — якщо local DB відхиляє/падає після WLaunch create, WLaunch запис скасовується
+- DELETE → WLaunch cancel — при видаленні manual appointment скасовує і в WLaunch (через `wlaunch_id` або `wl:UUID` з notes)
+- `specialist=''` заборонено — тільки `victoria` або `anastasia`
+- `wlaunch_id` тепер записується в INSERT при створенні
+
+**AI Chat (chat.php, gomon-chat.js):**
+- Rate limit списується ПІСЛЯ успішної відповіді (не до)
+- 429 від Anthropic не пробує fallback моделі (key-level)
+- Client timeout збільшено до 25с (server до 20с)
+- History cap: 20 повідомлень (запобігає context overflow)
+- XSS fix в `linkify()` — URL ескейпить `"` і `'` перед вставкою в `href`
+
+**Messenger (pwa_api.py, index.html):**
+- Thread auto-refresh — відкритий тред оновлюється кожні 10с
+- `_get_biz_connection_id` — single query, proper error logging (було bare `except: pass`)
+- `MAX_CONTENT_LENGTH = 16MB` на Flask
+
+**CORS (всі PHP + Flask):**
+- `api/index.php` — `Access-Control-Allow-Origin: *` → whitelist
+- `messenger/send.php` — `str_ends_with` + localhost → `parse_url` + `in_array`
+- `chat.php` — додано `drgomon.beauty`
+- Flask CORS — додано `drgomon.beauty`
+
+**DevOps:**
+- `check_flask.sh` — */2 cron + auto HUP reload при зміні `pwa_api.py`
+- Secrets centralized — всі токени в config.py / config.php
+
+### Google Drive — фото до/після
+
+**Архітектура:** Service Account (`id-303@gomon-492922.iam.gserviceaccount.com`) має Editor доступ до `GomonClinic` папки на Drive (2TB). Створює підпапки і шарить "anyone with link = editor".
+
+**Структура папок:** `GomonClinic / Ім'я Клієнта / YYYY-MM-DD_Процедура`
+
+**Файли:**
+- `gdrive.py` — Google Drive API v3 wrapper (JWT auth через openssl, Python 3.6 сумісний)
+  - `_get_access_token()` — кешований на 50 хв
+  - `create_visit_folder(client_name, date, procedure)` → `(visit_url, client_url)`
+  - `count_files_in_folder(folder_id)` — підрахунок завантажених фото
+  - `_find_or_create_folder()` — dedup (не створює дублікатів)
+- `photo_reminder.py` — cron-скрипт:
+  - `--create` (21:30 Kyiv): створює папки для всіх незмасованих записів дня → TG спеціалістам зі списком + лінками
+  - `--check` (11:00 Kyiv): перевіряє кожну папку → якщо є файли → TG адміну з підсумком
+  - `--date YYYY-MM-DD` — override дати для ручного запуску
+
+**Конфіг:**
+- SA key: `/home/gomoncli/private_data/gdrive_sa.json` (НЕ в git)
+- Root folder ID: `1Cj2MseN7toVQ_R4u8_PBVDnKAfngOA-N` (hardcoded в gdrive.py)
+
+**DB:** `manual_appointments.drive_folder_url TEXT` — URL папки Drive для запису
+
+**Frontend:** кнопка 📷 "Фото до/після" в action sheet для записів з `drive_folder_url`
+
+### Картка клієнта (адмін-календар)
+
+При натисканні на запис в календарі відкривається action sheet. Ім'я клієнта — **клікабельне** (золотий, підкреслений). Клік → модалка `#client-card-modal`:
+- Ім'я + клікабельний телефон
+- Повна історія візитів (WLaunch API realtime + local DB + manual appointments)
+- Спеціаліст (В/А кольором), скасовані — перекреслені
+- API: `GET /api/admin/client-card/<phone>`
+
+### Відомі обмеження (не виправлено, прийнятні)
+
+- **PTR в TWA** — не працює, задокументовано в TODO_PTR.md
+- **IG messenger** — App Review pending, receive не працює
+- **Safari voice recording** — обмежена підтримка MediaRecorder codecs
+- **Calendar timezone** — "now" лінія використовує device time (не Kyiv)
+- **Conversation list** — LIMIT 50, без пагінації
+
+### Відомі пастки (з досвіду)
+
+- **`doRefresh()` в PTR IIFE** — не ламати `try { if/else if } catch` структуру. Syntax error вбиває ВСЕ нижче, включаючи `_fmtDateStr` і весь admin функціонал
+- **Phone display regex** — `/^380/` → `'0'` (НЕ `/^38/` — це дає `00...`)
+- **Calendar onclick ID** — завжди передавати як string: `openApptAction('id')` + порівнювати `String(x.id) === String(id)`. Працює для numeric (manual) і string (WLaunch) IDs
+- **CSS `transform` на hover** — НЕ видаляти `.adm-tl-appt:hover{transform:scale(1.01)}` — без нього інші CSS зміни можуть зламати stacking order
+
+### Instagram AI — план (після App Review)
+
+Коли IG App Review пройде, додамо AI auto-reply для Instagram DM:
+1. Webhook endpoint для вхідних IG messages (замість polling)
+2. Та ж `_build_system_prompt()` + `_call_anthropic()` логіка з контекстом "Instagram"
+3. Відповідь через Graph API v25.0 `/me/messages`
+4. Ескалація аналогічна TG

@@ -59,8 +59,17 @@
   let _pendingProc    = null;  // процедура, по якій ще не зроблено дію
   let _reminderTimer  = null;  // 10-хв таймер нагадування
 
-  // Зберігаємо історію для контексту Claude
-  const history = []; // { role, content }
+  // Зберігаємо історію для контексту Claude (persistent in localStorage)
+  const _histKey = CONFIG.userPhone ? ('gc_hist_' + CONFIG.userPhone) : 'gc_hist_guest';
+  let history = [];
+  try {
+    var _saved = localStorage.getItem(_histKey);
+    if (_saved) history = JSON.parse(_saved);
+    if (!Array.isArray(history)) history = [];
+  } catch(e) { history = []; }
+  function _saveHistory() {
+    try { localStorage.setItem(_histKey, JSON.stringify(history.slice(-20))); } catch(e) {}
+  }
 
   // ── RATE LIMIT ────────────────────────────────────────────────────────────
   // Гість: 10 запитів/день; авторизований: 20 запитів/день
@@ -712,9 +721,16 @@
       try { new URL(url); } catch(e) { return text; }
       return '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">' + text + '</a>';
     });
-    // plain https://...
-    text = text.replace(/(^|[\s,>])(https?:\/\/[^\s<,]+)/g,
-      '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    // plain https://... (sanitize quotes in URL to prevent attribute injection)
+    text = text.replace(/(^|[\s,>])(https?:\/\/[^\s<,"']+)/g, function(m, pre, url) {
+      var safe = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      return pre + '<a href="' + safe + '" target="_blank" rel="noopener">' + safe + '</a>';
+    });
+    // bare phone numbers (0XX-XXX-XX-XX or 073XXXXXXX patterns)
+    text = text.replace(/(^|[\s,>])(0\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/g, function(m, pre, num) {
+      var digits = num.replace(/[\s-]/g, '');
+      return pre + '<a href="tel:+38' + digits + '">' + num + '</a>';
+    });
     return text;
   }
 
@@ -778,7 +794,12 @@
     document.body.style.overflow = 'hidden';
     if (!_welcomeShown) {
       _welcomeShown = true;
-      addMessage('assistant', WELCOME_MESSAGE);
+      // Restore previous conversation from localStorage
+      if (history.length > 0) {
+        history.forEach(function(m) { addMessage(m.role, m.content); });
+      } else {
+        addMessage('assistant', WELCOME_MESSAGE);
+      }
     }
     setTimeout(() => elInput.focus(), 350);
     scrollBottom();
@@ -881,6 +902,8 @@
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
+    while (history.length > 20) history.shift();
+    _saveHistory();
 
     // Google Ads conversion — перше повідомлення в чаті
     if (history.length === 1 && typeof gtag === 'function') {
@@ -900,6 +923,9 @@
     startTyping();
 
     try {
+      const _ac = new AbortController();
+      const _to = setTimeout(function() { _ac.abort(); }, 25000);
+
       const res = await fetch(CONFIG.apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -910,7 +936,9 @@
           },
           messages: history,
         }),
+        signal: _ac.signal,
       });
+      clearTimeout(_to);
 
       const data = await res.json();
 
@@ -923,6 +951,7 @@
 
       addMessage('assistant', data.reply);
       history.push({ role: 'assistant', content: data.reply });
+      _saveHistory();
 
       // Якщо агент підібрав процедуру — показуємо картку
       if (data.procedure) {
@@ -937,7 +966,11 @@
 
     } catch (err) {
       stopTyping();
-      addMessage('assistant', 'Немає зв\'язку із сервером. Перевірте інтернет і спробуйте ще раз.');
+      if (err.name === 'AbortError') {
+        addMessage('assistant', 'Сервер не відповів вчасно. Спробуйте ще раз або зателефонуйте нам: 073-310-31-10.');
+      } else {
+        addMessage('assistant', 'Немає зв\'язку із сервером. Перевірте інтернет і спробуйте ще раз.');
+      }
     } finally {
       isLoading = false;
       elSend.disabled = false;
@@ -1017,19 +1050,31 @@
 
 
   // ── KEYBOARD / VIEWPORT FIX (Android) ────────────────────────────────────
+  // Використовуємо visualViewport.height для точної висоти без клавіатури
+  // Header + footer фіксовані (flex-shrink:0), messages скролиться (flex:1)
 
   function applyViewport() {
     if (!window.visualViewport) return;
-    const vh     = window.visualViewport.height;
-    const offTop = window.visualViewport.offsetTop || 0;
-    elWindow.style.maxHeight = (vh - 8) + 'px';
-    elWindow.style.bottom    = offTop > 0 ? offTop + 'px' : '';
+    var vh = window.visualViewport.height;
+    elWindow.style.height = vh + 'px';
+    elWindow.style.maxHeight = vh + 'px';
+    elWindow.style.top = window.visualViewport.offsetTop + 'px';
+    elWindow.style.bottom = 'auto';
+    scrollBottom();
   }
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', applyViewport);
     window.visualViewport.addEventListener('scroll', applyViewport);
   }
+
+  // scrollIntoView при фокусі на input
+  elInput.addEventListener('focus', function() {
+    setTimeout(function() {
+      if (window.visualViewport) applyViewport();
+      elInput.scrollIntoView({block: 'nearest'});
+    }, 300);
+  });
 
   // При згортанні/закритті — одразу надсилаємо push якщо є pending процедура
   document.addEventListener('visibilitychange', () => {

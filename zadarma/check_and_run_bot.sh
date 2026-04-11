@@ -403,6 +403,14 @@ main() {
                 if start_bot; then
                     exit 0
                 else
+                    # Рестарт не допоміг — TG алерт
+                    cd "$BOT_DIR"
+                    "$PYTHON_EXEC" -c "
+import requests
+from config import TELEGRAM_TOKEN, ADMIN_USER_ID
+requests.post('https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN),
+  json={'chat_id': ADMIN_USER_ID, 'text': '[ALERT] TG бот не піднявся після рестарту. Потрібна ручна перевірка.'}, timeout=10)
+" 2>/dev/null
                     exit 1
                 fi
             fi

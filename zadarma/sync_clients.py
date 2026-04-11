@@ -4,14 +4,14 @@ import logging
 import os
 from datetime import datetime, timedelta
 from user_db import update_clients, add_or_update_client
-from config import COMPANY_ID, WLAUNCH_API_KEY, ADMIN_USER_ID, TELEGRAM_TOKEN
+from config import COMPANY_ID, WLAUNCH_API_KEY, ADMIN_USER_ID, TELEGRAM_TOKEN, WLAUNCH_API_URL
 
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://api.wlaunch.net/v1"
+API_BASE = WLAUNCH_API_URL
 FIRST_SYNC_FLAG_FILE = "/home/gomoncli/zadarma/.first_sync_done"
 
-def get_clients(created_start=None, created_end=None, page=0, size=1000):
+def get_clients(created_start=None, created_end=None, page=0, size=100):
     """Отримує клієнтів з API з можливістю пагінації"""
     headers = {
         "Authorization": f"Bearer {WLAUNCH_API_KEY}",

@@ -1,22 +1,23 @@
 <?php
 /**
- * Instagram Messenger — PHP Proxy
+ * Instagram Messenger — PHP Proxy (v25.0 Instagram API)
  * POST /messenger/send.php
- * Body: { "recipient_id": "...", "message_text": "..." }
+ * Body: { "recipient_id": "...", "message_text": "...", "token": "..." }
  */
 
 header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
 
-// ── CONFIG ─────────────────────────────────────────────────────────────────
-define('PAGE_ACCESS_TOKEN', 'EAAQLGOh0CyYBRCjOVDovzRrWucgH3X9LXDhTquvg7Hu39RocptXxTr9PcJ57gDeEr1XcZCnG01JazUSSZAZC81u5PYv3opdUvDRGQMAuXGMo3xZCXwDsS8xExqghqFPcjcLk5PTC2G0dQXrCTTZBTRztqVf5Qc9oYrlGAyLBkeAZAsDeob2mZCYBCyg3r9Inqvutexg9NvBDz9JXxZCTJDMZD');
-define('IG_USER_ID',        '17841433380804698');
-define('GRAPH_VERSION',     'v19.0');
+require_once dirname(__DIR__) . '/app/config.php';
 
-// ── CORS (тільки з того самого домену) ───────────────────────────────────
+define('GRAPH_VERSION', 'v25.0');
+
+// ── CORS ───────────────────────────────────────────────────────────────────
+$allowed_hosts = ['gomonclinic.com', 'www.gomonclinic.com', 'drgomon.beauty', 'www.drgomon.beauty'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin) {
     $host = parse_url($origin, PHP_URL_HOST) ?? '';
-    if (str_ends_with($host, 'gomon.ua') || str_ends_with($host, 'gomonclinic.com') || $host === 'localhost') {
+    if (in_array($host, $allowed_hosts, true)) {
         header("Access-Control-Allow-Origin: $origin");
         header('Access-Control-Allow-Methods: POST, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type');
@@ -24,14 +25,13 @@ if ($origin) {
 }
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-// ── ТІЛЬКИ POST ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed']);
     exit;
 }
 
-// ── ПАРСИНГ ТІЛА ──────────────────────────────────────────────────────────
+// ── PARSE BODY ─────────────────────────────────────────────────────────────
 $raw  = file_get_contents('php://input');
 $body = json_decode($raw, true);
 
@@ -43,6 +43,7 @@ if (!$body || !isset($body['recipient_id'], $body['message_text'])) {
 
 $recipient_id = trim($body['recipient_id']);
 $message_text = trim($body['message_text']);
+$token        = trim($body['token'] ?? '') ?: IG_FALLBACK_TOKEN;
 
 if ($recipient_id === '' || $message_text === '') {
     http_response_code(400);
@@ -50,8 +51,8 @@ if ($recipient_id === '' || $message_text === '') {
     exit;
 }
 
-// ── ВИКЛИК GRAPH API ──────────────────────────────────────────────────────
-$url     = 'https://graph.facebook.com/' . GRAPH_VERSION . '/' . IG_USER_ID . '/messages';
+// ── CALL INSTAGRAM GRAPH API ───────────────────────────────────────────────
+$url     = 'https://graph.instagram.com/' . GRAPH_VERSION . '/me/messages';
 $payload = json_encode([
     'recipient' => ['id' => $recipient_id],
     'message'   => ['text' => $message_text],
@@ -64,7 +65,7 @@ curl_setopt_array($ch, [
     CURLOPT_POSTFIELDS     => $payload,
     CURLOPT_HTTPHEADER     => [
         'Content-Type: application/json',
-        'Authorization: Bearer ' . PAGE_ACCESS_TOKEN,
+        'Authorization: Bearer ' . $token,
     ],
     CURLOPT_TIMEOUT        => 15,
     CURLOPT_SSL_VERIFYPEER => true,

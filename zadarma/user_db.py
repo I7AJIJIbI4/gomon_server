@@ -60,9 +60,18 @@ def init_db():
 
 
 def normalize_phone(phone):
-    normalized = ''.join(filter(str.isdigit, phone))
-    logger.debug("📞 Нормалізація: '{}' -> '{}'".format(phone, normalized))
-    return normalized
+    """Normalize phone to 380XXXXXXXXX format."""
+    d = ''.join(filter(str.isdigit, phone))
+    if d.startswith('380') and len(d) == 12:
+        result = d
+    elif d.startswith('0') and len(d) == 10:
+        result = '38' + d
+    elif d.startswith('80') and len(d) == 11:
+        result = '3' + d
+    else:
+        result = d
+    logger.debug("normalize_phone: '{}' -> '{}'".format(phone, result))
+    return result
 
 
 def add_or_update_client(client_id, first_name, last_name, phone,
@@ -143,7 +152,7 @@ def find_client_by_phone(phone):
             # Точний збіг
             cursor.execute('''
                 SELECT id, first_name, last_name, phone,
-                       last_service, last_visit, visits_count
+                       last_service, last_visit, visits_count, services_json
                 FROM clients WHERE phone = ? LIMIT 1
             ''', (phone_norm,))
             row = cursor.fetchone()
@@ -164,7 +173,7 @@ def find_client_by_phone(phone):
             # Пошук за патерном
             cursor.execute('''
                 SELECT id, first_name, last_name, phone,
-                       last_service, last_visit, visits_count
+                       last_service, last_visit, visits_count, services_json
                 FROM clients WHERE phone LIKE ? LIMIT 1
             ''', (search_pattern,))
             row = cursor.fetchone()

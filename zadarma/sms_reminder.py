@@ -9,22 +9,9 @@ import json
 import sqlite3
 import random
 import requests
-import calendar
 from datetime import date, datetime, timedelta
 from user_db import DB_PATH
 from sms_fly import send_sms
-
-
-def _kyiv_offset():
-    """UTC offset для Europe/Kyiv: +2 (зима) або +3 (літо/DST)."""
-    now = datetime.utcnow()
-    year = now.year
-    # DST: остання неділя березня 01:00 UTC — остання неділя жовтня 01:00 UTC
-    mar_last_sun = 31 - calendar.weekday(year, 3, 31)
-    oct_last_sun = 31 - calendar.weekday(year, 10, 31)
-    dst_start = datetime(year, 3, mar_last_sun, 1, 0)
-    dst_end = datetime(year, 10, oct_last_sun, 1, 0)
-    return 3 if dst_start <= now < dst_end else 2
 
 
 def _send_reminder(phone, tg_text, sms_text=None):
@@ -51,11 +38,10 @@ logger = logging.getLogger('sms_reminder')
 
 LOG_FILE = '/home/gomoncli/zadarma/sms_reminder.log'
 
-# Telegram: кому надсилати звіти
-# NOTIFY_ALL  — успішні відправки + загальний підсумок
-# NOTIFY_ADMIN — тільки помилки (тільки головний адмін)
-NOTIFY_ALL   = [573368771, 7930079513]   # samydoma (093...), Dr.Gomon (073...)
-NOTIFY_ADMIN = [573368771]               # samydoma — помилки тільки йому
+# Telegram: кому надсилати звіти (з config.py)
+from config import ADMIN_USER_IDS, ADMIN_USER_ID
+NOTIFY_ALL   = ADMIN_USER_IDS[:2]  # samydoma, DrGomon — підсумки
+NOTIFY_ADMIN = [ADMIN_USER_ID]     # samydoma — помилки
 
 # =============================================================================
 # КОНФІГУРАЦІЯ ІНТЕРВАЛІВ (днів до наступної процедури)
@@ -245,7 +231,7 @@ def _tg_send(chat_id, text, token):
     """Відправляє повідомлення в Telegram (HTML). Делегує в notifier._send_tg."""
     try:
         from notifier import _send_tg
-        ok = _send_tg(chat_id, text)
+        ok = _send_tg(chat_id, text, parse_mode='HTML')
         if not ok:
             logger.warning('Telegram send failed via notifier to {}'.format(chat_id))
     except Exception as e:
@@ -556,9 +542,9 @@ def check_and_send_reminders(dry_run=False):
                 stats['skipped'] += 1
                 continue
 
-            # Визначаємо годину відправки (UTC → Київ, з урахуванням DST)
+            # Визначаємо годину відправки (hour вже в київському часі після sync)
             if appt_hour_utc is not None:
-                send_hour = appt_hour_utc + _kyiv_offset()
+                send_hour = appt_hour_utc
                 if send_hour < 9:
                     send_hour = 9
                 elif send_hour > MAX_SEND_HOUR:

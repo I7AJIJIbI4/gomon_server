@@ -18,6 +18,7 @@ import requests
 from datetime import datetime
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
+from tz_utils import kyiv_now
 
 logger = logging.getLogger('notifier')
 
@@ -89,56 +90,76 @@ def _db():
 
 def _init_notification_log():
     """Таблиця notification_log — єдине місце дедуплікації всіх каналів."""
+    from datetime import timedelta
     conn = _db()
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS notification_log (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            phone           TEXT    NOT NULL,
-            type            TEXT    NOT NULL,
-            -- типи: appt_reminder | feedback | cancel | appt_confirm | spec_new
-            reference       TEXT    NOT NULL,
-            -- 'appt|2026-04-15'  'feedback|2026-04-15'  'cancel|{id}|2026-04-15'
-            channel         TEXT    NOT NULL,   -- 'tg' | 'sms' | 'push'
-            status          TEXT    DEFAULT 'sent',  -- 'sent' | 'failed'
-            sent_at         TEXT    NOT NULL,
-            message_preview TEXT,
-            UNIQUE(phone, type, reference, channel)
+    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS notification_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                phone           TEXT    NOT NULL,
+                type            TEXT    NOT NULL,
+                -- типи: appt_reminder | feedback | cancel | appt_confirm | spec_new
+                reference       TEXT    NOT NULL,
+                -- 'appt|2026-04-15'  'feedback|2026-04-15'  'cancel|{id}|2026-04-15'
+                channel         TEXT    NOT NULL,   -- 'tg' | 'sms' | 'push'
+                status          TEXT    DEFAULT 'sent',  -- 'sent' | 'failed'
+                sent_at         TEXT    NOT NULL,
+                message_preview TEXT,
+                UNIQUE(phone, type, reference, channel)
+            )
+        ''')
+        # Очищення старих записів (старше 30 днів) — таблиця не має рости безмежно
+        cutoff = (kyiv_now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute(
+            "DELETE FROM notification_log WHERE sent_at < ?", (cutoff,)
         )
-    ''')
-    # Очищення старих записів (старше 30 днів) — таблиця не має рости безмежно
-    conn.execute(
-        "DELETE FROM notification_log WHERE sent_at < datetime('now', '-30 days')"
-    )
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
 
-_init_notification_log()
+_notification_log_ready = False
+
+
+def _ensure_notification_log():
+    global _notification_log_ready
+    if _notification_log_ready:
+        return
+    try:
+        _init_notification_log()
+        _notification_log_ready = True
+    except Exception as e:
+        logger.error('_init_notification_log failed: {}'.format(e))
 
 
 def _already_sent(phone, type_, reference, channel):
+    _ensure_notification_log()
     conn = _db()
-    row = conn.execute(
-        'SELECT 1 FROM notification_log WHERE phone=? AND type=? AND reference=? AND channel=?',
-        (phone, type_, reference, channel)
-    ).fetchone()
-    conn.close()
-    return row is not None
+    try:
+        row = conn.execute(
+            'SELECT 1 FROM notification_log WHERE phone=? AND type=? AND reference=? AND channel=?',
+            (phone, type_, reference, channel)
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
 
 
 def _log(phone, type_, reference, channel, status, preview=''):
+    _ensure_notification_log()
+    conn = _db()
     try:
-        conn = _db()
         conn.execute(
             '''INSERT OR IGNORE INTO notification_log
                (phone, type, reference, channel, status, sent_at, message_preview)
                VALUES (?,?,?,?,?,?,?)''',
             (phone, type_, reference, channel, status,
-             datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), (preview or '')[:100])
+             kyiv_now().strftime('%Y-%m-%d %H:%M:%S'), (preview or '')[:100])
         )
         conn.commit()
-        conn.close()
     except Exception as e:
         logger.error('_log error: {}'.format(e))
+    finally:
+        conn.close()
 
 # ─── Telegram ────────────────────────────────────────────────────────────────
 
@@ -150,8 +171,8 @@ def _get_tg_id(phone):
     digits = ''.join(filter(str.isdigit, phone or ''))
     if not digits:
         return None
+    conn = _db()
     try:
-        conn = _db()
         # Точний збіг — прибираємо '+' та пробіли зі збереженого значення
         row = conn.execute(
             "SELECT telegram_id FROM users "
@@ -166,23 +187,28 @@ def _get_tg_id(phone):
                 "WHERE SUBSTR(REPLACE(REPLACE(phone,'+',''),' ',''), -9) = ?",
                 (tail,)
             ).fetchone()
-        conn.close()
         return row['telegram_id'] if row else None
     except Exception as e:
         logger.error('_get_tg_id error: {}'.format(e))
         return None
+    finally:
+        conn.close()
 
 
-def _send_tg(tg_id, text):
+def _send_tg(tg_id, text, parse_mode=None):
     """
     Надсилає повідомлення через Telegram Bot API.
+    parse_mode: None (plain text) або 'HTML'.
     Повертає True при успіху, False при будь-якій помилці (в т.ч. 403 заблоковано).
     """
     try:
         from config import TELEGRAM_TOKEN
+        payload = {'chat_id': tg_id, 'text': text}
+        if parse_mode:
+            payload['parse_mode'] = parse_mode
         r = requests.post(
             'https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN),
-            json={'chat_id': tg_id, 'text': text},
+            json=payload,
             timeout=10
         )
         data = r.json()
@@ -221,12 +247,14 @@ def _send_sms(phone, text):
 
 def notify_client(phone, tg_text, sms_text=None,
                   push_title=None, push_body=None,
-                  push_tag='gomon', push_url='/app/'):
+                  push_tag='gomon', push_url='/app/',
+                  push_only=False):
     """
     Надіслати сповіщення клієнту.
 
     push_title / push_body — якщо None, push не надсилається для цього виклику.
     sms_text               — якщо None, використовується tg_text (без HTML).
+    push_only              — якщо True, надсилає тільки push (TG/SMS обробляє WLaunch).
 
     Повертає: {'push': bool|None, 'tg': bool|None, 'sms': bool|None}
       None = канал не намагались (нема підписки / нема TG ID)
@@ -238,14 +266,16 @@ def notify_client(phone, tg_text, sms_text=None,
         results['push'] = _send_push(phone, push_title, push_body, push_tag, push_url)
 
     # 2. TG → SMS fallback (Push не впливає на рішення по TG/SMS)
-    tg_id = _get_tg_id(phone)
-    if tg_id:
-        ok = _send_tg(tg_id, tg_text)
-        results['tg'] = ok
-        if not ok:
+    #    Пропускаємо якщо push_only (WLaunch сам відправляє SMS/TG)
+    if not push_only:
+        tg_id = _get_tg_id(phone)
+        if tg_id:
+            ok = _send_tg(tg_id, tg_text)
+            results['tg'] = ok
+            if not ok:
+                results['sms'] = _send_sms(phone, sms_text or tg_text)
+        else:
             results['sms'] = _send_sms(phone, sms_text or tg_text)
-    else:
-        results['sms'] = _send_sms(phone, sms_text or tg_text)
 
     return results
 
@@ -297,12 +327,12 @@ def fmt_appt_confirm(appt):
         '💆 {service}\n'
         '👩‍⚕️ {spec_name}\n'
         '📍 БЦ Галерея, 6 поверх (поруч з ТЦ Будинок Торгівлі, через дорогу від McDonald\'s)\n\n'
-        'Переглянути або скасувати: gomonclinic.com/app/'
+        'Переглянути або скасувати: drgomon.beauty/app/'
     ).format(**v)
     sms = (
         'Dr.Gomon: запис {date_short} о {time}, {service}. '
         'Адреса: БЦ Галерея, "ЛІФТ", 6 пов. '
-        'Скасувати: gomonclinic.com/app/'
+        'Скасувати: drgomon.beauty/app/'
     ).format(**v)
     push_title = 'Запис підтверджено ✅'
     push_body  = '{service}, {date_short} о {time}'.format(**v)
@@ -318,11 +348,11 @@ def fmt_reminder_24h(appt):
         '💆 {service}\n'
         '👩‍⚕️ {spec_name}\n\n'
         'Чекаємо вас! Dr. Gómon Cosmetology\n'
-        'gomonclinic.com/app/'
+        'drgomon.beauty/app/'
     ).format(**v)
     sms = (
         'Dr.Gomon: нагадуємо — завтра {date_short} о {time} {service}. '
-        'Скасувати: gomonclinic.com/app/'
+        'Скасувати: drgomon.beauty/app/'
     ).format(**v)
     push_title = 'Запис завтра 🌸'
     push_body  = '{service}, {time}'.format(**v)
@@ -351,12 +381,12 @@ def fmt_cancel_client(appt):
         'Ваш запис скасовано\n\n'
         '📅 {date}\n'
         '💆 {service}\n\n'
-        'Записатись знову: gomonclinic.com/app/\n'
+        'Записатись знову: drgomon.beauty/app/\n'
         'або ig.me/m/dr.gomon'
     ).format(**v)
     sms = (
         'Dr.Gomon: запис {date_short} скасовано. '
-        'Записатись: gomonclinic.com/app/ або ig.me/m/dr.gomon'
+        'Записатись: drgomon.beauty/app/ або ig.me/m/dr.gomon'
     ).format(**v)
     push_title = 'Запис скасовано'
     push_body  = '{service}, {date_short}'.format(**v)
@@ -574,7 +604,7 @@ def send_cancellation(appt):
 
     if phone:
         tg, sms, push_title, push_body = fmt_cancel_client(appt)
-        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel', push_url='/app/#appointments')
+        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel', push_url='/app/#appointments', push_only=True)
         for ch, ok in results['client'].items():
             if ok is not None:
                 _log(phone, 'cancel', ref, ch, 'sent' if ok else 'failed', tg)
@@ -607,7 +637,7 @@ def send_appt_confirm(appt):
         return {'skipped': True}
 
     tg, sms, push_title, push_body = fmt_appt_confirm(appt)
-    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='confirm', push_url='/app/#appointments')
+    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='confirm', push_url='/app/#appointments', push_only=True)
 
     for ch, ok in results.items():
         if ok is not None:

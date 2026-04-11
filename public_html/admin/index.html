@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Dr. Gomon — Superadmin</title>
+<style>
+:root{--bg:#111010;--bg2:#1a1918;--bg3:#222120;--surface:#2a2826;--gold:#c9a96e;--gold-pale:#e8d5b5;--text:#f5f1ea;--text2:#b8b0a5;--text3:#7a7268;--border:rgba(201,169,110,.15);--border-gold:rgba(201,169,110,.25)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;padding:0}
+.container{max-width:480px;margin:0 auto;padding:16px}
+
+/* Auth */
+#auth{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+#auth h1{font-size:22px;color:var(--gold-pale);margin-bottom:24px;font-weight:300}
+#auth input{width:100%;max-width:280px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;color:var(--text);font-size:17px;margin-bottom:12px;text-align:center}
+#auth input::placeholder{color:var(--text3)}
+#auth button{width:100%;max-width:280px;background:var(--gold);color:#111;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:500;cursor:pointer}
+#auth button:disabled{opacity:.5}
+.auth-error{color:#e24b4a;font-size:14px;margin-top:8px;text-align:center}
+
+/* Main */
+#main{display:none}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 0 20px}
+.header h1{font-size:20px;color:var(--gold-pale);font-weight:300}
+.logout-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text3);font-size:13px;cursor:pointer}
+
+/* Specialist card */
+.spec-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.spec-name{font-size:18px;color:var(--gold-pale);margin-bottom:4px}
+.spec-role{font-size:13px;color:var(--text3);margin-bottom:12px}
+
+/* Permission row */
+.perm-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border)}
+.perm-label{font-size:15px;color:var(--text2)}
+.perm-toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.perm-btn{padding:5px 10px;font-size:12px;background:var(--bg3);color:var(--text3);border:none;cursor:pointer;min-width:44px;text-align:center}
+.perm-btn.active-write{background:rgba(29,158,117,.25);color:#1D9E75}
+.perm-btn.active-read{background:rgba(201,169,110,.2);color:var(--gold)}
+.perm-btn.active-deny{background:rgba(226,75,74,.2);color:#E24B4A}
+
+/* Save */
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border-gold);padding:12px 16px;display:none;z-index:100}
+.save-bar.show{display:flex;justify-content:center}
+.save-btn{background:var(--gold);color:#111;border:none;border-radius:10px;padding:12px 40px;font-size:16px;font-weight:500;cursor:pointer;max-width:480px;width:100%}
+.save-btn:disabled{opacity:.5}
+
+/* Toast */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border-gold);border-radius:20px;padding:10px 20px;font-size:15px;color:var(--gold-pale);z-index:200;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <h1>Superadmin Panel</h1>
+  <input id="auth-phone" type="tel" value="03751840375" placeholder="Телефон" readonly>
+  <input id="auth-pin" type="password" inputmode="numeric" maxlength="4" placeholder="PIN" autofocus>
+  <button id="auth-btn" onclick="login()">Увійти</button>
+  <div class="auth-error" id="auth-error"></div>
+</div>
+
+<div id="main">
+  <div class="container">
+    <div class="header">
+      <h1>Права доступу</h1>
+      <button class="logout-btn" onclick="logout()">Вийти</button>
+    </div>
+    <div id="specialists"></div>
+  </div>
+</div>
+
+<div class="save-bar" id="save-bar">
+  <button class="save-btn" id="save-btn" onclick="savePermissions()">Зберегти зміни</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var token = sessionStorage.getItem('sa_token') || '';
+var specData = [];
+var dirty = false;
+
+var FEAT_LABELS = {
+  calendar: 'Календар',
+  clients: 'Клієнти',
+  prices: 'Процедури / Ціни',
+  messenger: 'Месенджер',
+  stats: 'Статистика (головна)',
+  ai_assistant: 'AI-асистент'
+};
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+async function login() {
+  var phone = document.getElementById('auth-phone').value;
+  var pin = document.getElementById('auth-pin').value;
+  var err = document.getElementById('auth-error');
+  err.textContent = '';
+  if (!pin || pin.length < 4) { err.textContent = 'Введіть PIN'; return; }
+
+  var btn = document.getElementById('auth-btn');
+  btn.disabled = true;
+  try {
+    // Step 1: send-otp (PIN_AUTH — returns ok without SMS)
+    await fetch('/api/auth/send-otp', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({phone: phone})
+    });
+    // Step 2: verify PIN
+    var r = await fetch('/api/auth/verify', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({phone: phone, code: pin})
+    });
+    var data = await r.json();
+    if (!data.token) { err.textContent = data.error || 'Невірний PIN'; btn.disabled = false; return; }
+    token = data.token;
+    sessionStorage.setItem('sa_token', token);
+    // Step 3: verify superadmin access
+    var r2 = await fetch('/api/superadmin/resources', {headers: {Authorization: 'Bearer ' + token}});
+    if (!r2.ok) { err.textContent = 'Немає прав superadmin'; btn.disabled = false; token = ''; return; }
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('main').style.display = '';
+    loadData();
+  } catch(e) {
+    err.textContent = 'Помилка зʼєднання';
+  }
+  btn.disabled = false;
+}
+
+function logout() {
+  token = '';
+  sessionStorage.removeItem('sa_token');
+  document.getElementById('auth').style.display = '';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('auth-pin').value = '';
+  dirty = false;
+  document.getElementById('save-bar').classList.remove('show');
+}
+
+async function loadData() {
+  try {
+    var r = await fetch('/api/superadmin/resources', {headers: {Authorization: 'Bearer ' + token}});
+    if (r.status === 403) { logout(); return; }
+    var data = await r.json();
+    specData = data.specialists || [];
+    renderSpecs();
+  } catch(e) { showToast('Помилка завантаження'); }
+}
+
+function renderSpecs() {
+  var el = document.getElementById('specialists');
+  var html = '';
+  specData.forEach(function(s) {
+    html += '<div class="spec-card">';
+    html += '<div class="spec-name">' + esc(s.label) + '</div>';
+    html += '<div class="spec-role">' + esc(s.role) + ' &middot; ' + esc(s.phone.replace(/^380/,'0')) + '</div>';
+
+    if (s.role === 'full') {
+      html += '<div style="padding:8px 0;color:var(--text3);font-size:13px">Повний доступ (лікар)</div>';
+    } else {
+      var feats = Object.keys(FEAT_LABELS);
+      feats.forEach(function(feat) {
+        var level = s.permissions[feat] || 'write';
+        html += '<div class="perm-row">';
+        html += '<span class="perm-label">' + FEAT_LABELS[feat] + '</span>';
+        html += '<div class="perm-toggle">';
+        ['write','read','deny'].forEach(function(lvl) {
+          var labels = {write:'Повний', read:'Читати', deny:'Заборон.'};
+          var active = level === lvl ? 'active-' + lvl : '';
+          html += '<button class="perm-btn ' + active + '" onclick="setPerm(\'' + s.name + '\',\'' + feat + '\',\'' + lvl + '\')">' + labels[lvl] + '</button>';
+        });
+        html += '</div></div>';
+      });
+    }
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function setPerm(specName, feature, level) {
+  specData.forEach(function(s) {
+    if (s.name === specName) s.permissions[feature] = level;
+  });
+  dirty = true;
+  document.getElementById('save-bar').classList.add('show');
+  renderSpecs();
+}
+
+async function savePermissions() {
+  var btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Збереження...';
+  var perms = [];
+  specData.forEach(function(s) {
+    if (s.role === 'full') return; // skip full-access roles
+    Object.keys(s.permissions).forEach(function(feat) {
+      perms.push({specialist: s.name, feature: feat, level: s.permissions[feat]});
+    });
+  });
+  try {
+    var r = await fetch('/api/superadmin/permissions', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + token},
+      body: JSON.stringify({permissions: perms})
+    });
+    if (r.ok) {
+      showToast('Збережено');
+      dirty = false;
+      document.getElementById('save-bar').classList.remove('show');
+    } else { showToast('Помилка збереження'); }
+  } catch(e) { showToast('Помилка зʼєднання'); }
+  btn.disabled = false; btn.textContent = 'Зберегти зміни';
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Auto-login if token exists
+if (token) {
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('main').style.display = '';
+  loadData();
+}
+</script>
+</body>
+</html>

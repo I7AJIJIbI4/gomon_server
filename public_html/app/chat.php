@@ -18,7 +18,8 @@ define('SYSTEM_PROMPT_FILE', __DIR__ . '/system_prompt.txt');
 $allowed_origins = [
     'https://gomonclinic.com',
     'https://www.gomonclinic.com',
-    // 'http://localhost:3000', // для локальної розробки
+    'https://drgomon.beauty',
+    'https://www.drgomon.beauty',
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -174,13 +175,8 @@ try {
         echo json_encode(['error' => 'rate_limit']);
         exit;
     }
-
-    $rl_db->exec(
-        "INSERT INTO rl(key,date,count) VALUES('{$rl_key}','{$today}',1)"
-        . " ON CONFLICT(key,date) DO UPDATE SET count=count+1"
-    );
+    // Rate limit increment deferred — will be applied AFTER successful API call
 } catch (Exception $e) {
-    // RL DB помилка — не блокуємо запит, логуємо в PHP error_log
     error_log('chat.php RL error: ' . $e->getMessage());
     $rl_db = null;
 }
@@ -293,6 +289,18 @@ if (file_exists($prices_file)) {
                 }
             }
 
+            // Шукаємо про що питає клієнт (останнє повідомлення)
+            static $__last_msg = null;
+            if ($__last_msg === null) {
+                $__last_msg = '';
+                for ($mi = count($clean_messages) - 1; $mi >= 0; $mi--) {
+                    if ($clean_messages[$mi]['role'] === 'user') {
+                        $__last_msg = mb_strtolower($clean_messages[$mi]['content']);
+                        break;
+                    }
+                }
+            }
+
             $price_lines[] = "\n**" . $cat_name . "**";
             foreach ($items as $item) {
                 $name  = $item['name']  ?? '';
@@ -301,15 +309,45 @@ if (file_exists($prices_file)) {
                 if ($price && $discount && $source === 'app') {
                     $orig = (int) preg_replace('/[^\d]/', '', $price);
                     $sale = (int) round($orig * (1 - $discount['percent'] / 100));
-                    $price_lines[] = "- {$name}: повна ₴ {$orig}, зі знижкою ₴ {$sale}";
+                    $line = "- {$name}: повна ₴ {$orig}, зі знижкою ₴ {$sale}";
                 } elseif ($price) {
-                    $price_lines[] = "- {$name}: {$price}";
+                    $line = "- {$name}: {$price}";
                 } else {
-                    $price_lines[] = "- {$name} — ціна індивідуально";
+                    $line = "- {$name} — ціна індивідуально";
                 }
+
+                // Короткий опис — завжди (щоб AI міг підібрати процедуру за описом проблеми)
+                $desc = $item['desc'] ?? '';
+                if ($desc) {
+                    // Перше речення — суть процедури
+                    $first_sentence = preg_split('/(?<=[.!?])\s+/u', $desc, 2)[0] ?? $desc;
+                    $line .= " — {$first_sentence}";
+                }
+
+                // Повні деталі — тільки якщо клієнт згадує процедуру або категорію
+                $name_lower = mb_strtolower($name);
+                $cat_lower  = mb_strtolower($cat_name);
+                $mentioned  = ($__last_msg !== '' && (
+                    mb_strpos($__last_msg, $name_lower) !== false ||
+                    mb_strpos($__last_msg, $cat_lower) !== false ||
+                    (mb_strlen($name_lower) >= 5 && mb_strpos($__last_msg, mb_substr($name_lower, 0, 5)) !== false)
+                ));
+                if ($mentioned) {
+                    $duration  = $item['duration']   ?? '';
+                    $prep      = $item['prep']       ?? '';
+                    $aftercare = $item['aftercare']  ?? '';
+                    if ($duration)  $line .= " | Тривалість: {$duration}";
+                    // Повний опис (всі речення) якщо клієнт питав
+                    if (mb_strlen($desc) > mb_strlen($first_sentence ?? ''))
+                        $line .= "\n  Повний опис: {$desc}";
+                    if ($prep)      $line .= "\n  Підготовка: {$prep}";
+                    if ($aftercare) $line .= "\n  Після процедури: {$aftercare}";
+                }
+                $price_lines[] = $line;
             }
         }
         $system_prompt .= "\n\n---\n## Актуальний прайс\n" . implode("\n", $price_lines);
+        $system_prompt .= "\n\nПримітка: кожна процедура має короткий опис (перше речення). Використовуй його щоб підібрати процедуру під проблему клієнта (наприклад, 'тьмяна шкіра' → кисневий догляд). Для процедур, які клієнт згадує напряму, тобі доступні повні деталі (тривалість, підготовка, після процедури).";
 
         if ($source === 'app') {
             $system_prompt .= "\n\nВАЖЛИВО: Клієнт спілкується через додаток. Якщо процедура має знижку через застосунок — ЗАВЖДИ називай обидві ціни: повну і зі знижкою через застосунок.";
@@ -321,10 +359,10 @@ if (file_exists($prices_file)) {
 
 // ── 5. Контекст канала (сайт / додаток) ──────────────────────
 if ($source === 'site') {
-    $system_prompt .= "\n\n---\n## Контекст: сайт gomonclinic.com\nТи спілкуєшся з відвідувачем сайту gomonclinic.com. Людина ще не є зареєстрованим клієнтом. Після відповіді на питання природно запропонуй записатись: Instagram @dr.gomon (ig.me/m/dr.gomon) або Telegram @DrGomonCosmetology. Також можна порадити завантажити додаток gomonclinic.com/app — там діє -10% на ін'єкційні процедури.";
+    $system_prompt .= "\n\n---\n## Контекст: сайт gomonclinic.com\nТи спілкуєшся з відвідувачем сайту gomonclinic.com. Людина ще не є зареєстрованим клієнтом. Після відповіді на питання природно запропонуй записатись через [Instagram](https://ig.me/m/dr.gomon) або [Telegram](https://t.me/DrGomonCosmetology), або зателефонувати [073-310-31-10](tel:+380733103110). Також можна порадити завантажити додаток https://drgomon.beauty/app — там діє -10% на ін'єкційні процедури.\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
 } else {
     // source === 'app' (включно з незареєстрованими, що використовують inline chat)
-    $system_prompt .= "\n\n---\n## Контекст: додаток Dr. Gómon\nТи вбудований асистент у мобільному додатку клініки. Для запису пропонуй написати в чаті додатку або зателефонувати 073-310-31-10.";
+    $system_prompt .= "\n\n---\n## Контекст: додаток Dr. Gómon\nТи вбудований асистент у мобільному додатку клініки. Для запису пропонуй написати в чаті додатку, зателефонувати [073-310-31-10](tel:+380733103110), або написати лікарю в [Instagram](https://ig.me/m/dr.gomon) чи [Telegram](https://t.me/DrGomonCosmetology).\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -399,6 +437,10 @@ foreach ($models_to_try as $idx => $model) {
         $used_model = $model;
         break;
     }
+    // 429 rate limit = key-level, не модель-специфічна — не пробуємо наступну
+    if ($code === 429) {
+        break;
+    }
     // 529 overloaded або 4xx (модель не знайдена) → пробуємо наступну
 }
 
@@ -415,6 +457,18 @@ if (!$reply) {
     http_response_code(502);
     echo json_encode(['error' => 'Empty Claude response']);
     exit;
+}
+
+// Increment rate limit AFTER successful API call (not before)
+if (isset($rl_db) && $rl_db) {
+    try {
+        $ins = $rl_db->prepare('INSERT INTO rl(key,date,count) VALUES(:k,:d,1) ON CONFLICT(key,date) DO UPDATE SET count=count+1');
+        $ins->bindValue(':k', $rl_key);
+        $ins->bindValue(':d', $today);
+        $ins->execute();
+    } catch (Exception $e) {
+        error_log('chat.php RL increment error: ' . $e->getMessage());
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -457,9 +511,10 @@ if (!empty($rl_db)) {
         $log_stmt->bindValue(':st',   'ok');
         $log_stmt->bindValue(':rlen', strlen($clean_messages[count($clean_messages)-1]['content'] ?? ''), SQLITE3_INTEGER);
         $log_stmt->execute();
-        $rl_db->close();
     } catch (Exception $e) {
         error_log('chat.php log error: ' . $e->getMessage());
+    } finally {
+        $rl_db->close();
     }
 }
 

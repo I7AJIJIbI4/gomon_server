@@ -10,17 +10,11 @@ import atexit
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from telegram import ChatAction, InlineKeyboardButton, InlineKeyboardMarkup
 from user_db import init_db, is_authorized_user_simple, get_user_info
-#from sync_management import (
-#    handle_sync_status_command, handle_sync_clean_command, handle_sync_full_command,
-#    handle_sync_test_command, handle_sync_user_command, handle_sync_help_command
-#)
-from config import TELEGRAM_TOKEN, ADMIN_USER_ID, MAP_URL, SCHEME_URL, validate_config
-ADMIN_USER_IDS = [ADMIN_USER_ID, 7930079513, 827551951]  # samydoma, DrGomon, viktoria_gomon
+from config import TELEGRAM_TOKEN, ADMIN_USER_ID, ADMIN_USER_IDS, MAP_URL, SCHEME_URL, validate_config
 
 is_authenticated = is_authorized_user_simple
 
-# Стан очікування вводу суми/опису для LiqPay (user_id -> True)
-_pay_state = {}
+DB_PATH = '/home/gomoncli/zadarma/users.db'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +57,7 @@ def create_pid_file():
 
 def send_error_to_admin(bot, message):
     try:
-        bot.send_message(chat_id=ADMIN_USER_ID, text=message)
+        bot.send_message(chat_id=ADMIN_USER_ID, text=message, parse_mode=None)
         logger.info(f"📤 Повідомлення про помилку відправлено адміну: {message}")
     except Exception as e:
         logger.error(f"❌ Не вдалося відправити повідомлення адміну: {e}")
@@ -350,7 +344,7 @@ def app_command(bot, update):
     try:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://www.gomonclinic.com/go.html",
+            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://drgomon.beauty/go",
             parse_mode=None
         )
     except Exception as e:
@@ -397,7 +391,7 @@ def test_command(bot, update):
         
     except Exception as e:
         logger.exception(f"❌ Помилка в test_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка тестування")
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка тестування", parse_mode=None)
 
 def status_command(bot, update):
     user_id = update.effective_user.id
@@ -428,7 +422,7 @@ def status_command(bot, update):
         
     except Exception as e:
         logger.exception(f"❌ Помилка в status_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка при отриманні статусу")
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка при отриманні статусу", parse_mode=None)
 
 def restart_command(bot, update):
     user_id = update.effective_user.id
@@ -479,8 +473,8 @@ def sync_command(bot, update):
         )
         
         import subprocess
-        subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])
-        
+        subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])  # fire-and-forget
+
         logger.info(f"✅ Ручна синхронізація запущена користувачем {user_id}")
         
     except Exception as e:
@@ -553,7 +547,7 @@ def help_command(bot, update):
             "/map - Карта\n"
             "Техпідтримка: +380733103110"
         )
-        bot.send_message(chat_id=update.message.chat_id, text=simple_help)
+        bot.send_message(chat_id=update.message.chat_id, text=simple_help, parse_mode=None)
 
 def monitor_command(bot, update):
     user_id = update.effective_user.id
@@ -562,21 +556,23 @@ def monitor_command(bot, update):
     if user_id not in ADMIN_USER_IDS:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору"
+            text="❌ Ця команда доступна тільки адміністратору",
+            parse_mode=None
         )
         return
-    
+
     try:
         import os
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="📊 Запускаю API моніторинг..."
+            text="📊 Запускаю API моніторинг...",
+            parse_mode=None
         )
         
         # Запустити api_monitor.py та зберегти результат у файл
         with open("/tmp/monitor_result.txt", "w") as _mf:
-            subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT)
-        
+            subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT, timeout=120)
+
         # Прочитати результат
         try:
             with open("/tmp/monitor_result.txt", "r", encoding="utf-8") as f:
@@ -585,12 +581,14 @@ def monitor_command(bot, update):
                 output = output[:3900] + "\n\n... (обрізано)"
             bot.send_message(
                 chat_id=update.message.chat_id,
-                text=f"📊 МОНІТОРИНГ API:\n\n{output}"
+                text=f"📊 МОНІТОРИНГ API:\n\n{output}",
+                parse_mode=None
             )
         except Exception as e:
             bot.send_message(
                 chat_id=update.message.chat_id,
-                text=f"❌ Помилка читання результату: {e}"
+                text=f"❌ Помилка читання результату: {e}",
+                parse_mode=None
             )
         
         logger.info(f"📊 Моніторинг API відправлено адміну")
@@ -599,7 +597,8 @@ def monitor_command(bot, update):
         logger.exception(f"❌ Помилка в monitor_command: {e}")
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Помилка моніторингу API"
+            text="❌ Помилка моніторингу API",
+            parse_mode=None
         )
 
 def diagnostic_command(bot, update):
@@ -609,10 +608,11 @@ def diagnostic_command(bot, update):
     if user_id not in ADMIN_USER_IDS:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору"
+            text="❌ Ця команда доступна тільки адміністратору",
+            parse_mode=None
         )
         return
-    
+
     try:
         import subprocess
         import os
@@ -628,22 +628,24 @@ def diagnostic_command(bot, update):
         
         # Дискове простір
         try:
-            df_result = subprocess.run(['df', '-h', '/home/gomoncli'], 
-                                     stdout=subprocess.PIPE, 
-                                     stderr=subprocess.PIPE)
+            df_result = subprocess.run(['df', '-h', '/home/gomoncli'],
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     timeout=120)
             if df_result.returncode == 0:
                 lines = df_result.stdout.decode('utf-8').strip().split('\n')
                 if len(lines) > 1:
                     diagnostic_info.append("💾 ДИСК:")
                     diagnostic_info.append(f"   {lines[1]}")
-        except:
+        except Exception:
             pass
         
         # Процеси Python
         try:
-            ps_result = subprocess.run(['ps', 'aux'], 
-                                     stdout=subprocess.PIPE, 
-                                     stderr=subprocess.PIPE)
+            ps_result = subprocess.run(['ps', 'aux'],
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     timeout=120)
             if ps_result.returncode == 0:
                 ps_output = ps_result.stdout.decode('utf-8')
                 python_procs = [line for line in ps_output.split('\n') if 'python' in line and 'zadarma' in line]
@@ -652,7 +654,7 @@ def diagnostic_command(bot, update):
                     parts = proc.split()
                     if len(parts) > 10:
                         diagnostic_info.append(f"   PID:{parts[1]} CPU:{parts[2]}% MEM:{parts[3]}%")
-        except:
+        except Exception:
             pass
         
         # Файли конфігурації
@@ -683,7 +685,7 @@ def diagnostic_command(bot, update):
                         diagnostic_info.append(f"   {error.strip()[:100]}...")
                 else:
                     diagnostic_info.append("✅ Помилок не знайдено")
-        except:
+        except Exception:
             diagnostic_info.append("⚠️ Не вдалося прочитати лог")
         
         output = '\n'.join(diagnostic_info)
@@ -692,15 +694,17 @@ def diagnostic_command(bot, update):
         
         bot.send_message(
             chat_id=update.message.chat_id,
-            text=output
+            text=output,
+            parse_mode=None
         )
         logger.info(f"🔧 Діагностика відправлена адміну")
-        
+
     except Exception as e:
         logger.exception(f"❌ Помилка в diagnostic_command: {e}")
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Помилка при виконанні діагностики"
+            text="❌ Помилка при виконанні діагностики",
+            parse_mode=None
         )
 
 def logs_command(bot, update):
@@ -710,13 +714,14 @@ def logs_command(bot, update):
     if user_id not in ADMIN_USER_IDS:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору"
+            text="❌ Ця команда доступна тільки адміністратору",
+            parse_mode=None
         )
         return
-    
+
     try:
         import os
-        
+
         logs_info = []
         logs_info.append("📋 ОСТАННІ ЗАПИСИ ЛОГІВ")
         logs_info.append("=" * 25)
@@ -759,7 +764,7 @@ def logs_command(bot, update):
             
             size_mb = total_size / (1024 * 1024)
             logs_info.append(f"\n📊 ЗАГАЛОМ: {log_count} файлів, {size_mb:.1f}MB")
-        except:
+        except Exception:
             pass
         
         output = '\n'.join(logs_info)
@@ -768,15 +773,17 @@ def logs_command(bot, update):
         
         bot.send_message(
             chat_id=update.message.chat_id,
-            text=output
+            text=output,
+            parse_mode=None
         )
         logger.info(f"📋 Логи відправлені адміну")
-        
+
     except Exception as e:
         logger.exception(f"❌ Помилка в logs_command: {e}")
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="❌ Помилка при читанні логів"
+            text="❌ Помилка при читанні логів",
+            parse_mode=None
         )
 
 def _show_admin_panel(bot, chat_id):
@@ -790,7 +797,8 @@ def _show_admin_panel(bot, chat_id):
     bot.send_message(
         chat_id=chat_id,
         text="👑 Адмін-панель Dr. Gomon",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=None
     )
 
 
@@ -802,17 +810,17 @@ def admin_command(bot, update):
 
 
 def _do_monitor(bot, chat_id):
-    bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...")
+    bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...", parse_mode=None)
     with open("/tmp/monitor_result.txt", "w") as _mf:
-        subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT)
+        subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT, timeout=120)
     try:
         with open("/tmp/monitor_result.txt", "r", encoding="utf-8") as f:
             output = f.read()
         if len(output) > 3900:
             output = output[:3900] + "\n\n... (обрізано)"
-        bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output))
+        bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output), parse_mode=None)
     except Exception as e:
-        bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e))
+        bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e), parse_mode=None)
 
 
 def _do_logs(bot, chat_id):
@@ -839,7 +847,7 @@ def _do_logs(bot, chat_id):
     output = '\n'.join(logs_info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output)
+    bot.send_message(chat_id=chat_id, text=output, parse_mode=None)
 
 
 def _do_diagnostic(bot, chat_id):
@@ -848,34 +856,34 @@ def _do_diagnostic(bot, chat_id):
             "🤖 PID: {}  Час: {}".format(os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S'))]
     try:
         df = subprocess.run(['df', '-h', '/home/gomoncli'],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
         if df.returncode == 0:
             lines = df.stdout.decode('utf-8').strip().split('\n')
             if len(lines) > 1:
                 info.append("💾 ДИСК: {}".format(lines[1]))
-    except:
+    except Exception:
         pass
     try:
-        ps = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ps = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
         procs = [l for l in ps.stdout.decode('utf-8').split('\n') if 'python' in l and 'zadarma' in l]
         info.append("🐍 PYTHON ПРОЦЕСИ:")
         for p in procs[:3]:
             parts = p.split()
             if len(parts) > 3:
                 info.append("   PID:{} CPU:{}% MEM:{}%".format(parts[1], parts[2], parts[3]))
-    except:
+    except Exception:
         pass
     output = '\n'.join(info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output)
+    bot.send_message(chat_id=chat_id, text=output, parse_mode=None)
 
 
 def _do_sync(bot, chat_id):
     import subprocess
-    bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...")
-    subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])
-    subprocess.Popen(["/usr/bin/python3", "/home/gomoncli/zadarma/sync_appointments.py"],
+    bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...", parse_mode=None)
+    subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])  # fire-and-forget
+    subprocess.Popen(["/usr/bin/python3", "/home/gomoncli/zadarma/sync_appointments.py"],  # fire-and-forget
                      cwd="/home/gomoncli/zadarma")
 
 
@@ -914,8 +922,10 @@ def admin_callback(bot, update):
 
 
 def general_text_handler(bot, update):
-    """Обробляє текстові повідомлення — зараз тільки введення суми для LiqPay."""
+    """Обробляє текстові повідомлення — тільки введення суми для LiqPay (адміни)."""
     user_id = update.effective_user.id
+
+    # Admin payment flow — only for admins in pay state
     if user_id not in ADMIN_USER_IDS or not _pay_state.get(user_id):
         return
 
@@ -937,7 +947,8 @@ def general_text_handler(bot, update):
     except ValueError:
         bot.send_message(
             chat_id=update.message.chat_id,
-            text="⚠️ Некоректна сума. Спробуйте ще раз."
+            text="⚠️ Некоректна сума. Спробуйте ще раз.",
+            parse_mode=None
         )
         return
 
@@ -956,6 +967,9 @@ def general_text_handler(bot, update):
         parse_mode='HTML'
     )
     logger.info(f"💳 Адмін {user_id} ініціював оплату: {amount} грн — {description}")
+
+
+## media_message_handler removed — messages are captured by tg_business_listener.py
 
 
 def error_handler(bot, update, error):
@@ -980,7 +994,7 @@ def error_handler(bot, update, error):
                     "❌ Сталася помилка при обробці команди. Будь ласка, спробуйте ще раз або зверніться до підтримки",
                     parse_mode=None
                 )
-        except:
+        except Exception:
             pass
     
     send_error_to_admin(bot, f"❌ Критична помилка: {error}")
@@ -996,27 +1010,38 @@ from sync_stubs import (
 def save_channel_post(bot, update):
     import sqlite3 as _sq
     FEED_DB = '/home/gomoncli/zadarma/feed.db'
-    msg = update.channel_post
+    msg = update.channel_post or update.edited_channel_post
     if not msg:
         return
     text = msg.text or msg.caption or ''
     media_type = None
     file_id = None
+    thumb_id = None
     if msg.photo:
         media_type = 'photo'
         file_id = msg.photo[-1].file_id
     elif msg.video:
         media_type = 'video'
         file_id = msg.video.file_id
+        if msg.video.thumb:
+            thumb_id = msg.video.thumb.file_id
+    is_edit = bool(update.edited_channel_post)
     try:
         conn = _sq.connect(FEED_DB)
-        conn.execute(
-            'INSERT OR IGNORE INTO posts (tg_msg_id, text, date, media_type, file_id) VALUES (?,?,?,?,?)',
-            (msg.message_id, text, int(msg.date.timestamp()), media_type, file_id)
-        )
+        if is_edit:
+            conn.execute(
+                'UPDATE posts SET text=?, media_type=?, file_id=?, thumb_id=? WHERE tg_msg_id=?',
+                (text, media_type, file_id, thumb_id, msg.message_id)
+            )
+            logger.info(f'Channel post updated: {msg.message_id}')
+        else:
+            conn.execute(
+                'INSERT OR IGNORE INTO posts (tg_msg_id, text, date, media_type, file_id, thumb_id) VALUES (?,?,?,?,?,?)',
+                (msg.message_id, text, int(msg.date.timestamp()), media_type, file_id, thumb_id)
+            )
+            logger.info(f'Channel post saved: {msg.message_id}')
         conn.commit()
         conn.close()
-        logger.info(f'Channel post saved: {msg.message_id}')
     except Exception as e:
         logger.error(f'Feed save error: {e}')
 
@@ -1048,7 +1073,7 @@ def my_services_command(bot, update):
                 text=(
                     "Номер телефону не прив'язаний. "
                     "Поділіться номером через кнопку нижче "
-                    "або відкрийте додаток: https://www.gomonclinic.com/go.html"
+                    "або відкрийте додаток: https://drgomon.beauty/go"
                 ),
                 parse_mode=None
             )
@@ -1059,7 +1084,8 @@ def my_services_command(bot, update):
         # --- collect appointments from clients.services_json ---
         appointments = []
         client_row = conn.execute(
-            "SELECT services_json FROM clients WHERE phone=?", (phone,)
+            "SELECT services_json FROM clients WHERE phone=? OR phone LIKE '%' || ?",
+            (phone, phone[-9:])
         ).fetchone()
         if client_row and client_row[0]:
             try:
@@ -1150,7 +1176,7 @@ def my_services_command(bot, update):
                 lines.append("")
 
             lines.append("Записатись:")
-            lines.append("- Додаток: https://www.gomonclinic.com/go.html")
+            lines.append("- Додаток: https://drgomon.beauty/go")
             lines.append("- Telegram: https://t.me/DrGomonCosmetology")
             lines.append("- Instagram Direct: https://ig.me/m/dr.gomon")
 
@@ -1217,8 +1243,9 @@ def main():
     
     dp.add_handler(CommandHandler("admin", admin_command))
     dp.add_handler(CallbackQueryHandler(admin_callback, pattern='^(pay_start|admin_monitor|admin_diag|admin_logs|admin_sync)$'))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, general_text_handler))
-    dp.add_handler(MessageHandler(Filters.update.channel_posts, save_channel_post))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.channel_posts, general_text_handler))
+    # media_message_handler removed — DM messages captured by tg_business_listener.py
+    dp.add_handler(MessageHandler(Filters.update.channel_posts | Filters.update.edited_channel_post, save_channel_post))
     dp.add_error_handler(error_handler)
     
     logger.info("✅ Всі обробники додані")

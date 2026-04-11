@@ -44,8 +44,20 @@ curl_close($ch);
 
 http_response_code($http_code ?: 502);
 header('Content-Type: ' . ($content_type ?: 'application/json'));
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+
+// CORS — restricted to known origins
+$allowed_hosts = ['gomonclinic.com', 'www.gomonclinic.com', 'drgomon.beauty', 'www.drgomon.beauty'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin) {
+    $host = parse_url($origin, PHP_URL_HOST) ?? '';
+    if (in_array($host, $allowed_hosts, true)) {
+        header("Access-Control-Allow-Origin: $origin");
+    }
+} else {
+    // Same-origin requests (no Origin header) — allow
+    header('Access-Control-Allow-Origin: https://gomonclinic.com');
+}
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Authorization, Content-Type');
 
 if ($method === 'OPTIONS') { exit; }

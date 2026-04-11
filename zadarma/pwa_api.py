@@ -4,7 +4,6 @@
 # Запуск: python3 pwa_api.py
 
 import sqlite3
-import random
 import string
 import secrets
 import time
@@ -13,6 +12,8 @@ import logging
 import logging.handlers
 import os
 import sys
+import re
+import requests as _req
 from functools import wraps
 from datetime import datetime, timedelta
 
@@ -29,7 +30,8 @@ except ImportError:
         return False
 
 app = Flask(__name__)
-CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com'])
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
+CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com', 'https://drgomon.beauty', 'https://www.drgomon.beauty'])
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 _log_handler = logging.handlers.RotatingFileHandler(
@@ -38,17 +40,12 @@ _log_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message
 logging.getLogger().addHandler(_log_handler)
 logger = logging.getLogger('pwa_api')
 
-# ── Startup: перевірка що notifier.py імпортується без помилок ──
-try:
-    import notifier as _notifier_check  # noqa
-    logger.info('notifier.py OK')
-except Exception as _ne:
-    logger.error('notifier.py FAILED TO IMPORT: %s', _ne)
+# notifier.py imported lazily in endpoints that use it
 
 # ── CONFIG ──
 DB_PATH      = '/home/gomoncli/zadarma/users.db'
 FEED_DB      = '/home/gomoncli/zadarma/feed.db'
-from config import TELEGRAM_TOKEN as TG_TOKEN, ANTHROPIC_KEY
+from config import TELEGRAM_TOKEN as TG_TOKEN, ANTHROPIC_KEY, TG_BIZ_TOKEN
 try:
     from config import PIN_AUTH as _PIN_AUTH_CFG
     _PIN_AUTH_OVERRIDE = _PIN_AUTH_CFG
@@ -103,6 +100,16 @@ def init_otp_db():
     conn.execute("DELETE FROM otp_codes WHERE expires_at < ?", (int(time.time()),))
     # Cleanup old rate limit entries (older than 2 hours)
     conn.execute("DELETE FROM otp_rate WHERE window_start < ?", (int(time.time()) - 7200,))
+    c.execute('''CREATE TABLE IF NOT EXISTS magic_tokens (
+        token      TEXT PRIMARY KEY,
+        phone      TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS sms_rate (
+        phone      TEXT PRIMARY KEY,
+        count      INTEGER NOT NULL DEFAULT 0,
+        reset_date TEXT NOT NULL
+    )''')
     conn.commit()
     conn.close()
 
@@ -139,15 +146,108 @@ def init_appointments_db():
         created_by   TEXT
     )''')
     # Add duration column if missing (existing installs)
-    try:
-        conn.execute('ALTER TABLE manual_appointments ADD COLUMN duration INTEGER DEFAULT 60')
-        conn.commit()
-    except Exception:
-        pass  # column already exists
+    for col, ctype, default in [('duration', 'INTEGER', '60'), ('drive_folder_url', 'TEXT', 'NULL')]:
+        try:
+            conn.execute('ALTER TABLE manual_appointments ADD COLUMN {} {} DEFAULT {}'.format(col, ctype, default))
+            conn.commit()
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
 init_appointments_db()
+
+def init_breaks_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS specialist_breaks (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        specialist TEXT NOT NULL,
+        date       TEXT NOT NULL,
+        time_from  TEXT NOT NULL,
+        time_to    TEXT NOT NULL,
+        reason     TEXT,
+        created_by TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+    conn.commit()
+    conn.close()
+
+init_breaks_db()
+
+def init_permissions_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS permissions (
+        specialist TEXT NOT NULL,
+        feature    TEXT NOT NULL,
+        level      TEXT NOT NULL DEFAULT 'write',
+        updated_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (specialist, feature)
+    )''')
+    conn.commit()
+    conn.close()
+
+init_permissions_db()
+
+def _get_permission(specialist, feature):
+    """Returns 'write', 'read', or 'deny'. Defaults to 'write' if not set."""
+    if not specialist or not feature:
+        return 'write'
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        row = conn.execute('SELECT level FROM permissions WHERE specialist=? AND feature=?',
+                           (specialist, feature)).fetchone()
+        conn.close()
+        return row[0] if row else 'write'
+    except Exception:
+        return 'write'
+
+def _check_perm(feature, need='read'):
+    """Check permission for current admin. Returns None if OK, or 403 response."""
+    role = getattr(request, 'admin_role', '')
+    if role in ('superadmin', 'full'):
+        return None  # superadmin/full (Вікторія) always have full access
+    spec = getattr(request, 'admin_specialist', '')
+    if not spec:
+        return None
+    level = getattr(request, 'admin_permissions', {}).get(feature, 'write')
+    if need == 'read' and level in ('read', 'write'):
+        return None
+    if need == 'write' and level == 'write':
+        return None
+    return jsonify({'error': 'permission_denied', 'feature': feature}), 403
+
+def init_messages_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''CREATE TABLE IF NOT EXISTS messages (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        platform        TEXT NOT NULL DEFAULT 'telegram',
+        conversation_id TEXT NOT NULL,
+        sender_id       TEXT NOT NULL,
+        sender_name     TEXT,
+        client_phone    TEXT,
+        content         TEXT,
+        media_type      TEXT,
+        file_id         TEXT,
+        created_at      TEXT DEFAULT (datetime('now')),
+        is_from_admin   INTEGER DEFAULT 0,
+        admin_phone     TEXT,
+        is_read         INTEGER DEFAULT 0
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at DESC)')
+    # Partial index for unread messages
+    try:
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages(is_read) WHERE is_read=0')
+    except Exception:
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages(is_read)')
+    conn.execute('''CREATE TABLE IF NOT EXISTS biz_connections (
+        chat_id TEXT PRIMARY KEY,
+        biz_conn_id TEXT NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
+
+init_messages_db()
 
 
 def _time_to_min(t):
@@ -172,8 +272,9 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None):
         e = s + (row[1] or 60)
         if new_start < e and s < new_end:
             return True
-    # Check WLaunch appointments from services_json
-    for row in conn.execute('SELECT services_json FROM clients').fetchall():
+    # Check WLaunch appointments from services_json (pre-filter by date AND specialist)
+    for row in conn.execute('SELECT services_json FROM clients WHERE services_json LIKE ? AND services_json LIKE ?',
+                            ('%' + date + '%', '%' + specialist + '%')).fetchall():
         try:
             items = json.loads(row[0] or '[]')
         except Exception:
@@ -190,6 +291,14 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None):
             e = s + (it.get('duration_min') or 60)
             if new_start < e and s < new_end:
                 return True
+    # Check specialist_breaks
+    for row in conn.execute(
+        'SELECT time_from, time_to FROM specialist_breaks WHERE specialist=? AND date=?',
+        (specialist, date)).fetchall():
+        s = _time_to_min(row[0])
+        e = _time_to_min(row[1])
+        if new_start < e and s < new_end:
+            return True
     return False
 
 def save_lead(phone: str, procedure: str, source: str = 'app'):
@@ -198,13 +307,15 @@ def save_lead(phone: str, procedure: str, source: str = 'app'):
         return
     try:
         conn = sqlite3.connect(OTP_DB)
-        conn.execute(
-            'INSERT OR REPLACE INTO leads (phone, procedure, source) VALUES (?,?,?)',
-            (phone, procedure, source)
-        )
-        conn.commit()
-        conn.close()
-        logger.info('lead saved: {}'.format(phone))
+        try:
+            conn.execute(
+                'INSERT OR REPLACE INTO leads (phone, procedure, source) VALUES (?,?,?)',
+                (phone, procedure, source)
+            )
+            conn.commit()
+            logger.info('lead saved: {}'.format(phone))
+        finally:
+            conn.close()
     except Exception as e:
         logger.warning('save_lead error: {}'.format(e))
 
@@ -216,7 +327,11 @@ ADMIN_ROLES = {
     '380996093860': 'full',
     '380685129121': 'specialist',
     '16452040153':  'specialist',   # test account (Anastasia role, no appointments)
+    '03751840375':  'superadmin',   # superadmin panel
 }
+SUPERADMIN_PHONE = '03751840375'
+PERMISSION_FEATURES = ('calendar', 'clients', 'prices', 'messenger', 'stats', 'ai_assistant')
+PERMISSION_LEVELS = ('write', 'read', 'deny')
 SPECIALIST_MAP = {
     '380996093860': 'victoria',
     '380685129121': 'anastasia',
@@ -231,16 +346,11 @@ def get_admin_role(phone: str):
     p = norm_phone(phone)
     return ADMIN_ROLES.get(p), SPECIALIST_MAP.get(p)
 
-def norm_phone(phone: str) -> str:
-    """Нормалізує до формату 380XXXXXXXXX"""
-    d = ''.join(filter(str.isdigit, phone))
-    if d.startswith('380') and len(d) == 12:
-        return d
-    if d.startswith('0') and len(d) == 10:
-        return '38' + d
-    if d.startswith('80') and len(d) == 11:
-        return '3' + d
-    return d
+from user_db import normalize_phone as norm_phone
+try:
+    from tz_utils import kyiv_now
+except ImportError:
+    kyiv_now = datetime.now  # fallback if tz_utils missing
 
 def gen_token(n=40):
     return secrets.token_urlsafe(n)
@@ -253,24 +363,26 @@ def get_client(phone: str) -> Optional[dict]:
     """
     normalized = norm_phone(phone)
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    # Шукаємо за точним збігом, потім за хвостом номера
-    c.execute('''SELECT id, first_name, last_name, phone,
-                        last_service, last_visit, visits_count, services_json
-                 FROM clients
-                 WHERE phone = ? OR phone = ?
-                 LIMIT 1''', (normalized, phone))
-    row = c.fetchone()
-    if not row:
-        # Fuzzy: останні 9 цифр
-        tail = normalized[-9:] if len(normalized) >= 9 else normalized
+    try:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        # Шукаємо за точним збігом, потім за хвостом номера
         c.execute('''SELECT id, first_name, last_name, phone,
                             last_service, last_visit, visits_count, services_json
-                     FROM clients WHERE phone LIKE ? LIMIT 1''', (f'%{tail}',))
+                     FROM clients
+                     WHERE phone = ? OR phone = ?
+                     LIMIT 1''', (normalized, phone))
         row = c.fetchone()
-    conn.close()
-    return dict(row) if row else None
+        if not row:
+            # Fuzzy: останні 9 цифр
+            tail = normalized[-9:] if len(normalized) >= 9 else normalized
+            c.execute('''SELECT id, first_name, last_name, phone,
+                                last_service, last_visit, visits_count, services_json
+                         FROM clients WHERE phone LIKE ? LIMIT 1''', (f'%{tail}',))
+            row = c.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 def parse_services(client: dict) -> list:
     """
@@ -284,7 +396,8 @@ def parse_services(client: dict) -> list:
     except (json.JSONDecodeError, TypeError):
         items = []
 
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    # NOTE: Server timezone is Europe/Kyiv; appointment dates are also Kyiv — comparison is correct.
+    today_str = kyiv_now().strftime('%Y-%m-%d')
     result = []
     for item in items:
         if item.get('status') == 'CANCELLED':
@@ -317,19 +430,20 @@ def require_auth(f):
         if not token:
             return jsonify({'error': 'unauthorized'}), 401
         conn = sqlite3.connect(OTP_DB)
-        c = conn.cursor()
-        now = int(time.time())
-        c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?',
-                  (token, now))
-        row = c.fetchone()
-        if not row:
+        try:
+            c = conn.cursor()
+            now = int(time.time())
+            c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?',
+                      (token, now))
+            row = c.fetchone()
+            if not row:
+                return jsonify({'error': 'session_expired'}), 401
+            # sliding window — продовжуємо сесію при кожному запиті
+            c.execute('UPDATE sessions SET expires_at=? WHERE token=?',
+                      (now + SESSION_TTL, token))
+            conn.commit()
+        finally:
             conn.close()
-            return jsonify({'error': 'session_expired'}), 401
-        # sliding window — продовжуємо сесію при кожному запиті
-        c.execute('UPDATE sessions SET expires_at=? WHERE token=?',
-                  (now + SESSION_TTL, token))
-        conn.commit()
-        conn.close()
         request.user_phone = row[0]
         return f(*args, **kwargs)
     return wrapper
@@ -338,7 +452,38 @@ def require_auth(f):
 
 OTP_RATE_LIMIT = 3  # max OTPs per hour
 OTP_RATE_WINDOW = 3600  # 1 hour
-_magic_tokens = {}  # magic_token -> (phone, expires_at)
+MAGIC_TOKEN_TTL = 300  # 5 min
+
+
+def _save_magic_token(token, phone):
+    """Save magic token to DB."""
+    conn = sqlite3.connect(OTP_DB)
+    try:
+        conn.execute('INSERT OR REPLACE INTO magic_tokens (token, phone, created_at) VALUES (?,?,?)',
+                     (token, phone, int(time.time())))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _pop_magic_token(token):
+    """Retrieve and delete magic token atomically. Returns (phone, created_at) or None."""
+    conn = sqlite3.connect(OTP_DB, timeout=5)
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        # Cleanup expired tokens (>5 min)
+        conn.execute('DELETE FROM magic_tokens WHERE created_at < ?',
+                     (int(time.time()) - MAGIC_TOKEN_TTL,))
+        row = conn.execute('SELECT phone, created_at FROM magic_tokens WHERE token=?',
+                           (token,)).fetchone()
+        if row:
+            conn.execute('DELETE FROM magic_tokens WHERE token=?', (token,))
+            conn.commit()
+            return row[0], row[1]
+        conn.commit()
+        return None
+    finally:
+        conn.close()
 
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
@@ -347,15 +492,17 @@ def send_otp():
     if len(phone) < 11:
         return jsonify({'error': 'invalid_phone'}), 400
 
-    # Rate limit: max 3 OTPs per phone per hour (persistent, survives restart)
+    # Rate limit: max 3 OTPs per phone per hour (atomic transaction)
     now_ts = int(time.time())
-    otp_conn = sqlite3.connect(OTP_DB)
+    otp_conn = sqlite3.connect(OTP_DB, timeout=5)
     otp_conn.execute('CREATE TABLE IF NOT EXISTS otp_rate (phone TEXT PRIMARY KEY, count INT, window_start INT)')
+    otp_conn.execute('BEGIN IMMEDIATE')
     row = otp_conn.execute('SELECT count, window_start FROM otp_rate WHERE phone=?', (phone,)).fetchone()
     if row:
         count, window_start = row
         if now_ts - window_start < OTP_RATE_WINDOW:
             if count >= OTP_RATE_LIMIT:
+                otp_conn.rollback()
                 otp_conn.close()
                 return jsonify({'error': 'rate_limited'}), 429
             otp_conn.execute('UPDATE otp_rate SET count=count+1 WHERE phone=?', (phone,))
@@ -376,7 +523,7 @@ def send_otp():
     if phone in PIN_AUTH:
         return jsonify({'ok': True})
 
-    code    = ''.join(random.choices(string.digits, k=4))
+    code    = ''.join(secrets.choice(string.digits) for _ in range(4))
     expires = int(time.time()) + OTP_TTL
 
     conn = sqlite3.connect(OTP_DB)
@@ -385,15 +532,9 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    # TG-first з magic link, SMS/Viber fallback з WebOTP
-    magic = secrets.token_urlsafe(32)
-    _magic_tokens[magic] = (phone, expires)
-    magic_link = 'https://www.gomonclinic.com/app/?magic={}'.format(magic)
-
-    tg_text  = 'Ваш код для входу в Dr. Gomon — {code}.\n\nАбо натисніть для автоматичного входу:\n{link}'.format(
-        code=code, link=magic_link)
-    sms_text = (f"Ваш код — {code}. Дійсний 5 хвилин."
-                f"\n\n@www.gomonclinic.com #{code}")
+    # TG-first, SMS/Viber fallback з WebOTP
+    tg_text  = 'Ваш код для входу:\n\n    {code}\n\nДійсний 5 хвилин.\nDr. Gomon Cosmetology'.format(code=code)
+    sms_text = 'Ваш код — {code}. Дійсний 5 хвилин.\n\n@www.gomonclinic.com #{code}'.format(code=code)
 
     ok = False
     channel = 'sms'
@@ -424,12 +565,16 @@ def verify_magic():
     """Magic link auto-login — одноразовий токен з TG повідомлення."""
     data = request.get_json() or {}
     magic = (data.get('token') or '').strip()
-    if not magic or magic not in _magic_tokens:
+    if not magic:
         return jsonify({'error': 'invalid_token'}), 400
 
-    phone, expires_at = _magic_tokens.pop(magic)  # одноразовий — видаляємо
+    result = _pop_magic_token(magic)
+    if not result:
+        return jsonify({'error': 'invalid_token'}), 400
 
-    if int(time.time()) > expires_at:
+    phone, created_at = result
+
+    if int(time.time()) - created_at > MAGIC_TOKEN_TTL:
         return jsonify({'error': 'token_expired'}), 400
 
     # Видаляємо OTP (вже не потрібен)
@@ -474,18 +619,21 @@ def verify_otp():
         logger.info(f"PIN login: {phone}")
         return jsonify({'ok': True, 'token': token, 'client': _client_payload(client, phone)})
 
-    conn = sqlite3.connect(OTP_DB)
+    conn = sqlite3.connect(OTP_DB, timeout=5)
+    conn.execute('BEGIN IMMEDIATE')
     c    = conn.cursor()
     c.execute('SELECT code, expires_at, attempts FROM otp_codes WHERE phone=?', (phone,))
     row = c.fetchone()
 
     if not row:
+        conn.rollback()
         conn.close()
         return jsonify({'error': 'code_not_found'}), 400
 
     stored_code, expires_at, attempts = row
 
     if attempts >= 5:
+        conn.rollback()
         conn.close()
         return jsonify({'error': 'too_many_attempts'}), 429
 
@@ -501,8 +649,12 @@ def verify_otp():
         conn.close()
         return jsonify({'error': 'wrong_code'}), 400
 
-    # ✅ Успіх
+    # ✅ Успіх — delete OTP + create session atomically
     c.execute('DELETE FROM otp_codes WHERE phone=?', (phone,))
+    # Cap sessions per phone (keep latest 5)
+    c.execute('DELETE FROM sessions WHERE phone=? AND token NOT IN '
+              '(SELECT token FROM sessions WHERE phone=? ORDER BY created_at DESC LIMIT 4)',
+              (phone, phone))
     token = gen_token()
     now   = int(time.time())
     c.execute('INSERT INTO sessions VALUES (?,?,?,?)',
@@ -550,7 +702,8 @@ def get_my_appointments():
             (normalized,)
         ).fetchall()
         conn.close()
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        # NOTE: Server timezone is Europe/Kyiv; manual_appointments dates are also Kyiv.
+        today_str = kyiv_now().strftime('%Y-%m-%d')
         for r in rows:
             appt_status = 'upcoming' if r['date'] >= today_str else 'done'
             appointments.append({
@@ -603,10 +756,20 @@ def get_prices():
                     price = row[2] if len(row) > 2 else ''
                     items.append({'name': name, 'price': price})
                 elif isinstance(row, dict):
-                    items.append({
+                    item = {
                         'name':  row.get('name') or row.get('service') or '',
                         'price': row.get('price') or row.get('cost') or ''
-                    })
+                    }
+                    # Описи процедур — для всіх (публічна інформація про послуги)
+                    if row.get('desc'):
+                        item['desc'] = row['desc']
+                    if row.get('duration'):
+                        item['duration'] = row['duration']
+                    if row.get('prep'):
+                        item['prep'] = row['prep']
+                    if row.get('aftercare'):
+                        item['aftercare'] = row['aftercare']
+                    items.append(item)
             if items:
                 result.append({'cat': cat_name, 'items': items})
         return jsonify(result)
@@ -641,21 +804,70 @@ def health():
 
 @app.route('/api/feed', methods=['GET'])
 def get_feed():
+    """Повертає пости згруповані по днях. Кожен день = одна картка."""
     try:
         conn = sqlite3.connect(FEED_DB)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            'SELECT id, tg_msg_id, text, date, media_type, file_id FROM posts ORDER BY date DESC LIMIT 30'
+            'SELECT id, tg_msg_id, text, date, media_type, file_id, thumb_id FROM posts ORDER BY date ASC LIMIT 100'
         ).fetchall()
         conn.close()
-        return jsonify([dict(r) for r in rows])
+
+        # Групуємо по днях (Київський час, не UTC)
+        from collections import OrderedDict
+        from tz_utils import kyiv_offset
+        kyiv_off = kyiv_offset() * 3600  # секунд
+        days = OrderedDict()
+        for r in rows:
+            kyiv_ts = r['date'] + kyiv_off
+            day_ts = kyiv_ts - (kyiv_ts % 86400)  # початок дня Київ
+            if day_ts not in days:
+                days[day_ts] = {'date': r['date'], 'texts': [], 'media': []}
+            if r['text'] and r['text'].strip():
+                # Fix escaped newlines from TG (literal \n → real newline)
+                clean_text = r['text'].strip().replace('\\n', '\n')
+                days[day_ts]['texts'].append(clean_text)
+            if r['media_type'] and r['file_id']:
+                days[day_ts]['media'].append({
+                    'type': r['media_type'],
+                    'file_id': r['file_id'],
+                    'thumb_id': r['thumb_id'] or None,
+                })
+
+        # Формуємо результат (новіші першими)
+        result = []
+        for day_ts in reversed(days):
+            d = days[day_ts]
+            text = '\n\n'.join(d['texts'])
+            # Превью: пріоритет фото, потім відео
+            preview_media = None
+            for m in d['media']:
+                if m['type'] == 'photo':
+                    preview_media = m
+                    break
+            if not preview_media and d['media']:
+                preview_media = d['media'][0]
+            result.append({
+                'date': d['date'],
+                'text': text,
+                'media': d['media'],
+                'preview': preview_media,
+                'media_count': len(d['media']),
+            })
+
+        return jsonify(result)
     except Exception:
         return jsonify([])
 
 @app.route('/api/feed/media/<fid>')
 def feed_media(fid):
+    # NOTE: This endpoint is intentionally unauthenticated — media must load without auth
+    # (images are referenced in feed posts visible to all users).
+
+    if not re.match(r'^[A-Za-z0-9_-]+$', fid):
+        return '', 403
     try:
-        import requests as _req
+
         from config import TELEGRAM_TOKEN as TG_TOKEN_LOCAL
         r = _req.get('https://api.telegram.org/bot{}/getFile'.format(TG_TOKEN_LOCAL),
                       params={'file_id': fid}, timeout=5)
@@ -671,6 +883,7 @@ def feed_media(fid):
                         headers={'Cache-Control': 'public, max-age=86400'})
     except Exception:
         return '', 502
+
 
 # ── PWA STATIC FILES ──
 
@@ -710,6 +923,7 @@ def _client_payload(client: Optional[dict], phone: str) -> dict:
         'is_admin':     p in ADMIN_ROLES,
         'admin_role':   ADMIN_ROLES.get(p),
         'specialist':   SPECIALIST_MAP.get(p),
+        'permissions':  {},  # filled by frontend via /api/admin/role
     }
 
 
@@ -718,16 +932,24 @@ def _client_payload(client: Optional[dict], phone: str) -> dict:
 # ── ADMIN ──────────────────────────────────────────────────────────────────
 
 def _get_session_phone(token: str):
-    """Returns phone from token or None."""
-    conn = sqlite3.connect(OTP_DB)
-    c = conn.cursor()
-    c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?', (token, int(time.time())))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else None
+    """Returns phone from token or None. Also slides session expiry."""
+    conn = sqlite3.connect(OTP_DB, timeout=5)
+    try:
+        now = int(time.time())
+        c = conn.cursor()
+        c.execute('SELECT phone FROM sessions WHERE token=? AND expires_at>?', (token, now))
+        row = c.fetchone()
+        if row:
+            # Slide session (same as require_auth)
+            conn.execute('UPDATE sessions SET expires_at=? WHERE token=?',
+                         (now + SESSION_TTL, token))
+            conn.commit()
+        return row[0] if row else None
+    finally:
+        conn.close()
 
 def require_admin(f):
-    """Декоратор: superadmin, full і specialist."""
+    """Декоратор: superadmin, full і specialist. Loads permissions."""
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
@@ -738,6 +960,32 @@ def require_admin(f):
             return jsonify({'error': 'forbidden'}), 403
         request.admin_phone = norm_phone(phone)
         request.admin_role, request.admin_specialist = get_admin_role(phone)
+        # Load permissions for specialist
+        request.admin_permissions = {}
+        if request.admin_specialist and request.admin_role == 'specialist':
+            try:
+                conn = sqlite3.connect(DB_PATH, timeout=5)
+                for feat, lvl in conn.execute('SELECT feature, level FROM permissions WHERE specialist=?',
+                                              (request.admin_specialist,)).fetchall():
+                    request.admin_permissions[feat] = lvl
+                conn.close()
+            except Exception:
+                pass
+        return f(*args, **kwargs)
+    return decorated
+
+def require_superadmin(f):
+    """Декоратор: тільки superadmin panel phone."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+        if not token:
+            return jsonify({'error': 'unauthorized'}), 401
+        phone = _get_session_phone(token)
+        if norm_phone(phone or '') != SUPERADMIN_PHONE:
+            return jsonify({'error': 'forbidden'}), 403
+        request.admin_phone = SUPERADMIN_PHONE
+        request.admin_role = 'superadmin'
         return f(*args, **kwargs)
     return decorated
 
@@ -758,9 +1006,36 @@ def require_full_admin(f):
         return f(*args, **kwargs)
     return decorated
 
+
+@app.route('/api/admin/messages/tg-media/<fid>')
+def admin_msg_tg_media(fid):
+    """Proxy TG Business bot media files. No auth required (media URLs are unguessable file_ids)."""
+
+    if not re.match(r'^[A-Za-z0-9_-]+$', fid):
+        return '', 403
+    try:
+
+        r = _req.get('https://api.telegram.org/bot{}/getFile'.format(TG_BIZ_TOKEN),
+                      params={'file_id': fid}, timeout=5)
+        fp = r.json().get('result', {}).get('file_path', '')
+        if not fp:
+            return '', 404
+        media = _req.get('https://api.telegram.org/file/bot{}/{}'.format(TG_BIZ_TOKEN, fp), timeout=15)
+        if media.status_code != 200:
+            return '', 502
+        from flask import Response
+        ct = media.headers.get('Content-Type', 'application/octet-stream')
+        return Response(media.content, content_type=ct,
+                        headers={'Cache-Control': 'public, max-age=86400'})
+    except Exception:
+        return '', 502
+
+
 @app.route('/api/admin/stats', methods=['GET'])
 @require_admin
 def admin_stats():
+    denied = _check_perm('stats', 'read')
+    if denied: return denied
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -768,12 +1043,14 @@ def admin_stats():
     c.execute("SELECT COUNT(*) FROM clients")
     total_clients = c.fetchone()[0]
 
-    c.execute("SELECT COUNT(*) FROM push_subscriptions WHERE active=1")
+    c.execute("SELECT COUNT(DISTINCT phone) FROM push_subscriptions WHERE active=1")
     push_subs = c.fetchone()[0]
 
     # Записи за останні 30 днів
     # Поточний календарний місяць (1-е число → кінець місяця), без CANCELLED
-    now = datetime.now()
+    # NOTE: kyiv_now() uses server local time (Europe/Kyiv on production).
+    # Appointment dates in services_json are also in Kyiv timezone, so comparison is correct.
+    now = kyiv_now()
     month_start = now.strftime('%Y-%m-01')
     if now.month == 12:
         month_end = '{}-12-31'.format(now.year)
@@ -802,7 +1079,7 @@ def admin_stats():
     visits_month = c.fetchone()[0]
 
     # Останні 10 відвідувань
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    today_str = kyiv_now().strftime('%Y-%m-%d')
     if request.admin_role == 'specialist':
         spec = request.admin_specialist
         c.execute("""
@@ -879,7 +1156,8 @@ def _build_price_lookup():
     lookup = {}
     try:
         import json as _json
-        data = _json.load(open(PRICES_PATH))
+        with open(PRICES_PATH, 'r', encoding='utf-8') as _pf:
+            data = _json.load(_pf)
         cats = data.values() if isinstance(data, dict) else data
         for cat in cats:
             if not isinstance(cat, dict):
@@ -916,6 +1194,8 @@ def _client_appts(services_json_str):
 @app.route('/api/admin/clients-list', methods=['GET'])
 @require_admin
 def admin_clients_list():
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -936,6 +1216,114 @@ def admin_clients_list():
             'appointments': _client_appts(r['services_json']),
         })
     return jsonify({'clients': result})
+
+@app.route('/api/admin/client-card/<phone>', methods=['GET'])
+@require_admin
+def admin_client_card(phone):
+    """Client card with all visits — local DB + WLaunch full history."""
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
+    p = norm_phone(phone)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT first_name, last_name, phone, last_service, last_visit, visits_count, services_json "
+        "FROM clients WHERE phone=? OR phone LIKE ?",
+        (p, '%' + p[-9:])).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'visits': [], 'visits_count': 0})
+    # Manual appointments
+    manual = conn.execute(
+        "SELECT procedure_name, specialist, date, time, status FROM manual_appointments "
+        "WHERE client_phone=? OR client_phone LIKE ? ORDER BY date DESC, time DESC",
+        (p, '%' + p[-9:])).fetchall()
+    conn.close()
+
+    visits = []
+    # Local DB services_json
+    local_ids = set()
+    try:
+        services = json.loads(row['services_json'] or '[]')
+        for s in services:
+            visits.append({
+                'date': s.get('date', ''),
+                'service': s.get('service', ''),
+                'specialist': s.get('specialist', ''),
+                'status': s.get('status', ''),
+                'source': 'wlaunch',
+            })
+            if s.get('appt_id'):
+                local_ids.add(s['appt_id'])
+    except Exception:
+        pass
+
+    # Fetch FULL history from WLaunch API (all time)
+    try:
+        from wlaunch_api import HEADERS, get_specialist, parse_appt_time
+        from config import WLAUNCH_API_URL, COMPANY_ID
+
+        from wlaunch_api import get_branch_id
+        branch_id = get_branch_id()
+        if branch_id:
+            tail = p[-9:] if len(p) >= 9 else p
+            url = '{}/company/{}/branch/{}/appointment'.format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
+            page = 0
+            _deadline = time.time() + 15  # aggregate timeout 15s
+            while page < 20 and time.time() < _deadline:
+                r = _req.get(url, headers=HEADERS, params={
+                    'sort': 'start_time,desc', 'page': page, 'size': 100,
+                    'start': '2020-01-01T00:00:00.000Z',
+                    'end': '2030-01-01T00:00:00.000Z',
+                }, timeout=10)
+                data = r.json()
+                appts = data.get('content', [])
+                if not appts:
+                    break
+                for appt in appts:
+                    cl = appt.get('client', {})
+                    cl_phone = ''.join(filter(str.isdigit, cl.get('phone', '')))
+                    if cl_phone[-9:] != tail:
+                        continue
+                    aid = appt.get('id', '')
+                    if aid in local_ids:
+                        continue  # already have it
+                    svcs = appt.get('services', [])
+                    svc_name = ', '.join(s.get('name', '') for s in svcs if s.get('name'))
+                    vdate, vhour = parse_appt_time(appt.get('start_time', ''))
+                    visits.append({
+                        'date': vdate,
+                        'service': svc_name,
+                        'specialist': get_specialist(appt.get('resources', [])),
+                        'status': (appt.get('status') or '').upper(),
+                        'source': 'wlaunch',
+                    })
+                total_pages = data.get('page', {}).get('total_pages', 0)
+                page += 1
+                if page >= total_pages:
+                    break
+    except Exception as e:
+        logger.warning('client-card WLaunch fetch: {}'.format(e))
+
+    # Manual visits
+    for m in manual:
+        visits.append({
+            'date': m['date'],
+            'service': m['procedure_name'],
+            'specialist': m['specialist'],
+            'status': m['status'],
+            'source': 'manual',
+        })
+    visits.sort(key=lambda x: x.get('date', ''), reverse=True)
+
+    return jsonify({
+        'name': ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip(),
+        'phone': row['phone'],
+        'last_service': row['last_service'] or '',
+        'last_visit': row['last_visit'] or '',
+        'visits_count': max(row['visits_count'] or 0, len(visits)),
+        'visits': visits,
+    })
 
 @app.route('/api/admin/users-list', methods=['GET'])
 @require_admin
@@ -1020,7 +1408,7 @@ def admin_month_visits():
     from datetime import datetime
     from_date = request.args.get('from', '')
     to_date   = request.args.get('to', '')
-    since = from_date if from_date else datetime.now().strftime('%Y-%m') + '-01'
+    since = from_date if from_date else kyiv_now().strftime('%Y-%m') + '-01'
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -1085,11 +1473,65 @@ def admin_sync():
 @app.route('/api/admin/role', methods=['GET'])
 @require_admin
 def admin_role():
-    return jsonify({'role': request.admin_role, 'specialist': request.admin_specialist})
+    perms = {}
+    if request.admin_specialist and request.admin_role == 'specialist':
+        for feat in PERMISSION_FEATURES:
+            perms[feat] = request.admin_permissions.get(feat, 'write')
+    return jsonify({'role': request.admin_role, 'specialist': request.admin_specialist,
+                    'permissions': perms})
+
+
+# ── SUPERADMIN PANEL ──────────────────────────────────────────────────────
+
+@app.route('/api/superadmin/resources', methods=['GET'])
+@require_superadmin
+def superadmin_resources():
+    specialists = [
+        {'name': 'victoria', 'phone': '380996093860', 'label': 'Вікторія', 'role': 'full'},
+        {'name': 'anastasia', 'phone': '380685129121', 'label': 'Анастасія', 'role': 'specialist'},
+    ]
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    perm_map = {}
+    for spec, feat, lvl in conn.execute('SELECT specialist, feature, level FROM permissions').fetchall():
+        perm_map.setdefault(spec, {})[feat] = lvl
+    conn.close()
+    for s in specialists:
+        s['permissions'] = {}
+        for feat in PERMISSION_FEATURES:
+            s['permissions'][feat] = perm_map.get(s['name'], {}).get(feat, 'write')
+    return jsonify({'specialists': specialists, 'features': list(PERMISSION_FEATURES),
+                    'levels': list(PERMISSION_LEVELS)})
+
+@app.route('/api/superadmin/permissions', methods=['PUT'])
+@require_superadmin
+def superadmin_put_permissions():
+    data = request.get_json() or {}
+    perms = data.get('permissions', [])
+    if not perms:
+        return jsonify({'error': 'empty'}), 400
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    for p in perms:
+        spec = p.get('specialist', '')
+        feat = p.get('feature', '')
+        lvl = p.get('level', '')
+        if spec not in SPECIALIST_MAP.values():
+            continue
+        if feat not in PERMISSION_FEATURES:
+            continue
+        if lvl not in PERMISSION_LEVELS:
+            continue
+        conn.execute(
+            'INSERT OR REPLACE INTO permissions (specialist, feature, level, updated_at) '
+            'VALUES (?, ?, ?, datetime("now"))', (spec, feat, lvl))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
 
 @app.route('/api/admin/calendar/appointments', methods=['GET'])
 @require_admin
 def admin_cal_get():
+    denied = _check_perm('calendar', 'read')
+    if denied: return denied
     """Список записів: manual_appointments + WLaunch (services_json), фільтр по даті."""
     from_date = request.args.get('from', '')
     to_date   = request.args.get('to', '')
@@ -1100,7 +1542,7 @@ def admin_cal_get():
 
     # 1. Manual appointments
     # Specialist бачить свої записи повністю + чужі як "Зайнято" (без деталей)
-    query = "SELECT * FROM manual_appointments WHERE status != 'CANCELLED'"
+    query = "SELECT * FROM manual_appointments WHERE 1=1"
     params = []
     if from_date:
         query += ' AND date >= ?'
@@ -1134,8 +1576,6 @@ def admin_cal_get():
             if not d:
                 continue
             status = (it.get('status') or '').upper()
-            if status == 'CANCELLED':
-                continue
             if from_date and d < from_date:
                 continue
             if to_date and d > to_date:
@@ -1160,9 +1600,157 @@ def admin_cal_get():
                 'duration_min': it.get('duration_min') or 60,
             })
 
+    # 3. Breaks
+    brk_q = "SELECT id, specialist, date, time_from, time_to, reason FROM specialist_breaks WHERE 1=1"
+    brk_params = []
+    if from_date:
+        brk_q += ' AND date >= ?'; brk_params.append(from_date)
+    if to_date:
+        brk_q += ' AND date <= ?'; brk_params.append(to_date)
+    for bid, spec, bdate, tf, tt, reason in conn.execute(brk_q, brk_params).fetchall():
+        if request.admin_role == 'specialist' and spec != request.admin_specialist:
+            continue
+        dur = _time_to_min(tt) - _time_to_min(tf)
+        result.append({
+            'id': 'brk_{}'.format(bid),
+            'specialist': spec,
+            'date': bdate,
+            'time': tf,
+            'duration_min': dur if dur > 0 else 60,
+            'client_name': reason or 'Перерва',
+            'procedure_name': 'Перерва',
+            'source': 'break',
+            'status': 'CONFIRMED',
+            'break_id': bid,
+        })
+
     conn.close()
     result.sort(key=lambda x: (x['date'], x['time'] or ''))
     return jsonify({'appointments': result})
+
+
+@app.route('/api/admin/calendar/breaks', methods=['POST'])
+@require_admin
+def admin_break_create():
+    """Create a specialist break / off-hours."""
+    d = request.get_json() or {}
+    specialist = (d.get('specialist') or '').strip()
+    date = (d.get('date') or '').strip()
+    time_from = (d.get('time_from') or '').strip()
+    time_to = (d.get('time_to') or '').strip()
+    reason = (d.get('reason') or '').strip()
+
+    if not specialist or not date or not time_from or not time_to:
+        return jsonify({'error': 'missing_fields'}), 400
+
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        return jsonify({'error': 'invalid_date'}), 400
+    if not re.match(r'^\d{2}:\d{2}$', time_from) or not re.match(r'^\d{2}:\d{2}$', time_to):
+        return jsonify({'error': 'invalid_time'}), 400
+    if specialist not in ('victoria', 'anastasia'):
+        return jsonify({'error': 'invalid_specialist'}), 400
+    if request.admin_role == 'specialist' and specialist != request.admin_specialist:
+        return jsonify({'error': 'forbidden'}), 403
+    if time_from >= time_to:
+        return jsonify({'error': 'invalid_range', 'detail': 'Час початку має бути раніше за час кінця'}), 400
+
+    start_min = _time_to_min(time_from)
+    end_min = _time_to_min(time_to)
+
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn.execute('BEGIN IMMEDIATE')
+    if _check_overlap(conn, specialist, date, start_min, end_min):
+        conn.rollback()
+        conn.close()
+        return jsonify({'error': 'conflict', 'detail': 'Перетин з існуючим записом або перервою'}), 409
+    conn.execute(
+        'INSERT INTO specialist_breaks (specialist, date, time_from, time_to, reason, created_by) VALUES (?,?,?,?,?,?)',
+        (specialist, date, time_from, time_to, reason, request.admin_phone))
+    conn.commit()
+    conn.close()
+
+    # Sync to WLaunch — create OFF block
+    wl_id = None
+    try:
+
+        from wlaunch_api import get_branch_id, get_wlaunch_resources, HEADERS
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        bid = get_branch_id()
+        resources = get_wlaunch_resources(bid)
+        rid = resources.get(specialist)
+        if rid and bid:
+            wl_url = '{}/company/{}/branch/{}/resource/{}/schedule/day'.format(
+                WLAUNCH_API_URL, COMPANY_ID, bid, rid)
+            wl_h = dict(HEADERS, **{'Content-Type': 'application/json'})
+            payload = {'frame': {
+                'date': date,
+                'start_time': start_min * 60,
+                'end_time': end_min * 60,
+                'type': 'OFF',
+            }}
+            r = _req.post(wl_url, headers=wl_h, json=payload, timeout=10)
+            if r.status_code in (200, 201):
+                wl_id = r.json().get('id')
+                logger.info('WLaunch break created: {}'.format(wl_id))
+                # Save WLaunch ID to local break
+                conn2 = sqlite3.connect(DB_PATH, timeout=5)
+                conn2.execute('UPDATE specialist_breaks SET reason=? WHERE specialist=? AND date=? AND time_from=? AND time_to=? AND created_by=? ORDER BY id DESC LIMIT 1',
+                    ((reason + ' wl:' + wl_id).strip() if reason else 'wl:' + wl_id,
+                     specialist, date, time_from, time_to, request.admin_phone))
+                conn2.commit()
+                conn2.close()
+            else:
+                logger.warning('WLaunch break failed: {} {}'.format(r.status_code, r.text[:200]))
+    except Exception as e:
+        logger.warning('WLaunch break sync error: {}'.format(e))
+
+    return jsonify({'ok': True, 'wlaunch_id': wl_id})
+
+
+@app.route('/api/admin/calendar/breaks/<int:break_id>', methods=['DELETE'])
+@require_admin
+def admin_break_delete(break_id):
+    """Delete a specialist break."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute('SELECT * FROM specialist_breaks WHERE id=?', (break_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'not_found'}), 404
+    if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
+        conn.close()
+        return jsonify({'error': 'forbidden'}), 403
+    # Extract WLaunch ID from reason field (wl:UUID)
+
+    wl_id = None
+    reason = row['reason'] or ''
+    m = re.search(r'wl:([a-f0-9-]+)', reason, re.IGNORECASE)
+    if m:
+        wl_id = m.group(1)
+
+    conn.execute('DELETE FROM specialist_breaks WHERE id=?', (break_id,))
+    conn.commit()
+    conn.close()
+
+    # Delete from WLaunch
+    if wl_id:
+        try:
+    
+            from wlaunch_api import get_branch_id, get_wlaunch_resources, HEADERS
+            from config import WLAUNCH_API_URL, COMPANY_ID
+            bid = get_branch_id()
+            resources = get_wlaunch_resources(bid)
+            rid = resources.get(row['specialist'])
+            if rid and bid:
+                wl_url = '{}/company/{}/branch/{}/resource/{}/schedule/day/{}'.format(
+                    WLAUNCH_API_URL, COMPANY_ID, bid, rid, wl_id)
+                wl_h = dict(HEADERS, **{'Content-Type': 'application/json'})
+                r = _req.post(wl_url, headers=wl_h, json={'frame': {'active': False}}, timeout=10)
+                logger.info('WLaunch break deleted: {} status={}'.format(wl_id, r.status_code))
+        except Exception as e:
+            logger.warning('WLaunch break delete error: {}'.format(e))
+
+    return jsonify({'ok': True})
 
 
 # Безстрокові ключі для Google Calendar підписки (не протухають, можна відкликати)
@@ -1211,8 +1799,8 @@ def admin_calendar_ics():
         ics_specialist = SPECIALIST_MAP.get(ics_phone, '')
     ics_specialist = SPECIALIST_MAP.get(ics_phone, '')
 
-    from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%d')
+    from_date = (kyiv_now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    to_date   = (kyiv_now() + timedelta(days=90)).strftime('%Y-%m-%d')
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1229,8 +1817,12 @@ def admin_calendar_ics():
             continue
         appts.append(dict(r))
 
-    # WLaunch
-    for row in conn.execute('SELECT phone, first_name, last_name, services_json FROM clients').fetchall():
+    # WLaunch — pre-filter by date range in JSON (avoids scanning all 600 clients)
+    wl_q = 'SELECT phone, first_name, last_name, services_json FROM clients WHERE 1=1'
+    wl_params = []
+    if from_date:
+        wl_q += ' AND services_json LIKE ?'; wl_params.append('%' + from_date[:7] + '%')  # YYYY-MM prefix
+    for row in conn.execute(wl_q, wl_params).fetchall():
         try:
             items = json.loads(row['services_json'] or '[]')
         except Exception:
@@ -1312,6 +1904,8 @@ def admin_calendar_ics():
 @require_admin
 def admin_cal_create():
     """Створити новий запис."""
+    denied = _check_perm('calendar', 'write')
+    if denied: return denied
     d = request.get_json() or {}
     client_phone   = norm_phone(d.get('client_phone', ''))
     client_name    = (d.get('client_name', '') or '').strip()
@@ -1327,12 +1921,12 @@ def admin_cal_create():
     if not procedure_name or not specialist or not date or not appt_time:
         return jsonify({'error': 'missing_fields'}), 400
 
-    import re
+
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
         return jsonify({'error': 'invalid_date'}), 400
     if not re.match(r'^\d{2}:\d{2}$', appt_time):
         return jsonify({'error': 'invalid_time'}), 400
-    if specialist not in ('victoria', 'anastasia', ''):
+    if specialist not in ('victoria', 'anastasia'):
         return jsonify({'error': 'invalid_specialist'}), 400
 
     # Specialist може записувати тільки до себе
@@ -1345,27 +1939,89 @@ def admin_cal_create():
     if end_min > 21 * 60:
         return jsonify({'error': 'too_late', 'detail': 'Запис не може закінчуватись пізніше 21:00'}), 400
 
-    conn = sqlite3.connect(DB_PATH)
+    # 1. Спробувати створити в WLaunch. Якщо WLaunch відмовив через конфлікт
+    #    розкладу (validation) — повертаємо помилку. Якщо WLaunch недоступний
+    #    (мережа, серверна помилка) — створюємо локально як fallback.
+    wl_id = None
+    wl_warning = None
+    try:
+        from wlaunch_api import create_wlaunch_appointment
+        wl_id, wl_err = create_wlaunch_appointment(
+            client_phone, client_name, procedure_name,
+            specialist, date, appt_time, duration
+        )
+        if wl_err:
+            wl_lower = wl_err.lower()
+            if 'unavailable' in wl_lower:
+                return jsonify({'error': 'wlaunch_rejected',
+                    'detail': 'Спеціаліст недоступний у WLaunch у цей час. Перевірте розклад або оберіть інший час.'}), 409
+            if wl_err.startswith('http_422'):
+                return jsonify({'error': 'wlaunch_rejected',
+                    'detail': 'WLaunch відхилив запис. Перевірте дані.'}), 409
+            # Any other WLaunch error — block creation
+            logger.error('WLaunch error: {}'.format(wl_err))
+            return jsonify({'error': 'wlaunch_rejected',
+                'detail': 'WLaunch помилка: {}. Спробуйте пізніше.'.format(wl_err)}), 409
+    except Exception as _e:
+        logger.error('WLaunch create exception: {}'.format(_e))
+        return jsonify({'error': 'wlaunch_rejected',
+            'detail': 'WLaunch недоступний. Спробуйте пізніше.'}), 503
+
+    # 2. WLaunch OK — створюємо локальний запис
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.execute('BEGIN IMMEDIATE')
     new_start = _time_to_min(appt_time)
     new_end   = new_start + duration
     if _check_overlap(conn, specialist, date, new_start, new_end):
         conn.rollback()
         conn.close()
+        # Rollback WLaunch if overlap detected locally
+        if wl_id:
+            try:
+                _cancel_wlaunch_appt(wl_id)
+                logger.warning('WLaunch rollback (local overlap): {}'.format(wl_id))
+            except Exception as _re:
+                logger.error('WLaunch rollback failed: {}'.format(_re))
+                try:
+                    from notifier import _send_tg, _get_tg_id
+                    _send_tg(_get_tg_id('380733103110'), 'WLaunch orphan: rollback failed for wl_id={}. Manual cleanup needed.'.format(wl_id))
+                except Exception:
+                    pass
         return jsonify({'error': 'conflict'}), 409
 
-    c = conn.cursor()
-    c.execute(
-        '''INSERT INTO manual_appointments
-           (client_phone, client_name, procedure_name, specialist, date, time, duration, notes, created_by)
-           VALUES (?,?,?,?,?,?,?,?,?)''',
-        (client_phone, client_name, procedure_name, specialist, date, appt_time, duration, notes, request.admin_phone)
-    )
-    new_id = c.lastrowid
-    conn.commit()
+    wl_notes = 'wl:{}'.format(wl_id) if wl_id else ''
+    full_notes = (notes + ' ' + wl_notes).strip() if notes else wl_notes
+
+    try:
+        c = conn.cursor()
+        c.execute(
+            '''INSERT INTO manual_appointments
+               (client_phone, client_name, procedure_name, specialist, date, time, duration, notes, wlaunch_id, created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?)''',
+            (client_phone, client_name, procedure_name, specialist, date, appt_time, duration, full_notes, wl_id, request.admin_phone)
+        )
+        new_id = c.lastrowid
+        conn.commit()
+    except Exception as _db_err:
+        conn.rollback()
+        conn.close()
+        # Rollback WLaunch if local DB failed
+        if wl_id:
+            try:
+                _cancel_wlaunch_appt(wl_id)
+                logger.warning('WLaunch rollback (DB error): {}'.format(wl_id))
+            except Exception as _re:
+                logger.error('WLaunch rollback failed: {}'.format(_re))
+                try:
+                    from notifier import _send_tg, _get_tg_id
+                    _send_tg(_get_tg_id('380733103110'), 'WLaunch orphan: rollback failed for wl_id={}. Manual cleanup needed.'.format(wl_id))
+                except Exception:
+                    pass
+        logger.error('Local DB insert failed: {}'.format(_db_err))
+        return jsonify({'error': 'db_error'}), 500
     conn.close()
 
-    # Підтвердження запису клієнту
+    # Push підтвердження клієнту (тільки push, TG/SMS — WLaunch)
     if client_phone:
         try:
             from notifier import send_appt_confirm
@@ -1382,13 +2038,16 @@ def admin_cal_create():
         except Exception as _e:
             logger.error('notifier confirm error: {}'.format(_e))
 
-    return jsonify({'ok': True, 'id': new_id})
+    resp = {'ok': True, 'id': new_id, 'wlaunch_id': wl_id}
+    if wl_warning:
+        resp['warning'] = wl_warning
+    return jsonify(resp)
 
 @app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['PUT'])
 @require_admin
 def admin_cal_update(appt_id):
     d = request.get_json() or {}
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     row = conn.execute('SELECT * FROM manual_appointments WHERE id=?', (appt_id,)).fetchone()
     if not row:
@@ -1397,6 +2056,22 @@ def admin_cal_update(appt_id):
     if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
         conn.close()
         return jsonify({'error': 'forbidden'}), 403
+
+    # Validate date/time/specialist if provided
+
+    if 'date' in d and d['date']:
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', d['date']):
+            conn.close()
+            return jsonify({'error': 'invalid_date'}), 400
+    if 'time' in d and d['time']:
+        if not re.match(r'^\d{2}:\d{2}$', d['time']):
+            conn.close()
+            return jsonify({'error': 'invalid_time'}), 400
+    if 'specialist' in d and d['specialist']:
+        if d['specialist'] not in ('victoria', 'anastasia'):
+            conn.close()
+            return jsonify({'error': 'invalid_specialist'}), 400
+
     fields = ['procedure_name', 'specialist', 'date', 'time', 'status', 'notes', 'client_name', 'client_phone', 'duration']
     updates, params = [], []
     for f in fields:
@@ -1406,6 +2081,9 @@ def admin_cal_update(appt_id):
     if not updates:
         conn.close()
         return jsonify({'ok': True})
+
+    # Atomic overlap check + update
+    conn.execute('BEGIN IMMEDIATE')
 
     # Overlap check only when time/date/specialist/duration is being changed
     time_related = {'specialist', 'date', 'time', 'duration'}
@@ -1417,6 +2095,7 @@ def admin_cal_update(appt_id):
         new_start = _time_to_min(eff_time)
         new_end   = new_start + eff_duration
         if _check_overlap(conn, eff_specialist, eff_date, new_start, new_end, exclude_id=appt_id):
+            conn.rollback()
             conn.close()
             return jsonify({'error': 'conflict'}), 409
 
@@ -1438,11 +2117,27 @@ def admin_cal_delete(appt_id):
     if request.admin_role == 'specialist' and row['specialist'] != request.admin_specialist:
         conn.close()
         return jsonify({'error': 'forbidden'}), 403
+    # Cancel in WLaunch FIRST (before local commit)
+    wl_id = row['wlaunch_id'] if row['wlaunch_id'] else None
+    wl_warning = None
+    if not wl_id:
+    
+        m = re.search(r'wl:([a-f0-9-]+)', row['notes'] or '', re.IGNORECASE)
+        if m:
+            wl_id = m.group(1)
+    if wl_id:
+        try:
+            _cancel_wlaunch_appt(wl_id)
+            logger.info('WLaunch cancel on delete: {}'.format(wl_id))
+        except Exception as _wle:
+            logger.error('WLaunch cancel failed on delete: {}'.format(_wle))
+            wl_warning = 'WLaunch cancel failed: {}'.format(_wle)
+
     conn.execute("UPDATE manual_appointments SET status='CANCELLED' WHERE id=?", (appt_id,))
     conn.commit()
     conn.close()
 
-    # Сповіщення клієнту + спеціалісту про скасування
+    # Push клієнту + TG спеціалісту (SMS/TG клієнту — WLaunch)
     try:
         from notifier import send_cancellation
         send_cancellation({
@@ -1458,7 +2153,10 @@ def admin_cal_delete(appt_id):
     except Exception as _e:
         logger.error('notifier cancel error: {}'.format(_e))
 
-    return jsonify({'ok': True})
+    resp = {'ok': True}
+    if wl_warning:
+        resp['warning'] = wl_warning
+    return jsonify(resp)
 
 @app.route('/api/admin/clients/add', methods=['POST'])
 @require_admin
@@ -1492,103 +2190,8 @@ def admin_client_add():
     conn.close()
     return jsonify({'ok': True, 'existing': False})
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ФОТО-АЛЬБОМИ КЛІЄНТІВ — ЗАКОМЕНТОВАНО, ГОТОВО ДО АКТИВАЦІЇ
-#
-# Концепція:
-#   Спеціалісти ведуть shared Google Photos / iCloud альбом для кожного клієнта.
-#   В БД зберігається тільки ПОСИЛАННЯ на альбом (не файли).
-#   В адмін-додатку — кнопка "Фото" що відкриває альбом у браузері.
-#   Без upload на сервер, без thumbnails, без зайвого навантаження.
-#
-# Формат альбому (рекомендація):
-#   - Google Photos: створити shared album → "Отримати посилання" → зберегти URL
-#     URL формат: https://photos.google.com/share/...
-#     Плюси: автобекап, необмежений простір, зручний UI
-#   - iCloud: створити shared album → скопіювати посилання
-#     URL формат: https://www.icloud.com/sharedalbum/...
-#     Плюси: нативний на iPhone, автосинк
-#   - Будь-яке інше: Dropbox, OneDrive — головне URL
-#
-# Структура папок в альбомі (рекомендація):
-#   Назва альбому: "{Ім'я Прізвище} — {Телефон}"
-#   Фото всередині: підписувати датою процедури (Google Photos дозволяє)
-#   Порада: використовувати один Google-акаунт клініки для всіх альбомів
-#
-# Таблиця: client_albums (phone → album_url)
-# API: GET/PUT для збереження і отримання URL альбому
-# UI: кнопка "📷 Фото" в action sheet запису + в картці клієнта
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# def _init_albums_table():
-#     conn = sqlite3.connect(DB_PATH)
-#     conn.execute('''
-#         CREATE TABLE IF NOT EXISTS client_albums (
-#             phone       TEXT PRIMARY KEY,
-#             album_url   TEXT NOT NULL,
-#             album_type  TEXT DEFAULT 'google',  -- 'google', 'icloud', 'other'
-#             updated_by  TEXT,
-#             updated_at  TEXT DEFAULT (datetime('now'))
-#         )
-#     ''')
-#     conn.commit()
-#     conn.close()
-#
-# _init_albums_table()
-#
-#
-# @app.route('/api/admin/album/<phone>', methods=['GET'])
-# @require_admin
-# def admin_album_get(phone):
-#     """Отримати URL фото-альбому клієнта."""
-#     phone = norm_phone(phone)
-#     conn = sqlite3.connect(DB_PATH)
-#     conn.row_factory = sqlite3.Row
-#     row = conn.execute('SELECT * FROM client_albums WHERE phone=?', (phone,)).fetchone()
-#     conn.close()
-#     if not row:
-#         return jsonify({'album': None})
-#     return jsonify({'album': dict(row)})
-#
-#
-# @app.route('/api/admin/album/<phone>', methods=['PUT'])
-# @require_admin
-# def admin_album_set(phone):
-#     """Зберегти/оновити URL фото-альбому клієнта."""
-#     phone = norm_phone(phone)
-#     d = request.get_json() or {}
-#     url = (d.get('album_url') or '').strip()
-#     album_type = d.get('album_type', 'google')
-#     if not url:
-#         return jsonify({'error': 'empty_url'}), 400
-#     if album_type not in ('google', 'icloud', 'other'):
-#         album_type = 'other'
-#     conn = sqlite3.connect(DB_PATH)
-#     conn.execute(
-#         '''INSERT INTO client_albums (phone, album_url, album_type, updated_by, updated_at)
-#            VALUES (?,?,?,?,datetime('now'))
-#            ON CONFLICT(phone) DO UPDATE SET
-#              album_url=excluded.album_url,
-#              album_type=excluded.album_type,
-#              updated_by=excluded.updated_by,
-#              updated_at=excluded.updated_at''',
-#         (phone, url, album_type, request.admin_phone)
-#     )
-#     conn.commit()
-#     conn.close()
-#     return jsonify({'ok': True})
-#
-#
-# @app.route('/api/admin/album/<phone>', methods=['DELETE'])
-# @require_admin
-# def admin_album_delete(phone):
-#     """Видалити прив'язку альбому (не сам альбом — він в Google/iCloud)."""
-#     phone = norm_phone(phone)
-#     conn = sqlite3.connect(DB_PATH)
-#     conn.execute('DELETE FROM client_albums WHERE phone=?', (phone,))
-#     conn.commit()
-#     conn.close()
-#     return jsonify({'ok': True})
+
+# (Photo albums: see gdrive.py + photo_reminder.py)
 
 @app.route('/api/admin/prices/edit', methods=['GET'])
 @require_full_admin
@@ -1721,9 +2324,9 @@ def admin_ai_intent():
     if not text:
         return jsonify({'error': 'empty_text'}), 400
 
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = kyiv_now().strftime('%Y-%m-%d')
     wd_names = ['понеділок','вівторок','середа','четвер','п\'ятниця','субота','неділя']
-    today_wd = wd_names[datetime.now().weekday()]
+    today_wd = wd_names[kyiv_now().weekday()]
 
     all_clients = _load_clients_for_ai()
     all_procs   = _load_procs_for_ai()
@@ -1981,12 +2584,30 @@ def sms_procedure_reminder_guest():
     if len(phone) < 11 or not procedure:
         return jsonify({'error': 'invalid_params'}), 400
 
+    # Rate limit: max 5 SMS per phone per day
+    today_str = kyiv_now().strftime('%Y-%m-%d')
+    conn = sqlite3.connect(OTP_DB)
+    try:
+        row = conn.execute('SELECT count, reset_date FROM sms_rate WHERE phone=?', (phone,)).fetchone()
+        if row:
+            if row[1] == today_str:
+                if row[0] >= 5:
+                    return jsonify({'error': 'rate_limited'}), 429
+            else:
+                conn.execute('UPDATE sms_rate SET count=0, reset_date=? WHERE phone=?', (today_str, phone))
+                conn.commit()
+        # else: will be inserted after sending
+    finally:
+        conn.close()
+
     # Захист від зловживань: тільки якщо телефон є в leads (юзер проходив через додаток)
     conn = sqlite3.connect(OTP_DB)
-    c = conn.cursor()
-    c.execute("SELECT phone FROM leads WHERE phone=? AND created_at >= datetime('now','-3 hours')", (phone,))
-    row = c.fetchone()
-    conn.close()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT phone FROM leads WHERE phone=? AND created_at >= datetime('now','-3 hours')", (phone,))
+        row = c.fetchone()
+    finally:
+        conn.close()
     if not row:
         logger.warning('sms/procedure-reminder: phone not in recent leads: {}'.format(phone))
         return jsonify({'error': 'not_eligible'}), 403
@@ -2019,12 +2640,29 @@ def sms_procedure_reminder_guest():
 
     logger.info('guest procedure-reminder ({}) {} ok={}'.format(channel, phone, ok))
 
+    # Increment SMS rate limit counter
+    try:
+        conn = sqlite3.connect(OTP_DB)
+        try:
+            today_str = kyiv_now().strftime('%Y-%m-%d')
+            conn.execute(
+                'INSERT INTO sms_rate (phone, count, reset_date) VALUES (?,1,?) '
+                'ON CONFLICT(phone) DO UPDATE SET count=count+1, reset_date=?',
+                (phone, today_str, today_str))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
     # Оновлюємо процедуру в leads
     try:
         conn = sqlite3.connect(OTP_DB)
-        conn.execute('UPDATE leads SET procedure=? WHERE phone=?', (procedure, phone))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute('UPDATE leads SET procedure=? WHERE phone=?', (procedure, phone))
+            conn.commit()
+        finally:
+            conn.close()
     except Exception:
         pass
 
@@ -2033,34 +2671,36 @@ def sms_procedure_reminder_guest():
 
 # ── CANCEL APPOINTMENT ──
 
-def _find_wlaunch_appt_id(phone, date_str, service):
-    """Шукає ID запису в WLaunch за телефоном і датою"""
-    import requests as _req
-    from config import WLAUNCH_API_KEY, COMPANY_ID
+def _find_wlaunch_appt_id(phone, date_str, service, branch_id=None):
+    """Шукає ID запису в WLaunch за телефоном і датою.
+    Розширений UTC діапазон +-1 день для коректної роботи з DST."""
+
+    from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
+    from datetime import datetime as _dt, timedelta as _td
     headers = {
         "Authorization": "Bearer " + WLAUNCH_API_KEY,
         "Accept": "application/json"
     }
-    base = "https://api.wlaunch.net/v1"
-    # Отримуємо branch_id
-    try:
-        br = _req.get(base + "/company/" + COMPANY_ID + "/branch/",
-                      headers=headers, params={"active": "true", "page": 0, "size": 1}, timeout=8)
-        br.raise_for_status()
-        branches = br.json().get("content", [])
-        if not branches:
-            return None
-        branch_id = branches[0]["id"]
-    except Exception as e:
-        logger.error("cancel: branch error: {}".format(e))
+    if not branch_id:
+        from wlaunch_api import get_branch_id
+        branch_id = get_branch_id()
+    if not branch_id:
         return None
 
+    # Expand search range +-1 day to handle UTC/Kyiv timezone edge cases
+    try:
+        d = _dt.strptime(date_str, '%Y-%m-%d')
+        start_d = (d - _td(days=1)).strftime('%Y-%m-%d')
+        end_d = (d + _td(days=1)).strftime('%Y-%m-%d')
+    except Exception:
+        start_d = end_d = date_str
+
     phone_digits = ''.join(filter(str.isdigit, phone))
-    url = "{}/company/{}/branch/{}/appointment".format(base, COMPANY_ID, branch_id)
+    url = "{}/company/{}/branch/{}/appointment".format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
     params = {
         "sort": "start_time,desc", "page": 0, "size": 100,
-        "start": date_str + "T00:00:00.000Z",
-        "end":   date_str + "T23:59:59.999Z"
+        "start": start_d + "T00:00:00.000Z",
+        "end":   end_d + "T23:59:59.999Z"
     }
     try:
         resp = _req.get(url, headers=headers, params=params, timeout=10)
@@ -2077,28 +2717,22 @@ def _find_wlaunch_appt_id(phone, date_str, service):
     return None
 
 
-def _cancel_wlaunch_appt(appt_id):
+def _cancel_wlaunch_appt(appt_id, branch_id=None):
     """Скасовує запис у WLaunch через POST {"appointment": {"id": ..., "status": "CANCELLED"}}"""
-    import requests as _req
-    from config import WLAUNCH_API_KEY, COMPANY_ID
+
+    from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
     headers = {
         "Authorization": "Bearer " + WLAUNCH_API_KEY,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    base = "https://api.wlaunch.net/v1"
-    try:
-        br = _req.get(base + "/company/" + COMPANY_ID + "/branch/",
-                      headers=headers, params={"active": "true", "page": 0, "size": 1}, timeout=8)
-        br.raise_for_status()
-        branches = br.json().get("content", [])
-        if not branches:
-            return False, "no_branch"
-        branch_id = branches[0]["id"]
-    except Exception as e:
-        return False, "branch: " + str(e)
+    if not branch_id:
+        from wlaunch_api import get_branch_id
+        branch_id = get_branch_id()
+    if not branch_id:
+        return False, "no_branch"
 
-    url = "{}/company/{}/branch/{}/appointment/{}".format(base, COMPANY_ID, branch_id, appt_id)
+    url = "{}/company/{}/branch/{}/appointment/{}".format(WLAUNCH_API_URL, COMPANY_ID, branch_id, appt_id)
     try:
         resp = _req.post(url, headers=headers,
                          json={"appointment": {"id": appt_id, "status": "CANCELLED"}},
@@ -2129,15 +2763,17 @@ def _update_local_appt_cancelled(phone, date_str, service):
     if changed:
         import sqlite3 as _sq
         conn = _sq.connect(DB_PATH)
-        conn.execute("UPDATE clients SET services_json=? WHERE phone=? OR phone=?",
-                     (json.dumps(items, ensure_ascii=False), phone, norm_phone(phone)))
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute("UPDATE clients SET services_json=? WHERE phone=? OR phone=?",
+                         (json.dumps(items, ensure_ascii=False), phone, norm_phone(phone)))
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def _tg_notify_cancel(name, phone, date_str, service):
     """Telegram notification to admin about cancellation"""
-    import requests as _req
+
     from config import TELEGRAM_TOKEN, ADMIN_USER_IDS
     lines = [
         "Скасування запису",
@@ -2172,14 +2808,29 @@ def cancel_my_appointment():
 
     phone = request.user_phone
 
+    # Fetch branch_id once for both find + cancel
+    from wlaunch_api import get_branch_id as _get_bid
+    _branch_id = _get_bid()
+
+    # Extract specialist BEFORE updating local DB (so status is still CONFIRMED)
+    _client = get_client(phone)
+    _client_name = ((_client.get('first_name','') + ' ' + _client.get('last_name','')).strip()
+                    if _client else '')
+    _specialist = None
+    if _client:
+        for _it in json.loads(_client.get('services_json','[]') or '[]'):
+            if _it.get('date') == date and (not service or _it.get('service') == service):
+                _specialist = _it.get('specialist')
+                break
+
     # Знаходимо WLaunch ID якщо не переданий
     if not appt_id:
-        appt_id = _find_wlaunch_appt_id(phone, date, service)
+        appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
         if not appt_id:
             return jsonify({'error': 'appointment_not_found'}), 404
 
     # Скасовуємо в WLaunch
-    ok, err = _cancel_wlaunch_appt(appt_id)
+    ok, err = _cancel_wlaunch_appt(appt_id, branch_id=_branch_id)
     if not ok:
         logger.error("cancel failed for {}: {}".format(phone, err))
         return jsonify({'error': 'cancel_failed', 'detail': err}), 502
@@ -2187,20 +2838,9 @@ def cancel_my_appointment():
     # Оновлюємо локальну БД
     _update_local_appt_cancelled(phone, date, service)
 
-    # Сповіщення клієнту + спеціалісту про скасування
+    # Push клієнту + TG спеціалісту (SMS/TG клієнту — WLaunch)
     try:
         from notifier import send_cancellation
-        from user_db import get_client_by_phone as _gcbp
-        import json as _json
-        _client = _gcbp(phone)
-        _client_name = ((_client.get('first_name','') + ' ' + _client.get('last_name','')).strip()
-                        if _client else '')
-        _specialist = None
-        if _client:
-            for _it in _json.loads(_client.get('services_json','[]') or '[]'):
-                if _it.get('date') == date and _it.get('service') == service:
-                    _specialist = _it.get('specialist')
-                    break
         send_cancellation({
             'appt_id':        appt_id,
             'client_phone':   phone,
@@ -2212,10 +2852,420 @@ def cancel_my_appointment():
             'duration_min':   60,
         })
     except Exception as _e:
-        logger.error('notifier cancel (client-initiated) error: {}'.format(_e))
+        logger.error('notifier cancel error: {}'.format(_e))
 
     logger.info("Cancelled appointment: {} {} {}".format(phone, date, service))
     return jsonify({'ok': True})
+
+# ── UNIFIED MESSENGER ENDPOINTS ──
+
+def _get_client_name(conn, phone):
+    """Get client name from clients table by phone."""
+    if not phone:
+        return None
+    row = conn.execute(
+        "SELECT first_name, last_name FROM clients WHERE phone=? OR phone=?",
+        (phone, norm_phone(phone))
+    ).fetchone()
+    if row:
+        return '{} {}'.format(row[0] or '', row[1] or '').strip() or None
+    return None
+
+
+@app.route('/api/admin/messages', methods=['GET'])
+@require_admin
+def admin_messages_list():
+    denied = _check_perm('messenger', 'read')
+    if denied: return denied
+    """List conversations with last message, unread count."""
+    platform = request.args.get('platform', '').strip()
+    unread_only = request.args.get('unread_only', '') == '1'
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Subquery: get latest message per conversation
+        query = """
+            SELECT m.conversation_id, m.client_phone, m.sender_name, m.platform,
+                   m.content AS last_message, m.created_at AS last_at,
+                   m.media_type, m.is_from_admin,
+                   (SELECT COUNT(*) FROM messages m2
+                    WHERE m2.conversation_id = m.conversation_id
+                      AND m2.is_read = 0 AND m2.is_from_admin = 0) AS unread_count
+            FROM messages m
+            WHERE m.id = (SELECT MAX(id) FROM messages m3
+                          WHERE m3.conversation_id = m.conversation_id)
+        """
+        params = []
+        if platform:
+            query += " AND m.platform = ?"
+            params.append(platform)
+        query += " ORDER BY m.created_at DESC LIMIT 50"
+
+        rows = conn.execute(query, params).fetchall()
+
+        result = []
+        for r in rows:
+            uc = r['unread_count']
+            if unread_only and uc == 0:
+                continue
+            client_name = _get_client_name(conn, r['client_phone']) or r['sender_name']
+            result.append({
+                'conversation_id': r['conversation_id'],
+                'client_phone':    r['client_phone'],
+                'client_name':     client_name,
+                'sender_name':     r['sender_name'],
+                'platform':        r['platform'],
+                'last_message':    r['last_message'],
+                'last_at':         r['last_at'],
+                'media_type':      r['media_type'],
+                'is_from_admin':   r['is_from_admin'],
+                'unread_count':    uc,
+            })
+        return jsonify({'conversations': result})
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin/messages/<conv_id>', methods=['GET'])
+@require_admin
+def admin_messages_thread(conv_id):
+    """Get messages for a conversation."""
+
+    if not re.match(r'^[a-z]{2,10}_[A-Za-z0-9_-]+$', conv_id):
+        return jsonify({'error': 'invalid_conv_id'}), 400
+
+    limit = min(int(request.args.get('limit', 50)), 200)
+    before_id = request.args.get('before_id', '')
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        query = "SELECT * FROM messages WHERE conversation_id = ?"
+        params = [conv_id]
+        if before_id:
+            query += " AND id < ?"
+            params.append(int(before_id))
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(query, params).fetchall()
+        messages = []
+        for r in rows:
+            messages.append({
+                'id':            r['id'],
+                'platform':      r['platform'],
+                'sender_id':     r['sender_id'],
+                'sender_name':   r['sender_name'],
+                'client_phone':  r['client_phone'],
+                'content':       r['content'],
+                'media_type':    r['media_type'],
+                'file_id':       r['file_id'],
+                'created_at':    r['created_at'],
+                'is_from_admin': r['is_from_admin'],
+                'admin_phone':   r['admin_phone'],
+                'is_read':       r['is_read'],
+            })
+        # Return in chronological order
+        messages.reverse()
+        return jsonify({'messages': messages})
+    finally:
+        conn.close()
+
+
+def _get_biz_connection_id(chat_id):
+    """Get business_connection_id for a chat from biz_connections table."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        try:
+            row = conn.execute(
+                "SELECT biz_conn_id FROM biz_connections WHERE chat_id=?",
+                (str(chat_id),)).fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error('_get_biz_connection_id error: {}'.format(e))
+        return None
+
+def _send_tg_from_api(chat_id, text, media_type='text', media_url=None, file_id=None, file_path=None):
+    """Send a Telegram message via Business Bot API (used by admin messenger).
+
+    media_type: 'text', 'photo', 'video', 'voice'
+    media_url:  URL to forward (not used for TG currently)
+    file_id:    existing TG file_id to re-send
+    file_path:  local file path to upload
+    """
+
+    base = 'https://api.telegram.org/bot{}'.format(TG_BIZ_TOKEN)
+    cid = int(chat_id)
+    biz_conn = _get_biz_connection_id(chat_id)
+
+    if media_type == 'text' or (not media_url and not file_id and not file_path):
+        payload = {'chat_id': cid, 'text': text or '.'}
+        if biz_conn:
+            payload['business_connection_id'] = biz_conn
+        r = _req.post(base + '/sendMessage', json=payload, timeout=10)
+        return r.json()
+
+    method_map = {'photo': 'sendPhoto', 'video': 'sendVideo', 'voice': 'sendVoice'}
+    field_map = {'photo': 'photo', 'video': 'video', 'voice': 'voice'}
+    method = method_map.get(media_type, 'sendDocument')
+    field = field_map.get(media_type, 'document')
+
+    # Option 1: re-send by file_id (cheapest)
+    if file_id:
+        payload = {'chat_id': cid, field: file_id}
+        if text:
+            payload['caption'] = text
+        if biz_conn:
+            payload['business_connection_id'] = biz_conn
+        r = _req.post(base + '/' + method, json=payload, timeout=15)
+        return r.json()
+
+    # Option 2: upload local file
+    if file_path and os.path.isfile(file_path):
+        with open(file_path, 'rb') as fobj:
+            data = {'chat_id': str(cid)}
+            if text:
+                data['caption'] = text
+            if biz_conn:
+                data['business_connection_id'] = biz_conn
+            r = _req.post(base + '/' + method,
+                          data=data,
+                          files={field: fobj},
+                          timeout=30)
+        return r.json()
+
+    # Option 3: send by URL
+    if media_url:
+        payload = {'chat_id': cid, field: media_url}
+        if text:
+            payload['caption'] = text
+        r = _req.post(base + '/' + method, json=payload, timeout=15)
+        return r.json()
+
+    # Fallback: text only
+    r = _req.post(base + '/sendMessage',
+                  json={'chat_id': cid, 'text': text or '.'},
+                  timeout=10)
+    return r.json()
+
+
+@app.route('/api/admin/messages/send', methods=['POST'])
+@require_admin
+def admin_messages_send():
+    """Send a reply in a conversation (text or media)."""
+    data = request.get_json() or {}
+    conv_id = (data.get('conversation_id') or '').strip()
+    text = (data.get('text') or data.get('message') or '').strip()
+    media_type = (data.get('media_type') or 'text').strip()
+    media_url = (data.get('media_url') or '').strip()
+    file_id = (data.get('file_id') or '').strip()
+    file_ref = (data.get('file_ref') or '').strip()  # local filename from upload
+
+    if not conv_id:
+        return jsonify({'error': 'missing_fields'}), 400
+    # Need either text or media
+    if not text and media_type == 'text':
+        return jsonify({'error': 'missing_fields'}), 400
+
+
+    if not re.match(r'^[a-z]{2,10}_[A-Za-z0-9_-]+$', conv_id):
+        return jsonify({'error': 'invalid_conv_id'}), 400
+
+    if media_type not in ('text', 'photo', 'video', 'voice'):
+        return jsonify({'error': 'invalid_media_type'}), 400
+
+    # Determine platform and recipient from conversation_id
+    parts = conv_id.split('_', 1)
+    platform = parts[0]  # 'tg', 'ig', etc.
+    recipient_id = parts[1] if len(parts) > 1 else ''
+
+    # Resolve local file path from file_ref
+    file_path = None
+    if file_ref:
+    
+        if re.match(r'^[A-Za-z0-9_.-]+$', file_ref):
+            candidate = os.path.join('/home/gomoncli/zadarma/msg_media', file_ref)
+            if os.path.isfile(candidate):
+                file_path = candidate
+
+    sent = False
+    error_detail = None
+    tg_file_id = None  # capture file_id from TG response for DB
+
+    if platform == 'tg':
+        # Send via Telegram Bot API
+        try:
+            result = _send_tg_from_api(
+                recipient_id, text,
+                media_type=media_type,
+                media_url=media_url or None,
+                file_id=file_id or None,
+                file_path=file_path
+            )
+            if result.get('ok'):
+                sent = True
+                # Extract file_id from response for DB storage
+                msg_result = result.get('result', {})
+                if media_type == 'photo' and msg_result.get('photo'):
+                    tg_file_id = msg_result['photo'][-1].get('file_id', '')
+                elif media_type == 'video' and msg_result.get('video'):
+                    tg_file_id = msg_result['video'].get('file_id', '')
+                elif media_type == 'voice' and msg_result.get('voice'):
+                    tg_file_id = msg_result['voice'].get('file_id', '')
+            else:
+                error_detail = result.get('description', 'telegram_error')
+        except Exception as e:
+            error_detail = str(e)
+    elif platform == 'ig':
+        # TODO: Instagram Graph API media sending
+        # For now, only text is supported for IG
+        if media_type != 'text':
+            error_detail = 'instagram_media_not_implemented'
+        else:
+            error_detail = 'instagram_not_implemented'
+    else:
+        error_detail = 'unknown_platform'
+
+    if not sent and error_detail:
+        logger.error("admin_messages_send failed: {} {}".format(conv_id, error_detail))
+        return jsonify({'error': 'send_failed', 'detail': error_detail}), 502
+
+    # Save admin message to DB
+    content_for_db = text
+    if media_type != 'text' and not text:
+        type_labels = {'photo': '[Фото]', 'video': '[Відео]', 'voice': '[Голосове]'}
+        content_for_db = type_labels.get(media_type, '[Медіа]')
+
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    try:
+        # Look up client_phone for this conversation
+        row = conn.execute(
+            "SELECT client_phone FROM messages WHERE conversation_id=? LIMIT 1",
+            (conv_id,)
+        ).fetchone()
+        client_phone = row[0] if row else None
+
+        conn.execute(
+            "INSERT INTO messages (platform, conversation_id, sender_id, sender_name, "
+            "client_phone, content, media_type, file_id, is_from_admin, admin_phone) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (platform, conv_id, 'admin_' + request.admin_phone,
+             'Admin', client_phone, content_for_db, media_type,
+             tg_file_id or file_id or '', 1, request.admin_phone))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'ok': True, 'media_type': media_type, 'file_id': tg_file_id or file_id or ''})
+
+
+MSG_MEDIA_DIR = '/home/gomoncli/zadarma/msg_media'
+
+
+@app.route('/api/admin/messages/upload', methods=['POST'])
+@require_admin
+def admin_messages_upload():
+    """Upload media file for messenger (photo/video/voice)."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'no_file'}), 400
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'empty_filename'}), 400
+
+    # Determine media type from content type
+    ct = (f.content_type or '').lower()
+    if ct.startswith('image/'):
+        media_type = 'photo'
+    elif ct.startswith('video/'):
+        media_type = 'video'
+    elif ct.startswith('audio/') or 'ogg' in ct or 'webm' in ct:
+        media_type = 'voice'
+    else:
+        return jsonify({'error': 'unsupported_type', 'detail': ct}), 400
+
+    # Limit file size (10MB)
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > 10 * 1024 * 1024:
+        return jsonify({'error': 'file_too_large'}), 400
+
+    # Ensure directory exists
+    os.makedirs(MSG_MEDIA_DIR, exist_ok=True)
+
+    # Generate safe filename
+
+    ext_map = {
+        'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
+        'video/mp4': '.mp4', 'video/quicktime': '.mov',
+        'audio/ogg': '.ogg', 'audio/webm': '.webm', 'audio/mpeg': '.mp3',
+        'audio/ogg; codecs=opus': '.ogg',
+    }
+    ext = ext_map.get(ct, '')
+    if not ext:
+        # Try from filename
+        orig = f.filename or ''
+        if '.' in orig:
+            ext = '.' + re.sub(r'[^a-zA-Z0-9]', '', orig.rsplit('.', 1)[-1])[:5]
+        else:
+            ext = '.bin'
+    safe_name = secrets.token_urlsafe(16) + ext
+    save_path = os.path.join(MSG_MEDIA_DIR, safe_name)
+    f.save(save_path)
+
+    logger.info("admin_messages_upload: {} ({}, {} bytes) by {}".format(
+        safe_name, media_type, size, request.admin_phone))
+
+    return jsonify({
+        'ok': True,
+        'file_ref': safe_name,
+        'media_type': media_type,
+        'size': size
+    })
+
+
+@app.route('/api/admin/messages/media/<fname>')
+@require_admin
+def admin_messages_media(fname):
+    """Serve uploaded media file (admin only)."""
+
+    if not re.match(r'^[A-Za-z0-9_.-]+$', fname):
+        return '', 403
+    fpath = os.path.join(MSG_MEDIA_DIR, fname)
+    if not os.path.isfile(fpath):
+        return '', 404
+    return send_from_directory(MSG_MEDIA_DIR, fname)
+
+
+@app.route('/api/admin/messages/read', methods=['POST'])
+@require_admin
+def admin_messages_read():
+    """Mark all messages in a conversation as read."""
+    data = request.get_json() or {}
+    conv_id = (data.get('conversation_id') or '').strip()
+    if not conv_id:
+        return jsonify({'error': 'missing_conversation_id'}), 400
+
+
+    if not re.match(r'^[a-z]{2,10}_[A-Za-z0-9_-]+$', conv_id):
+        return jsonify({'error': 'invalid_conv_id'}), 400
+
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    try:
+        conn.execute(
+            "UPDATE messages SET is_read = 1 "
+            "WHERE conversation_id = ? AND is_read = 0 AND is_from_admin = 0",
+            (conv_id,))
+        conn.commit()
+        updated = conn.execute("SELECT changes()").fetchone()[0]
+    finally:
+        conn.close()
+
+    return jsonify({'ok': True, 'marked': updated})
+
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5001, debug=False)

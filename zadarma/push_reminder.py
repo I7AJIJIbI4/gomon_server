@@ -269,11 +269,9 @@ def send_appt_push_reminders(dry_run=False):
                 stats['skipped'] += 1
                 continue
 
-            # Формуємо час у повідомленні
+            # Формуємо час у повідомленні (hour вже в київському часі після sync)
             if appt_hour_utc is not None:
-                from sms_reminder import _kyiv_offset
-                kyiv_hour = appt_hour_utc + _kyiv_offset()
-                time_str = ' \u043e {:02d}:00'.format(kyiv_hour)
+                time_str = ' \u043e {:02d}:00'.format(appt_hour_utc)
             else:
                 time_str = ''
 
