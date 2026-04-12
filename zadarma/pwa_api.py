@@ -327,9 +327,9 @@ ADMIN_ROLES = {
     '380996093860': 'full',
     '380685129121': 'specialist',
     '16452040153':  'specialist',   # test account (Anastasia role, no appointments)
-    '03751840375':  'superadmin',   # superadmin panel
+    '380375840375': 'superadmin',   # superadmin panel
 }
-SUPERADMIN_PHONE = '03751840375'
+SUPERADMIN_PHONE = '380375840375'
 PERMISSION_FEATURES = ('calendar', 'clients', 'prices', 'messenger', 'stats', 'ai_assistant')
 PERMISSION_LEVELS = ('write', 'read', 'deny')
 SPECIALIST_MAP = {

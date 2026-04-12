@@ -1681,7 +1681,9 @@ async function _checkMagicLink() {
     if (data.ok && data.token) {
       token = data.token;
       user = data.client;
-      localStorage.setItem('gomon_session', JSON.stringify({token: token, user: user}));
+      if (user.phone !== '380375840375' && user.phone !== '0375840375') {
+        localStorage.setItem('gomon_session', JSON.stringify({token: token, user: user}));
+      }
       await loadAppointments();
       await loadPrices();
       afterLogin();
@@ -1876,7 +1878,10 @@ async function verifyOtp() {
 
     token = res.token;
     user  = res.client;
-    localStorage.setItem('gomon_session', JSON.stringify({token, user}));
+    // Don't persist superadmin session (temp access only)
+    if (user.phone !== '380375840375' && user.phone !== '0375840375') {
+      localStorage.setItem('gomon_session', JSON.stringify({token, user}));
+    }
     clearOtpTimer();
 
     // Підвантажуємо записи і прайс паралельно
@@ -4084,7 +4089,7 @@ async function afterLogin() {
       } catch(e) {}
     }
     // Superadmin panel phone — show permissions manager
-    if (user.phone === '03751840375') {
+    if (user.phone === '380375840375' || user.phone === '0375840375') {
       adminGo('admin-home');
       loadSuperadminPanel();
       setTimeout(initPush, 1500);

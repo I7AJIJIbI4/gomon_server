@@ -705,9 +705,10 @@
   }
 
   function parseMarkdown(text) {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // Bold first, then italic (avoid matching ** as two *)
+    text = text.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    return text;
   }
 
   function linkify(text) {
