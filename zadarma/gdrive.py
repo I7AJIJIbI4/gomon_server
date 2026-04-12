@@ -150,10 +150,71 @@ def count_files_in_folder(folder_id):
         return 0
 
 
+def list_files_in_folder(folder_id, recursive=False):
+    """List image/video files in a folder. Returns [{id, name, mimeType, thumbnailLink, createdTime}]."""
+    try:
+        q = "'{}' in parents and trashed=false".format(folder_id)
+        if not recursive:
+            q += " and mimeType!='application/vnd.google-apps.folder'"
+        r = requests.get(DRIVE_API + '/files', params={
+            'q': q,
+            'fields': 'files(id,name,mimeType,thumbnailLink,createdTime)',
+            'pageSize': 100,
+            'orderBy': 'createdTime',
+        }, headers=_headers(), timeout=10)
+        files = r.json().get('files', [])
+        if recursive:
+            # Also list files in subfolders (До/Після)
+            subfolders = [f for f in files if f.get('mimeType') == 'application/vnd.google-apps.folder']
+            result = [f for f in files if f.get('mimeType') != 'application/vnd.google-apps.folder']
+            for sf in subfolders:
+                sub_files = list_files_in_folder(sf['id'], recursive=False)
+                for sf_file in sub_files:
+                    sf_file['subfolder'] = sf.get('name', '')
+                result.extend(sub_files)
+            return result
+        return files
+    except Exception as e:
+        logger.error('list_files error: {}'.format(e))
+        return []
+
+
+def get_client_all_photos(client_name):
+    """Get all photos for a client across all visit folders. Returns [{visit, subfolder, id, name, thumbnailLink, createdTime}]."""
+    safe_client = _sanitize_name(client_name)
+    client_folder_id = _find_folder(safe_client, ROOT_FOLDER_ID)
+    if not client_folder_id:
+        return []
+
+    # List visit subfolders
+    try:
+        r = requests.get(DRIVE_API + '/files', params={
+            'q': "'{}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false".format(client_folder_id),
+            'fields': 'files(id,name)',
+            'pageSize': 50,
+            'orderBy': 'name',
+        }, headers=_headers(), timeout=10)
+        visit_folders = r.json().get('files', [])
+    except Exception:
+        return []
+
+    all_photos = []
+    for vf in visit_folders:
+        files = list_files_in_folder(vf['id'], recursive=True)
+        for f in files:
+            f['visit'] = vf.get('name', '')
+            f['visit_folder_id'] = vf['id']
+        all_photos.extend(files)
+
+    # Sort chronologically
+    all_photos.sort(key=lambda x: x.get('createdTime', ''))
+    return all_photos
+
+
 def create_visit_folder(client_name, date, procedure_name):
     """
-    Create folder structure: GomonClinic / ClientName / YYYY-MM-DD ProcedureName
-    Returns (folder_url, client_folder_url).
+    Create folder structure: GomonClinic / ClientName / YYYY-MM-DD_Procedure / До + Після
+    Returns (visit_folder_url, client_folder_url). До/Після subfolders are created but URLs not returned.
     """
     safe_client = _sanitize_name(client_name)
     safe_proc = _sanitize_name(procedure_name)
@@ -165,11 +226,18 @@ def create_visit_folder(client_name, date, procedure_name):
     # GomonClinic / ClientName / YYYY-MM-DD_ProcedureName
     visit_folder_id = _find_or_create_folder(visit_name, client_folder_id)
 
-    # Share visit folder with anyone (editor)
+    # GomonClinic / ClientName / YYYY-MM-DD_ProcedureName / До
+    before_id = _find_or_create_folder('До', visit_folder_id)
+    # GomonClinic / ClientName / YYYY-MM-DD_ProcedureName / Після
+    after_id = _find_or_create_folder('��ісля', visit_folder_id)
+
+    # Share visit folder with anyone (editor) — subfolders inherit
     _share_anyone_editor(visit_folder_id)
 
     visit_url = _get_web_link(visit_folder_id)
     client_url = _get_web_link(client_folder_id)
+    before_url = _get_web_link(before_id)
+    after_url = _get_web_link(after_id)
 
     logger.info('Drive folder created: {} → {}'.format(visit_name, visit_url))
     return visit_url, client_url

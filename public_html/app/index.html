@@ -784,6 +784,11 @@ nav{
 .client-card-visit-date{color:var(--text3);min-width:80px;font-size:14px}
 .client-card-visit-proc{flex:1;color:var(--text)}
 .client-card-visit-spec{font-size:12px;font-weight:600;min-width:16px;text-align:center}
+.client-photos-carousel{display:flex;gap:8px;overflow-x:auto;padding:8px 0;scrollbar-width:none}
+.client-photos-carousel::-webkit-scrollbar{display:none}
+.client-photo-item{flex-shrink:0;width:90px;cursor:pointer}
+.client-photo-item img{width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.client-photo-label{font-size:10px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .client-card-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer;padding:4px}
 #adm-appt-action.show{display:flex}
 .adm-action-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);width:100%;max-width:480px;padding:20px 20px 24px}
@@ -2026,8 +2031,8 @@ async function loadAdminStats() {
     const data = await res.json();
     document.getElementById('adm-stat-clients').textContent = data.total_clients ?? '—';
     document.getElementById('adm-stat-users').textContent   = data.pwa_users ?? '—';
-    document.getElementById('adm-stat-push').textContent    = data.push_subs     ?? '—';
-    document.getElementById('adm-stat-month').textContent   = data.visits_month  ?? '—';
+    document.getElementById('adm-stat-push').textContent    = data.push_subs ?? '—';
+    document.getElementById('adm-stat-month').textContent   = data.visits_month ?? '—';
 
     const list = document.getElementById('adm-recent-list');
     if (data.recent && data.recent.length) {
@@ -2723,10 +2728,76 @@ async function openClientCard(phone, name) {
       '</div>';
     });
     modal.querySelector('.client-card-visits').innerHTML = html;
+
+    // Load photos carousel
+    _loadClientPhotos(phone, modal);
   } catch(e) {
     if (e.name !== 'AbortError')
       modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Помилка завантаження</div>';
   }
+}
+
+async function _loadClientPhotos(phone, modal) {
+  var container = modal.querySelector('.client-card-photos');
+  if (!container) return;
+  container.innerHTML = '';
+  try {
+    var r = await fetch('/api/admin/client-photos/' + encodeURIComponent(phone), {headers:{Authorization:'Bearer '+token}});
+    if (!r.ok) return;
+    var data = await r.json();
+    var photos = data.photos || [];
+    _visitPhotosCache[phone] = photos;
+    if (!photos.length) return;
+
+    var html = '<div style="padding:8px 0 4px;color:var(--text3);font-size:13px;border-top:1px solid var(--border);margin-top:8px">Фото (' + photos.length + ')</div>';
+    html += '<div class="client-photos-carousel">';
+    photos.forEach(function(p, i) {
+      var label = p.subfolder ? p.subfolder + ' · ' : '';
+      label += p.visit || '';
+      html += '<div class="client-photo-item" onclick="_openVisitPhotos(\'' + _esc(p.visit) + '\',\'' + _esc(phone) + '\')">' +
+        '<img src="' + _esc(p.thumbnail) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+        '<div class="client-photo-label">' + _esc(label) + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } catch(e) {}
+}
+
+var _visitPhotosCache = {};
+async function _openVisitPhotos(visitName, phone) {
+  // Show modal with only this visit's photos
+  var photos = _visitPhotosCache[phone] || [];
+  if (!photos.length) {
+    try {
+      var r = await fetch('/api/admin/client-photos/' + encodeURIComponent(phone), {headers:{Authorization:'Bearer '+token}});
+      var data = await r.json();
+      photos = data.photos || [];
+      _visitPhotosCache[phone] = photos;
+    } catch(e) { return; }
+  }
+  var visitPhotos = photos.filter(function(p) { return p.visit === visitName; });
+  if (!visitPhotos.length) return;
+
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10500;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:16px';
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+
+  var header = '<div style="color:var(--gold-pale);font-size:16px;margin-bottom:12px;text-align:center">' + _esc(visitName) + '</div>';
+  var close = '<button onclick="this.parentElement.remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:white;font-size:24px;cursor:pointer">&times;</button>';
+  var grid = '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;overflow-y:auto;max-height:calc(100vh - 80px)">';
+  visitPhotos.forEach(function(p) {
+    var tag = p.subfolder ? '<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.6);color:white;font-size:10px;padding:2px 6px;border-radius:4px">' + _esc(p.subfolder) + '</div>' : '';
+    grid += '<div style="position:relative;cursor:pointer" onclick="window.open(\'https://drive.google.com/file/d/' + _esc(p.id) + '/view\',\'_blank\')">' +
+      '<img src="' + _esc(p.thumbnail) + '" style="width:150px;height:150px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">' +
+      tag + '</div>';
+  });
+  grid += '</div>';
+  overlay.innerHTML = close + header + grid;
+  document.body.appendChild(overlay);
+  // Escape to close
+  var _escHandler = function(e) { if (e.key === 'Escape') { document.body.removeChild(overlay); document.removeEventListener('keydown', _escHandler); } };
+  document.addEventListener('keydown', _escHandler);
 }
 function closeClientCard() {
   var m = document.getElementById('client-card-modal');
@@ -3190,7 +3261,71 @@ function renderMsgConvList() {
 function filterMsgPlatform(f) {
   _msgFilter = f;
   document.querySelectorAll('.msg-filter').forEach(function(b) { b.classList.toggle('active', b.dataset.f === f); });
-  loadMsgConversations();
+  if (f === 'ai') {
+    loadAiConversations();
+  } else {
+    loadMsgConversations();
+  }
+}
+
+// ── AI Conversations ──
+var _aiConvs = [];
+async function loadAiConversations() {
+  var el = document.getElementById('msgConvList');
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Завантаження...</div>';
+  try {
+    var r = await fetch('/api/admin/ai-conversations', {headers:{Authorization:'Bearer '+token}});
+    var data = await r.json();
+    _aiConvs = data.conversations || [];
+    if (!_aiConvs.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Немає AI розмов</div>'; return; }
+    el.innerHTML = _aiConvs.map(function(c) {
+      var srcIcon = c.source === 'telegram' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#2AABEE" stroke="none"><path d="M20.3 3.5L2.5 10.4c-.7.3-.7.7 0 .9l4.4 1.4 1.7 5.5c.2.5.7.6 1 .3l2.5-2.5 5 3.6c.5.3 1 .1 1.1-.5L21.5 4.7c.2-.8-.3-1.4-1.2-1.2z"/></svg>'
+        : c.source === 'app' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7F77DD" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M10 18h4"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>';
+      var time = _fmtMsgTime(c.last_at || '');
+      return '<div class="msg-conv-item" onclick="openAiThread(\'' + _esc(c.id) + '\',\'' + _esc(c.name) + '\',\'' + _esc(c.source) + '\')">' +
+        '<div class="msg-conv-avatar">' + srcIcon + '</div>' +
+        '<div class="msg-conv-body">' +
+          '<div class="msg-conv-name">' + _esc(c.name) + '</div>' +
+          '<div class="msg-conv-preview" style="color:var(--text3)">' + c.msg_count + ' повідомлень · ' + _esc(c.source) + '</div>' +
+        '</div>' +
+        '<div class="msg-conv-time">' + time + '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Помилка</div>';
+  }
+}
+
+async function openAiThread(sessionId, name, source) {
+  _msgActiveConv = null; // Not a regular conversation
+  document.getElementById('msgChatEmpty').style.display = 'none';
+  document.getElementById('msgChatThread').style.display = 'flex';
+  document.getElementById('msgChatName').textContent = name || sessionId;
+  document.getElementById('msgChatPlatform').innerHTML = '<span style="color:#7F77DD;font-size:12px">AI · ' + _esc(source) + '</span>';
+  var mc = document.getElementById('msg-container');
+  if (mc) mc.classList.add('chat-open');
+
+  var el = document.getElementById('msgMessages');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Завантаження...</div>';
+
+  try {
+    var r = await fetch('/api/admin/ai-conversations/' + encodeURIComponent(sessionId), {headers:{Authorization:'Bearer '+token}});
+    var data = await r.json();
+    var msgs = data.messages || [];
+    if (!msgs.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Порожня розмова</div>'; return; }
+    el.innerHTML = msgs.map(function(m) {
+      var cls = m.role === 'assistant' ? 'out' : 'in';
+      var time = _fmtMsgTime(m.created_at || '');
+      var aiTag = m.is_ai ? '<span style="color:#7F77DD;font-size:11px;margin-left:4px">AI</span>' : '';
+      return '<div class="msg-bubble-row ' + cls + '">' +
+        '<div class="msg-bubble">' + _esc(m.content) + aiTag + '</div>' +
+        '<div class="msg-bubble-time">' + time + '</div></div>';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Помилка</div>';
+  }
 }
 
 function openMsgThread(convId) {
@@ -3966,9 +4101,20 @@ function canWrite(feature) {
 
 // ── SUPERADMIN PANEL (in-app) ──────────────────────────────────────────
 var _saData = [];
-var FEAT_LABELS = {calendar:'Календар',clients:'Клієнти',prices:'Процедури',messenger:'Месенджер',stats:'Статистика',ai_assistant:'AI-асистент'};
-var LVL_LABELS = {write:'Повний',read:'Читати',deny:'Заборон.'};
-var LVL_COLORS = {write:'#1D9E75',read:'var(--gold)',deny:'#E24B4A'};
+var FEAT_LABELS = {
+  stat_clients_tap:'Тап "Клієнтів у базі"', stat_users_tap:'Тап "В додатку"',
+  stat_push_tap:'Тап "Push підписок"', stat_month:'Записів за місяць',
+  stat_recent:'Найближчі записи', calendar:'Календар',
+  calendar_edit:'Створення/редагування', clients:'Клієнти',
+  prices:'Процедури/ціни', messenger:'Месенджер',
+  ai_assistant:'AI-асистент (запис)', ai_chat:'AI-чат (пошук)',
+  sync:'Синхронізація', photo:'Фото Drive'
+};
+var LVL_LABELS = {write:'Повний',read:'Читати',deny:'Заборон.',allow:'Дозв.'};
+var LVL_COLORS = {write:'#1D9E75',read:'var(--gold)',deny:'#E24B4A',allow:'#1D9E75'};
+var SPEC_FEATURES = ['stat_month','stat_recent','calendar'];
+var ALL_SPECS = ['victoria','anastasia'];
+var SPEC_LABELS = {own:'Свої',victoria:'Вікторія',anastasia:'Анастасія',all:'Всі'};
 
 async function loadSuperadminPanel() {
   var el = document.getElementById('adm-home-content');
@@ -3994,17 +4140,38 @@ function renderSuperadminPanel() {
       html += '<div style="color:var(--text3);font-size:13px;padding:4px 0">Повний доступ (лікар)</div>';
     } else {
       Object.keys(FEAT_LABELS).forEach(function(feat) {
-        var lvl = (s.permissions||{})[feat] || 'write';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border)">';
-        html += '<span style="font-size:15px;color:var(--text2)">' + FEAT_LABELS[feat] + '</span>';
-        html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">';
-        ['write','read','deny'].forEach(function(l) {
-          var active = lvl === l;
-          var bg = active ? (l==='write'?'rgba(29,158,117,.25)':l==='read'?'rgba(201,169,110,.2)':'rgba(226,75,74,.2)') : 'var(--bg3)';
-          var color = active ? LVL_COLORS[l] : 'var(--text3)';
-          html += '<button style="padding:5px 10px;font-size:12px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:55px" onclick="_saSet(\''+s.name+'\',\''+feat+'\',\''+l+'\')">' + LVL_LABELS[l] + '</button>';
-        });
-        html += '</div></div>';
+        var val = (s.permissions||{})[feat] || 'write';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);gap:8px">';
+        html += '<span style="font-size:14px;color:var(--text2);flex-shrink:0">' + FEAT_LABELS[feat] + '</span>';
+
+        if (SPEC_FEATURES.indexOf(feat) >= 0) {
+          // Multi-select specialists
+          var selected = [];
+          try { selected = JSON.parse(val); } catch(e) { selected = [val]; }
+          if (!Array.isArray(selected)) selected = ['own'];
+          html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-wrap:wrap">';
+          ['own','victoria','anastasia','all'].forEach(function(sp) {
+            var active = selected.indexOf(sp) >= 0;
+            var bg = active ? 'rgba(127,119,221,.25)' : 'var(--bg3)';
+            var color = active ? '#7F77DD' : 'var(--text3)';
+            html += '<button style="padding:5px 8px;font-size:11px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:40px" onclick="_saSpecToggle(\''+s.name+'\',\''+feat+'\',\''+sp+'\')">' + SPEC_LABELS[sp] + '</button>';
+          });
+          html += '</div>';
+        } else {
+          // Simple toggle
+          var levels = (feat.indexOf('_tap') >= 0) ? ['allow','deny'] :
+                       (feat === 'calendar_edit' || feat === 'ai_assistant' || feat === 'ai_chat' || feat === 'sync') ? ['write','deny'] :
+                       ['write','read','deny'];
+          html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">';
+          levels.forEach(function(l) {
+            var active = val === l;
+            var bg = active ? (l==='write'||l==='allow'?'rgba(29,158,117,.25)':l==='read'?'rgba(201,169,110,.2)':'rgba(226,75,74,.2)') : 'var(--bg3)';
+            var color = active ? LVL_COLORS[l] : 'var(--text3)';
+            html += '<button style="padding:5px 10px;font-size:12px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:50px" onclick="_saSet(\''+s.name+'\',\''+feat+'\',\''+l+'\')">' + LVL_LABELS[l] + '</button>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
       });
     }
     html += '</div>';
@@ -4016,6 +4183,29 @@ function renderSuperadminPanel() {
 function _saSet(specName, feature, level) {
   _saData.forEach(function(s) {
     if (s.name === specName) { if (!s.permissions) s.permissions = {}; s.permissions[feature] = level; }
+  });
+  renderSuperadminPanel();
+}
+
+function _saSpecToggle(specName, feature, specVal) {
+  _saData.forEach(function(s) {
+    if (s.name !== specName) return;
+    if (!s.permissions) s.permissions = {};
+    var current = s.permissions[feature] || '["own"]';
+    var arr = [];
+    try { arr = JSON.parse(current); } catch(e) { arr = ['own']; }
+    if (!Array.isArray(arr)) arr = ['own'];
+    // 'all' is exclusive — selecting it clears others
+    if (specVal === 'all') {
+      arr = arr.indexOf('all') >= 0 ? ['own'] : ['all'];
+    } else {
+      // Remove 'all' if selecting specific
+      arr = arr.filter(function(x) { return x !== 'all'; });
+      var idx = arr.indexOf(specVal);
+      if (idx >= 0) arr.splice(idx, 1); else arr.push(specVal);
+      if (!arr.length) arr = ['own'];
+    }
+    s.permissions[feature] = JSON.stringify(arr);
   });
   renderSuperadminPanel();
 }
@@ -4043,27 +4233,36 @@ async function _saSave() {
 
 function applyPermissions() {
   if (!Object.keys(adminPerms).length) return;
-  // Hide/show nav buttons based on permissions
-  var navMap = {
-    'admin-appts': 'calendar',
-    'admin-clients': 'clients',
-    'admin-price': 'prices',
-    'admin-chat': 'messenger',
-  };
+  // Nav buttons
+  var navMap = {'admin-appts':'calendar','admin-clients':'clients','admin-price':'prices','admin-chat':'messenger'};
   document.querySelectorAll('.admin-nav .nav-btn').forEach(function(btn) {
     var onclick = btn.getAttribute('onclick') || '';
-    Object.keys(navMap).forEach(function(screenId) {
-      if (onclick.includes("'" + screenId + "'")) {
-        btn.style.display = canAccess(navMap[screenId]) ? '' : 'none';
+    Object.keys(navMap).forEach(function(sid) {
+      if (onclick.includes("'" + sid + "'")) {
+        var feat = navMap[sid];
+        // For calendar — check if specialist array feature, not simple deny
+        if (feat === 'calendar') return; // calendar always visible (filtered by specialists)
+        btn.style.display = canAccess(feat) ? '' : 'none';
       }
     });
   });
-  // Stats: hide all stats if denied, show only own if read
-  var statsGrid = document.getElementById('adm-stats-grid');
-  if (statsGrid) statsGrid.style.display = canAccess('stats') ? '' : 'none';
-  // FAB "+" — hide if calendar not writable
+  // Stat card taps
+  var tapMap = {clients:'stat_clients_tap', users:'stat_users_tap', push:'stat_push_tap'};
+  document.querySelectorAll('.stat-card').forEach(function(card) {
+    var onclick = card.getAttribute('onclick') || '';
+    Object.keys(tapMap).forEach(function(key) {
+      if (onclick.includes("'" + key + "'")) {
+        var perm = adminPerms[tapMap[key]];
+        if (perm === 'deny') {
+          card.style.pointerEvents = 'none';
+          card.style.cursor = 'default';
+        }
+      }
+    });
+  });
+  // FAB "+" — hide if calendar_edit deny
   document.querySelectorAll('.adm-fab').forEach(function(fab) {
-    fab.style.display = canWrite('calendar') ? '' : 'none';
+    fab.style.display = canAccess('calendar_edit') ? '' : 'none';
   });
   // AI assistant section
   var aiSection = document.querySelector('.admin-section .adm-ai-input-row');
@@ -4071,6 +4270,10 @@ function applyPermissions() {
     var sec = aiSection.closest('.admin-section');
     if (sec) sec.style.display = canAccess('ai_assistant') ? '' : 'none';
   }
+  // Sync button
+  document.querySelectorAll('.sync-btn').forEach(function(btn) {
+    btn.style.display = canAccess('sync') ? '' : 'none';
+  });
 }
 
 async function afterLogin() {
@@ -5225,6 +5428,7 @@ document.addEventListener('keydown', function(e) {
         <button class="msg-filter" onclick="filterMsgPlatform('unread')" data-f="unread"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><circle cx="8" cy="8" r="4"/></svg>Непрочитані</button>
         <button class="msg-filter" onclick="filterMsgPlatform('telegram')" data-f="telegram"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M13.6 2.8L1.7 7.5c-.5.2-.5.5 0 .6l3 .9 1.2 3.8c.1.4.5.4.7.2l1.7-1.7 3.4 2.5c.4.2.7.1.8-.4L14.4 3.5c.2-.5-.2-.9-.8-.7zM5.8 9l5.4-3.3L7 9.6l-.4 2.2L5.8 9z"/></svg>TG</button>
         <button class="msg-filter" onclick="filterMsgPlatform('instagram')" data-f="instagram"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="3.5"/><circle cx="8" cy="8" r="2.8"/><circle cx="11.5" cy="4.5" r=".7" fill="currentColor" stroke="none"/></svg>IG</button>
+        <button class="msg-filter" onclick="filterMsgPlatform('ai')" data-f="ai" style="border-color:rgba(127,119,221,.4)"><svg viewBox="0 0 16 16" fill="none" stroke="#7F77DD" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5.5 6.5h5M5.5 9.5h3"/></svg>AI</button>
       </div>
       <div class="msg-conv-list" id="msgConvList"></div>
     </div>
@@ -5398,6 +5602,7 @@ document.addEventListener('keydown', function(e) {
       <div class="client-card-phone"></div>
     </div>
     <div class="client-card-visits"></div>
+    <div class="client-card-photos" style="padding:0 20px"></div>
   </div>
 </div>
 
@@ -5718,6 +5923,10 @@ function _admListFilter() {
 }
 
 async function _admStatClick(type) {
+  // Check tap permissions
+  var tapPerms = {clients:'stat_clients_tap', users:'stat_users_tap', push:'stat_push_tap'};
+  if (tapPerms[type] && adminPerms[tapPerms[type]] === 'deny') return;
+
   let url, title;
   if (type === 'clients') { url = '/api/admin/clients-list'; title = 'Всі клієнти'; }
   else if (type === 'users') { url = '/api/admin/users-list'; title = 'Клієнти в додатку'; }

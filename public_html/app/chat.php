@@ -494,6 +494,64 @@ echo json_encode([
     'procedure' => $procedure,
 ], JSON_UNESCAPED_UNICODE);
 
+// ── SAVE TO AI CHAT LOG DB ──────────────────────────────────────
+try {
+    $ai_db = new SQLite3('/home/gomoncli/zadarma/ai_chat.db');
+    $ai_db->exec('PRAGMA journal_mode=WAL');
+    $ai_db->exec(
+        'CREATE TABLE IF NOT EXISTS ai_messages ('
+        . 'id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        . 'session_key TEXT NOT NULL,'
+        . 'source TEXT NOT NULL,'
+        . 'user_phone TEXT,'
+        . 'user_name TEXT,'
+        . 'role TEXT NOT NULL,'
+        . 'content TEXT NOT NULL,'
+        . 'created_at TEXT DEFAULT (datetime("now")))'
+    );
+    $ai_db->exec('CREATE INDEX IF NOT EXISTS idx_ai_session ON ai_messages(session_key)');
+    $ai_db->exec('CREATE INDEX IF NOT EXISTS idx_ai_created ON ai_messages(created_at)');
+
+    // Session key: phone for authed users, IP+date for guests
+    $sess_key = $user_phone ? 'phone_' . substr($user_phone, -9) : 'ip_' . $client_ip . '_' . $today;
+
+    // Save last user message
+    $last_user_msg = '';
+    for ($i = count($clean_messages) - 1; $i >= 0; $i--) {
+        if ($clean_messages[$i]['role'] === 'user') {
+            $last_user_msg = $clean_messages[$i]['content'];
+            break;
+        }
+    }
+    if ($last_user_msg) {
+        $st = $ai_db->prepare('INSERT INTO ai_messages (session_key, source, user_phone, user_name, role, content) VALUES (:sk, :src, :ph, :nm, :r, :c)');
+        $st->bindValue(':sk', $sess_key);
+        $st->bindValue(':src', $source);
+        $st->bindValue(':ph', $user_phone ?: null, SQLITE3_TEXT);
+        $st->bindValue(':nm', $user_name ?: null, SQLITE3_TEXT);
+        $st->bindValue(':r', 'user');
+        $st->bindValue(':c', $last_user_msg);
+        $st->execute();
+    }
+    // Save AI reply
+    $st2 = $ai_db->prepare('INSERT INTO ai_messages (session_key, source, user_phone, user_name, role, content) VALUES (:sk, :src, :ph, :nm, :r, :c)');
+    $st2->bindValue(':sk', $sess_key);
+    $st2->bindValue(':src', $source);
+    $st2->bindValue(':ph', $user_phone ?: null, SQLITE3_TEXT);
+    $st2->bindValue(':nm', $user_name ?: null, SQLITE3_TEXT);
+    $st2->bindValue(':r', 'assistant');
+    $st2->bindValue(':c', $reply);
+    $st2->execute();
+
+    // Cleanup >90 days (1 in 50 requests)
+    if (rand(1, 50) === 1) {
+        $ai_db->exec("DELETE FROM ai_messages WHERE created_at < datetime('now', '-90 days')");
+    }
+    $ai_db->close();
+} catch (Exception $e) {
+    error_log('ai_chat log error: ' . $e->getMessage());
+}
+
 // ── LOG ──────────────────────────────────────────────────────────
 $duration_ms = (int)(microtime(true) * 1000) - $start_ms;
 if (!empty($rl_db)) {

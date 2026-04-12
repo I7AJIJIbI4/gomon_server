@@ -205,16 +205,38 @@ def _check_perm(feature, need='read'):
     """Check permission for current admin. Returns None if OK, or 403 response."""
     role = getattr(request, 'admin_role', '')
     if role in ('superadmin', 'full'):
-        return None  # superadmin/full (Вікторія) always have full access
+        return None
     spec = getattr(request, 'admin_specialist', '')
+    if not spec and role == 'specialist':
+        return jsonify({'error': 'permission_denied', 'feature': feature}), 403
     if not spec:
         return None
     level = getattr(request, 'admin_permissions', {}).get(feature, 'write')
-    if need == 'read' and level in ('read', 'write'):
+    if level == 'allow':
         return None
-    if need == 'write' and level == 'write':
+    if need == 'read' and level in ('read', 'write', 'allow'):
+        return None
+    if need == 'write' and level in ('write', 'allow'):
         return None
     return jsonify({'error': 'permission_denied', 'feature': feature}), 403
+
+def _get_visible_specialists(feature):
+    """For specialist-select features, return list of visible specialist names.
+    Returns ['all'] for superadmin/full, or ['own'] or ['victoria','anastasia'] etc."""
+    role = getattr(request, 'admin_role', '')
+    if role in ('superadmin', 'full'):
+        return ['all']
+    perms = getattr(request, 'admin_permissions', {})
+    val = perms.get(feature, '["own"]')
+    if isinstance(val, list):
+        return val
+    try:
+        parsed = json.loads(val)
+        if isinstance(parsed, list):
+            return parsed
+    except Exception:
+        pass
+    return ['own']
 
 def init_messages_db():
     conn = sqlite3.connect(DB_PATH)
@@ -330,8 +352,26 @@ ADMIN_ROLES = {
     '380375840375': 'superadmin',   # superadmin panel
 }
 SUPERADMIN_PHONE = '380375840375'
-PERMISSION_FEATURES = ('calendar', 'clients', 'prices', 'messenger', 'stats', 'ai_assistant')
-PERMISSION_LEVELS = ('write', 'read', 'deny')
+# Features with simple levels (write/read/deny/allow)
+PERM_SIMPLE = {
+    'stat_clients_tap': ('allow', 'deny'),
+    'stat_users_tap':   ('allow', 'deny'),
+    'stat_push_tap':    ('allow', 'deny'),
+    'calendar_edit':    ('write', 'deny'),
+    'clients':          ('write', 'read', 'deny'),
+    'prices':           ('write', 'read', 'deny'),
+    'messenger':        ('write', 'read', 'deny'),
+    'ai_assistant':     ('write', 'deny'),
+    'ai_chat':          ('write', 'deny'),
+    'sync':             ('write', 'deny'),
+    'photo':            ('write', 'read', 'deny'),
+}
+# Features with specialist multi-select (JSON array: ["own"], ["victoria","anastasia"], ["all"])
+PERM_SPECIALISTS = ('stat_month', 'stat_recent', 'calendar')
+ALL_PERM_FEATURES = tuple(PERM_SIMPLE.keys()) + PERM_SPECIALISTS
+# Backwards compat
+PERMISSION_FEATURES = ALL_PERM_FEATURES
+PERMISSION_LEVELS = ('write', 'read', 'deny', 'allow')
 SPECIALIST_MAP = {
     '380996093860': 'victoria',
     '380685129121': 'anastasia',
@@ -1034,8 +1074,6 @@ def admin_msg_tg_media(fid):
 @app.route('/api/admin/stats', methods=['GET'])
 @require_admin
 def admin_stats():
-    denied = _check_perm('stats', 'read')
-    if denied: return denied
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -1056,18 +1094,8 @@ def admin_stats():
         month_end = '{}-12-31'.format(now.year)
     else:
         month_end = (now.replace(month=now.month+1, day=1) - timedelta(days=1)).strftime('%Y-%m-%d')
-    if request.admin_role == 'specialist':
-        spec = request.admin_specialist
-        c.execute("""
-            SELECT COUNT(*) FROM (
-                SELECT json_each.value FROM clients, json_each(clients.services_json)
-                WHERE json_extract(json_each.value, '$.date') >= ?
-                  AND json_extract(json_each.value, '$.date') <= ?
-                  AND json_extract(json_each.value, '$.specialist') = ?
-                  AND IFNULL(json_extract(json_each.value, '$.status'),'') != 'CANCELLED'
-            )
-        """, (month_start, month_end, spec))
-    else:
+    vis_month = _get_visible_specialists('stat_month')
+    if 'all' in vis_month:
         c.execute("""
             SELECT COUNT(*) FROM (
                 SELECT json_each.value FROM clients, json_each(clients.services_json)
@@ -1076,26 +1104,27 @@ def admin_stats():
                   AND IFNULL(json_extract(json_each.value, '$.status'),'') != 'CANCELLED'
             )
         """, (month_start, month_end))
+    else:
+        spec_names = [request.admin_specialist if s == 'own' else s for s in vis_month]
+        spec_names = [s for s in spec_names if s]  # remove None/empty
+        if not spec_names:
+            spec_names = [request.admin_specialist or 'nobody']
+        placeholders = ','.join('?' * len(spec_names))
+        c.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT json_each.value FROM clients, json_each(clients.services_json)
+                WHERE json_extract(json_each.value, '$.date') >= ?
+                  AND json_extract(json_each.value, '$.date') <= ?
+                  AND json_extract(json_each.value, '$.specialist') IN ({})
+                  AND IFNULL(json_extract(json_each.value, '$.status'),'') != 'CANCELLED'
+            )
+        """.format(placeholders), (month_start, month_end) + tuple(spec_names))
     visits_month = c.fetchone()[0]
 
     # Останні 10 відвідувань
     today_str = kyiv_now().strftime('%Y-%m-%d')
-    if request.admin_role == 'specialist':
-        spec = request.admin_specialist
-        c.execute("""
-            SELECT c.first_name, c.last_name, c.phone,
-                   json_extract(s.value, '$.date') as date,
-                   json_extract(s.value, '$.service') as service,
-                   json_extract(s.value, '$.hour') as hour
-            FROM clients c, json_each(c.services_json) s
-            WHERE json_extract(s.value, '$.date') IS NOT NULL
-              AND json_extract(s.value, '$.date') >= ?
-              AND json_extract(s.value, '$.specialist') = ?
-              AND IFNULL(json_extract(s.value, '$.status'),'') != 'CANCELLED'
-            ORDER BY json_extract(s.value, '$.date') ASC
-            LIMIT 10
-        """, (today_str, spec))
-    else:
+    vis_recent = _get_visible_specialists('stat_recent')
+    if 'all' in vis_recent:
         c.execute("""
             SELECT c.first_name, c.last_name, c.phone,
                    json_extract(s.value, '$.date') as date,
@@ -1108,6 +1137,25 @@ def admin_stats():
             ORDER BY json_extract(s.value, '$.date') ASC
             LIMIT 10
         """, (today_str,))
+    else:
+        spec_names = [request.admin_specialist if s == 'own' else s for s in vis_recent]
+        spec_names = [s for s in spec_names if s]
+        if not spec_names:
+            spec_names = [request.admin_specialist or 'nobody']
+        placeholders = ','.join('?' * len(spec_names))
+        c.execute("""
+            SELECT c.first_name, c.last_name, c.phone,
+                   json_extract(s.value, '$.date') as date,
+                   json_extract(s.value, '$.service') as service,
+                   json_extract(s.value, '$.hour') as hour
+            FROM clients c, json_each(c.services_json) s
+            WHERE json_extract(s.value, '$.date') IS NOT NULL
+              AND json_extract(s.value, '$.date') >= ?
+              AND json_extract(s.value, '$.specialist') IN ({})
+              AND IFNULL(json_extract(s.value, '$.status'),'') != 'CANCELLED'
+            ORDER BY json_extract(s.value, '$.date') ASC
+            LIMIT 10
+        """.format(placeholders), (today_str,) + tuple(spec_names))
     recent = [dict(r) for r in c.fetchall()]
     conn.close()
 
@@ -1132,6 +1180,8 @@ def admin_stats():
 @require_admin
 def admin_appointments():
     """Всі записи всіх клієнтів, відсортовані за датою"""
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -1325,9 +1375,50 @@ def admin_client_card(phone):
         'visits': visits,
     })
 
+@app.route('/api/admin/client-photos/<phone>', methods=['GET'])
+@require_admin
+def admin_client_photos(phone):
+    """Get all photos for a client from Google Drive."""
+    denied = _check_perm('photo', 'read')
+    if denied: return denied
+    p = norm_phone(phone)
+    # Find client name
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    row = conn.execute(
+        "SELECT first_name, last_name FROM clients WHERE phone=? OR phone LIKE ?",
+        (p, '%' + p[-9:])).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'photos': []})
+    name = ('{} {}'.format(row[0] or '', row[1] or '')).strip()
+    if not name:
+        return jsonify({'photos': []})
+    try:
+        from gdrive import get_client_all_photos
+        photos = get_client_all_photos(name)
+        result = []
+        for ph in photos:
+            # Build thumbnail URL (public for shared folders)
+            fid = ph.get('id', '')
+            result.append({
+                'id': fid,
+                'name': ph.get('name', ''),
+                'visit': ph.get('visit', ''),
+                'subfolder': ph.get('subfolder', ''),
+                'thumbnail': 'https://lh3.googleusercontent.com/d/{}'.format(fid) if fid else '',
+                'created': ph.get('createdTime', ''),
+            })
+        return jsonify({'photos': result, 'client_name': name})
+    except Exception as e:
+        logger.warning('client-photos error: {}'.format(e))
+        return jsonify({'photos': [], 'error': str(e)})
+
+
 @app.route('/api/admin/users-list', methods=['GET'])
 @require_admin
 def admin_users_list():
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
     # PWA users = phones that have authenticated via OTP (otp_sessions.db)
     try:
         otp_conn = sqlite3.connect(OTP_DB)
@@ -1377,6 +1468,8 @@ def admin_users_list():
 @app.route('/api/admin/push-list', methods=['GET'])
 @require_admin
 def admin_push_list():
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -1405,6 +1498,8 @@ def admin_push_list():
 @app.route('/api/admin/month-visits', methods=['GET'])
 @require_admin
 def admin_month_visits():
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
     from datetime import datetime
     from_date = request.args.get('from', '')
     to_date   = request.args.get('to', '')
@@ -1475,8 +1570,15 @@ def admin_sync():
 def admin_role():
     perms = {}
     if request.admin_specialist and request.admin_role == 'specialist':
-        for feat in PERMISSION_FEATURES:
-            perms[feat] = request.admin_permissions.get(feat, 'write')
+        defaults = {
+            'stat_clients_tap': 'allow', 'stat_users_tap': 'allow', 'stat_push_tap': 'allow',
+            'stat_month': '["own"]', 'stat_recent': '["own"]', 'calendar': '["own"]',
+            'calendar_edit': 'write', 'clients': 'write', 'prices': 'write',
+            'messenger': 'write', 'ai_assistant': 'write', 'ai_chat': 'write',
+            'sync': 'write', 'photo': 'write',
+        }
+        for feat in ALL_PERM_FEATURES:
+            perms[feat] = request.admin_permissions.get(feat, defaults.get(feat, 'write'))
     return jsonify({'role': request.admin_role, 'specialist': request.admin_specialist,
                     'permissions': perms})
 
@@ -1495,12 +1597,24 @@ def superadmin_resources():
     for spec, feat, lvl in conn.execute('SELECT specialist, feature, level FROM permissions').fetchall():
         perm_map.setdefault(spec, {})[feat] = lvl
     conn.close()
+    # Default values per feature
+    defaults = {
+        'stat_clients_tap': 'allow', 'stat_users_tap': 'allow', 'stat_push_tap': 'allow',
+        'stat_month': '["all"]', 'stat_recent': '["all"]', 'calendar': '["all"]',
+        'calendar_edit': 'write', 'clients': 'write', 'prices': 'write',
+        'messenger': 'write', 'ai_assistant': 'write', 'ai_chat': 'write',
+        'sync': 'write', 'photo': 'write',
+    }
     for s in specialists:
         s['permissions'] = {}
-        for feat in PERMISSION_FEATURES:
-            s['permissions'][feat] = perm_map.get(s['name'], {}).get(feat, 'write')
-    return jsonify({'specialists': specialists, 'features': list(PERMISSION_FEATURES),
-                    'levels': list(PERMISSION_LEVELS)})
+        for feat in ALL_PERM_FEATURES:
+            s['permissions'][feat] = perm_map.get(s['name'], {}).get(feat, defaults.get(feat, 'write'))
+    return jsonify({
+        'specialists': specialists,
+        'simple_features': dict(PERM_SIMPLE),
+        'specialist_features': list(PERM_SPECIALISTS),
+        'all_specialists': ['victoria', 'anastasia'],
+    })
 
 @app.route('/api/superadmin/permissions', methods=['PUT'])
 @require_superadmin
@@ -1516,16 +1630,100 @@ def superadmin_put_permissions():
         lvl = p.get('level', '')
         if spec not in SPECIALIST_MAP.values():
             continue
-        if feat not in PERMISSION_FEATURES:
+        if feat not in ALL_PERM_FEATURES:
             continue
-        if lvl not in PERMISSION_LEVELS:
-            continue
+        # Validate level: simple string or JSON array for specialist features
+        if feat in PERM_SPECIALISTS:
+            if not isinstance(lvl, (str, list)):
+                continue
+            if isinstance(lvl, list):
+                lvl = json.dumps(lvl)
+        else:
+            valid = PERM_SIMPLE.get(feat, ('write', 'read', 'deny'))
+            if lvl not in valid:
+                continue
         conn.execute(
             'INSERT OR REPLACE INTO permissions (specialist, feature, level, updated_at) '
             'VALUES (?, ?, ?, datetime("now"))', (spec, feat, lvl))
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
+
+
+# ── AI CHAT LOG ───────────────────────────────────────────────────────────
+
+AI_CHAT_DB = '/home/gomoncli/zadarma/ai_chat.db'
+
+@app.route('/api/admin/ai-conversations', methods=['GET'])
+@require_admin
+def admin_ai_conversations():
+    """List AI chat sessions (site + app + TG) grouped by session_key."""
+    denied = _check_perm('ai_assistant', 'read')
+    if denied: return denied
+
+    conversations = []
+
+    # 1. Site/App conversations from ai_chat.db
+    try:
+        conn = sqlite3.connect(AI_CHAT_DB, timeout=5)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute('''
+            SELECT session_key, source, user_phone, user_name,
+                   MAX(created_at) as last_at,
+                   COUNT(*) as msg_count
+            FROM ai_messages
+            GROUP BY session_key
+            ORDER BY last_at DESC
+            LIMIT 50
+        ''').fetchall()
+        for r in rows:
+            conversations.append({
+                'id': r['session_key'],
+                'source': r['source'],
+                'phone': r['user_phone'] or '',
+                'name': r['user_name'] or r['session_key'],
+                'last_at': r['last_at'],
+                'msg_count': r['msg_count'],
+                'type': 'chat',
+            })
+        conn.close()
+    except Exception as e:
+        logger.warning('ai_conversations chat db: {}'.format(e))
+
+    # TG AI conversations NOT included — already visible in TG tab
+    conversations.sort(key=lambda x: x.get('last_at', ''), reverse=True)
+    return jsonify({'conversations': conversations[:50]})
+
+
+@app.route('/api/admin/ai-conversations/<path:session_id>', methods=['GET'])
+@require_admin
+def admin_ai_conversation_thread(session_id):
+    """Get messages for a specific AI conversation."""
+    denied = _check_perm('ai_assistant', 'read')
+    if denied: return denied
+
+    messages = []
+    try:
+        conn = sqlite3.connect(AI_CHAT_DB, timeout=5)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT role, content, user_name, created_at "
+            "FROM ai_messages WHERE session_key=? ORDER BY id ASC LIMIT 100",
+            (session_id,)).fetchall()
+        for r in rows:
+            messages.append({
+                'role': r['role'],
+                'content': r['content'] or '',
+                'name': r['user_name'] or '',
+                'is_ai': r['role'] == 'assistant',
+                'created_at': r['created_at'],
+            })
+        conn.close()
+    except Exception as e:
+        logger.warning('ai_thread: {}'.format(e))
+
+    return jsonify({'messages': messages})
+
 
 @app.route('/api/admin/calendar/appointments', methods=['GET'])
 @require_admin
