@@ -3043,8 +3043,10 @@ function admAiRenderCard(d) {
 }
 
 function admAiClose() {
-  document.getElementById('adm-ai-card').style.display = 'none';
-  document.getElementById('adm-ai-input').value = '';
+  var c = document.getElementById('adm-ai-card');
+  if (c) c.style.display = 'none';
+  var i = document.getElementById('adm-ai-input');
+  if (i) i.value = '';
   _admAiResult = null;
 }
 
@@ -4105,7 +4107,7 @@ var FEAT_LABELS = {
   stat_clients_tap:'Тап "Клієнтів у базі"', stat_users_tap:'Тап "В додатку"',
   stat_push_tap:'Тап "Push підписок"', stat_month:'Записів за місяць',
   stat_recent:'Найближчі записи', calendar:'Календар',
-  calendar_edit:'Створення/редагування', clients:'Клієнти',
+  calendar_edit:'Записи: створення/редагування', clients:'Клієнти',
   prices:'Процедури/ціни', messenger:'Месенджер',
   ai_assistant:'AI-асистент (запис)', ai_chat:'AI-чат (пошук)',
   sync:'Синхронізація', photo:'Фото Drive'
@@ -4125,12 +4127,14 @@ async function loadSuperadminPanel() {
     if (!r.ok) { el.innerHTML = '<div style="padding:20px;color:var(--text3)">Немає доступу</div>'; return; }
     _saData = (await r.json()).specialists || [];
     renderSuperadminPanel();
+    setTimeout(_saLoadResources, 100);
   } catch(e) { el.innerHTML = '<div style="padding:20px;color:var(--text3)">Помилка</div>'; }
 }
 
 function renderSuperadminPanel() {
   var el = document.getElementById('adm-home-content');
   if (!el) return;
+  el.style.padding = '0 20px 20px';
   var html = '<h2 style="font-family:var(--serif);font-size:20px;color:var(--gold-pale);margin:0 0 16px">Управління правами</h2>';
   _saData.forEach(function(s) {
     html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">';
@@ -4145,18 +4149,22 @@ function renderSuperadminPanel() {
         html += '<span style="font-size:14px;color:var(--text2);flex-shrink:0">' + FEAT_LABELS[feat] + '</span>';
 
         if (SPEC_FEATURES.indexOf(feat) >= 0) {
-          // Multi-select specialists
+          // Dropdown multiselect
           var selected = [];
           try { selected = JSON.parse(val); } catch(e) { selected = [val]; }
           if (!Array.isArray(selected)) selected = ['own'];
-          html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-wrap:wrap">';
-          ['own','victoria','anastasia','all'].forEach(function(sp) {
-            var active = selected.indexOf(sp) >= 0;
-            var bg = active ? 'rgba(127,119,221,.25)' : 'var(--bg3)';
-            var color = active ? '#7F77DD' : 'var(--text3)';
-            html += '<button style="padding:5px 8px;font-size:11px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:40px" onclick="_saSpecToggle(\''+s.name+'\',\''+feat+'\',\''+sp+'\')">' + SPEC_LABELS[sp] + '</button>';
+          var selText = selected.indexOf('all') >= 0 ? 'Всі' : selected.map(function(x){return SPEC_LABELS[x]||x;}).join(', ');
+          var ddId = 'sa-dd-' + s.name + '-' + feat;
+          html += '<div style="position:relative">';
+          html += '<button style="padding:5px 12px;font-size:12px;background:var(--bg3);color:#7F77DD;border:1px solid rgba(127,119,221,.3);border-radius:6px;cursor:pointer;min-width:80px;text-align:left" onclick="_saToggleDd(\''+ddId+'\')">' + _esc(selText) + ' ▾</button>';
+          html += '<div id="'+ddId+'" style="display:none;position:absolute;right:0;top:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:100;min-width:140px;margin-top:4px">';
+          ['all','own'].concat(ALL_SPECS).forEach(function(sp) {
+            var checked = selected.indexOf(sp) >= 0;
+            html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:13px;color:var(--text2);cursor:pointer">';
+            html += '<input type="checkbox" '+(checked?'checked':'')+' onchange="_saSpecCheck(\''+s.name+'\',\''+feat+'\',\''+sp+'\',this.checked)" style="accent-color:#7F77DD">';
+            html += SPEC_LABELS[sp] + '</label>';
           });
-          html += '</div>';
+          html += '</div></div>';
         } else {
           // Simple toggle
           var levels = (feat.indexOf('_tap') >= 0) ? ['allow','deny'] :
@@ -4177,7 +4185,32 @@ function renderSuperadminPanel() {
     html += '</div>';
   });
   html += '<button style="width:100%;background:var(--gold);color:#111;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:500;cursor:pointer;margin-top:8px" onclick="_saSave()" id="sa-save-btn">Зберегти зміни</button>';
+
+  // Resource management section
+  html += '<h2 style="font-family:var(--serif);font-size:20px;color:var(--gold-pale);margin:24px 0 12px">Спеціалісти (WLaunch)</h2>';
+  html += '<div id="sa-resources-list" style="color:var(--text3);font-size:13px">Завантаження...</div>';
+  html += '<div style="margin-top:12px;display:flex;gap:8px">';
+  html += '<input id="sa-res-name" class="adm-form-input" placeholder="Ім\'я" style="flex:1;font-size:14px;padding:10px">';
+  html += '<input id="sa-res-last" class="adm-form-input" placeholder="Прізвище" style="flex:1;font-size:14px;padding:10px">';
+  html += '</div>';
+  html += '<div style="margin-top:6px;display:flex;gap:8px">';
+  html += '<input id="sa-res-phone" class="adm-form-input" placeholder="Телефон" type="tel" style="flex:1;font-size:14px;padding:10px">';
+  html += '<button style="background:var(--gold);color:#111;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;white-space:nowrap" onclick="_saCreateResource()">+ Додати</button>';
+  html += '</div>';
   el.innerHTML = html;
+}
+
+function _openSpecialistAiChat() {
+  if (window.GomonChat) {
+    GomonChat.open();
+  } else {
+    showToast('AI чат недоступний');
+  }
+}
+
+function _saToggleDd(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 function _saSet(specName, feature, level) {
@@ -4187,7 +4220,7 @@ function _saSet(specName, feature, level) {
   renderSuperadminPanel();
 }
 
-function _saSpecToggle(specName, feature, specVal) {
+function _saSpecCheck(specName, feature, specVal, checked) {
   _saData.forEach(function(s) {
     if (s.name !== specName) return;
     if (!s.permissions) s.permissions = {};
@@ -4195,19 +4228,71 @@ function _saSpecToggle(specName, feature, specVal) {
     var arr = [];
     try { arr = JSON.parse(current); } catch(e) { arr = ['own']; }
     if (!Array.isArray(arr)) arr = ['own'];
-    // 'all' is exclusive — selecting it clears others
+
     if (specVal === 'all') {
-      arr = arr.indexOf('all') >= 0 ? ['own'] : ['all'];
+      arr = checked ? ['all'] : ['own'];
     } else {
-      // Remove 'all' if selecting specific
       arr = arr.filter(function(x) { return x !== 'all'; });
-      var idx = arr.indexOf(specVal);
-      if (idx >= 0) arr.splice(idx, 1); else arr.push(specVal);
+      if (checked) { if (arr.indexOf(specVal) < 0) arr.push(specVal); }
+      else { arr = arr.filter(function(x) { return x !== specVal; }); }
       if (!arr.length) arr = ['own'];
     }
     s.permissions[feature] = JSON.stringify(arr);
   });
   renderSuperadminPanel();
+}
+
+async function _saLoadResources() {
+  var el = document.getElementById('sa-resources-list');
+  if (!el) return;
+  try {
+    var r = await fetch('/api/superadmin/wlaunch-resources', {headers:{Authorization:'Bearer '+token}});
+    var data = await r.json();
+    var resources = data.resources || [];
+    if (!resources.length) { el.innerHTML = 'Немає ресурсів'; return; }
+    el.innerHTML = resources.map(function(res) {
+      var statusColor = res.active ? '#1D9E75' : '#E24B4A';
+      var statusText = res.active ? 'активний' : 'неактивний';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1"><span style="color:var(--text)">' + _esc(res.name + ' ' + (res.last_name||'')) + '</span>' +
+        '<br><span style="font-size:11px;color:var(--text3)">' + _esc((res.phone||'').replace(/^\+380/,'0')) + ' · <span style="color:'+statusColor+'">' + statusText + '</span></span></div>' +
+        (res.active ? '<button style="background:none;border:1px solid rgba(226,75,74,.3);border-radius:6px;padding:4px 10px;font-size:11px;color:#E24B4A;cursor:pointer" onclick="_saDeactivateResource(\''+_esc(res.id)+'\')">Вимкнути</button>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) { el.innerHTML = 'Помилка'; }
+}
+
+async function _saCreateResource() {
+  var name = document.getElementById('sa-res-name').value.trim();
+  var last = document.getElementById('sa-res-last').value.trim();
+  var phone = document.getElementById('sa-res-phone').value.trim();
+  if (!name) { showToast('Введіть ім\'я'); return; }
+  try {
+    var r = await fetch('/api/superadmin/wlaunch-resources', {
+      method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+      body: JSON.stringify({name:name, last_name:last, phone:phone})
+    });
+    var data = await r.json();
+    if (data.ok) {
+      showToast('Спеціаліста додано');
+      document.getElementById('sa-res-name').value = '';
+      document.getElementById('sa-res-last').value = '';
+      document.getElementById('sa-res-phone').value = '';
+      _saLoadResources();
+    } else { showToast(data.error || 'Помилка'); }
+  } catch(e) { showToast('Помилка зʼєднання'); }
+}
+
+async function _saDeactivateResource(resId) {
+  if (!confirm('Деактивувати спеціаліста?')) return;
+  try {
+    var r = await fetch('/api/superadmin/wlaunch-resources/' + resId, {
+      method:'DELETE', headers:{Authorization:'Bearer '+token}
+    });
+    var data = await r.json();
+    if (data.ok) { showToast('Деактивовано'); _saLoadResources(); }
+    else { showToast(data.error || 'Помилка'); }
+  } catch(e) { showToast('Помилка'); }
 }
 
 async function _saSave() {
@@ -4234,14 +4319,25 @@ async function _saSave() {
 function applyPermissions() {
   if (!Object.keys(adminPerms).length) return;
   // Nav buttons
-  var navMap = {'admin-appts':'calendar','admin-clients':'clients','admin-price':'prices','admin-chat':'messenger'};
+  var navMap = {'admin-appts':'calendar','admin-clients':'clients','admin-price':'prices'};
   document.querySelectorAll('.admin-nav .nav-btn').forEach(function(btn) {
     var onclick = btn.getAttribute('onclick') || '';
+    // Chat button — special logic: messenger OR ai_chat
+    if (onclick.includes("'admin-chat'")) {
+      if (canAccess('messenger')) {
+        // messenger available — keep as is
+      } else if (canAccess('ai_chat')) {
+        btn.setAttribute('onclick', '_openSpecialistAiChat()');
+        btn.querySelector('.nav-label').textContent = 'AI Чат';
+      } else {
+        btn.style.display = 'none';
+      }
+      return;
+    }
     Object.keys(navMap).forEach(function(sid) {
       if (onclick.includes("'" + sid + "'")) {
         var feat = navMap[sid];
-        // For calendar — check if specialist array feature, not simple deny
-        if (feat === 'calendar') return; // calendar always visible (filtered by specialists)
+        if (feat === 'calendar') return;
         btn.style.display = canAccess(feat) ? '' : 'none';
       }
     });
@@ -4264,12 +4360,13 @@ function applyPermissions() {
   document.querySelectorAll('.adm-fab').forEach(function(fab) {
     fab.style.display = canAccess('calendar_edit') ? '' : 'none';
   });
-  // AI assistant section
+  // AI assistant section on home
   var aiSection = document.querySelector('.admin-section .adm-ai-input-row');
   if (aiSection) {
     var sec = aiSection.closest('.admin-section');
     if (sec) sec.style.display = canAccess('ai_assistant') ? '' : 'none';
   }
+  // Chat nav button logic moved to main nav loop above
   // Sync button
   document.querySelectorAll('.sync-btn').forEach(function(btn) {
     btn.style.display = canAccess('sync') ? '' : 'none';
@@ -6050,7 +6147,8 @@ async function _admShowMonth() {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data && e.data.type === 'sw-updated') {
-      window.location.reload();
+      // Don't reload — index.html is already fresh (navigate = network-first in SW)
+      console.log('SW updated, cache refreshed');
     }
   });
 }

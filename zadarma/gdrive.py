@@ -137,6 +137,96 @@ def _get_web_link(folder_id):
     return r.json().get('webViewLink', 'https://drive.google.com/drive/folders/{}'.format(folder_id))
 
 
+def list_all_client_folders():
+    """List all client folders under ROOT. Returns [{id, name}]."""
+    try:
+        r = requests.get(DRIVE_API + '/files', params={
+            'q': "'{}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false".format(ROOT_FOLDER_ID),
+            'fields': 'files(id,name)',
+            'pageSize': 200,
+        }, headers=_headers(), timeout=15)
+        return r.json().get('files', [])
+    except Exception as e:
+        logger.error('list_all_client_folders error: {}'.format(e))
+        return []
+
+
+def list_all_files_under(folder_id):
+    """List ALL files recursively under a folder using a single query with 'parents' trick.
+    Actually Drive API doesn't support recursive listing, so we do 2 levels: visit folders + their children."""
+    result = []
+    try:
+        # Level 1: visit folders
+        r1 = requests.get(DRIVE_API + '/files', params={
+            'q': "'{}' in parents and trashed=false".format(folder_id),
+            'fields': 'files(id,name,mimeType)',
+            'pageSize': 100,
+        }, headers=_headers(), timeout=10)
+        items = r1.json().get('files', [])
+
+        visit_folders = [f for f in items if f.get('mimeType') == 'application/vnd.google-apps.folder']
+
+        if not visit_folders:
+            return result
+
+        # Level 2: batch query for all visit folders + their subfolders at once
+        # Build OR query for all visit folder IDs
+        parent_ids = [vf['id'] for vf in visit_folders]
+        # Query in chunks of 10 to avoid query length limits
+        for i in range(0, len(parent_ids), 10):
+            chunk = parent_ids[i:i+10]
+            q_parts = ["'{}' in parents".format(pid) for pid in chunk]
+            q = '({}) and trashed=false'.format(' or '.join(q_parts))
+            r2 = requests.get(DRIVE_API + '/files', params={
+                'q': q,
+                'fields': 'files(id,name,mimeType,thumbnailLink,createdTime,parents)',
+                'pageSize': 200,
+            }, headers=_headers(), timeout=15)
+            sub_items = r2.json().get('files', [])
+
+            # Separate subfolders (До/Після) from files
+            sub_folders = [f for f in sub_items if f.get('mimeType') == 'application/vnd.google-apps.folder']
+            files = [f for f in sub_items if f.get('mimeType') != 'application/vnd.google-apps.folder']
+
+            # Map parent_id to visit folder name
+            pid_to_visit = {vf['id']: vf['name'] for vf in visit_folders}
+
+            # Add files from visit folders directly
+            for f in files:
+                parent = (f.get('parents') or [''])[0]
+                f['visit'] = pid_to_visit.get(parent, '')
+                f['subfolder'] = ''
+                result.append(f)
+
+            # Level 3: files inside subfolders (До/Після)
+            if sub_folders:
+                sf_ids = [sf['id'] for sf in sub_folders]
+                sf_parent_map = {}
+                for sf in sub_folders:
+                    sf_parent = (sf.get('parents') or [''])[0]
+                    sf_parent_map[sf['id']] = {'name': sf['name'], 'visit': pid_to_visit.get(sf_parent, '')}
+
+                for j in range(0, len(sf_ids), 10):
+                    sf_chunk = sf_ids[j:j+10]
+                    sq = '({}) and trashed=false'.format(' or '.join(["'{}' in parents".format(sid) for sid in sf_chunk]))
+                    r3 = requests.get(DRIVE_API + '/files', params={
+                        'q': sq,
+                        'fields': 'files(id,name,mimeType,thumbnailLink,createdTime,parents)',
+                        'pageSize': 200,
+                    }, headers=_headers(), timeout=15)
+                    for f in r3.json().get('files', []):
+                        parent = (f.get('parents') or [''])[0]
+                        sf_info = sf_parent_map.get(parent, {})
+                        f['visit'] = sf_info.get('visit', '')
+                        f['subfolder'] = sf_info.get('name', '')
+                        result.append(f)
+
+    except Exception as e:
+        logger.error('list_all_files_under error: {}'.format(e))
+
+    return result
+
+
 def count_files_in_folder(folder_id):
     """Count non-folder files in a Drive folder."""
     try:

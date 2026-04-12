@@ -281,8 +281,11 @@ def _time_to_min(t):
         return 0
 
 
-def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None):
-    """Return True if specialist already has a non-cancelled appointment overlapping [new_start, new_end) on date."""
+def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None, exclude_wl_id=None):
+    """Return True if specialist already has a non-cancelled appointment overlapping [new_start, new_end) on date.
+    exclude_id: manual appointment ID to skip (for editing)
+    exclude_wl_id: WLaunch appointment ID to skip (the WLaunch copy of the same appointment)
+    """
     # Check manual_appointments
     q = "SELECT time, duration FROM manual_appointments WHERE specialist=? AND date=? AND status!='CANCELLED'"
     params = [specialist, date]
@@ -303,6 +306,9 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None):
             items = []
         for it in items:
             if it.get('date') != date or it.get('specialist') != specialist:
+                continue
+            # Skip WLaunch copy of the appointment being edited
+            if exclude_wl_id and it.get('appt_id') == exclude_wl_id:
                 continue
             if (it.get('status') or '').upper() == 'CANCELLED':
                 continue
@@ -532,6 +538,10 @@ def send_otp():
     if len(phone) < 11:
         return jsonify({'error': 'invalid_phone'}), 400
 
+    # PIN_AUTH phones skip rate limit and OTP sending
+    if phone in PIN_AUTH:
+        return jsonify({'ok': True})
+
     # Rate limit: max 3 OTPs per phone per hour (atomic transaction)
     now_ts = int(time.time())
     otp_conn = sqlite3.connect(OTP_DB, timeout=5)
@@ -558,10 +568,6 @@ def send_otp():
         save_lead(phone, '', 'app_guest')
         logger.info(f"Guest mode (not a client): {phone}")
         return jsonify({'ok': True, 'guest': True})
-
-    # PIN-авторизація — не надсилаємо SMS, просто підтверджуємо що код прийнятий
-    if phone in PIN_AUTH:
-        return jsonify({'ok': True})
 
     code    = ''.join(secrets.choice(string.digits) for _ in range(4))
     expires = int(time.time()) + OTP_TTL
@@ -1393,24 +1399,22 @@ def admin_client_photos(phone):
     name = ('{} {}'.format(row[0] or '', row[1] or '')).strip()
     if not name:
         return jsonify({'photos': []})
+    # Read from photo cache DB (built by photo_cache.py cron)
+    PHOTO_CACHE_DB = '/home/gomoncli/zadarma/photo_cache.db'
     try:
-        from gdrive import get_client_all_photos
-        photos = get_client_all_photos(name)
-        result = []
-        for ph in photos:
-            # Build thumbnail URL (public for shared folders)
-            fid = ph.get('id', '')
-            result.append({
-                'id': fid,
-                'name': ph.get('name', ''),
-                'visit': ph.get('visit', ''),
-                'subfolder': ph.get('subfolder', ''),
-                'thumbnail': 'https://lh3.googleusercontent.com/d/{}'.format(fid) if fid else '',
-                'created': ph.get('createdTime', ''),
-            })
+        pconn = sqlite3.connect(PHOTO_CACHE_DB, timeout=5)
+        pconn.row_factory = sqlite3.Row
+        rows = pconn.execute(
+            'SELECT file_id, file_name, visit, subfolder, thumbnail, created_time '
+            'FROM photo_cache WHERE client_name=? ORDER BY created_time ASC',
+            (name,)).fetchall()
+        pconn.close()
+        result = [{'id': r['file_id'], 'name': r['file_name'], 'visit': r['visit'],
+                    'subfolder': r['subfolder'], 'thumbnail': r['thumbnail'],
+                    'created': r['created_time']} for r in rows]
         return jsonify({'photos': result, 'client_name': name})
     except Exception as e:
-        logger.warning('client-photos error: {}'.format(e))
+        logger.warning('client-photos cache error: {}'.format(e))
         return jsonify({'photos': [], 'error': str(e)})
 
 
@@ -1498,8 +1502,8 @@ def admin_push_list():
 @app.route('/api/admin/month-visits', methods=['GET'])
 @require_admin
 def admin_month_visits():
-    denied = _check_perm('clients', 'read')
-    if denied: return denied
+    # Uses stat_month permission (specialist-select), not clients
+    # No _check_perm — filtering by visible specialists instead
     from datetime import datetime
     from_date = request.args.get('from', '')
     to_date   = request.args.get('to', '')
@@ -1513,6 +1517,9 @@ def admin_month_visits():
     conn.close()
     price_lookup = _build_price_lookup()
     visits = []
+    vis = _get_visible_specialists('stat_month')
+    vis_names = vis if 'all' in vis else [request.admin_specialist if s == 'own' else s for s in vis]
+    vis_names = [s for s in vis_names if s]
     for r in rows:
         name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip() or r['phone']
         try:
@@ -1525,6 +1532,9 @@ def admin_month_visits():
                 continue
             if to_date and date > to_date:
                 continue
+            spec = it.get('specialist', '')
+            if 'all' not in vis_names and spec not in vis_names:
+                continue
             service = it.get('service', '')
             price = price_lookup.get(service.lower(), '')
             visits.append({
@@ -1534,6 +1544,7 @@ def admin_month_visits():
                 'date':    date,
                 'hour':    it.get('hour'),
                 'price':   price,
+                'specialist': spec,
             })
     visits.sort(key=lambda x: x['date'], reverse=True)
     return jsonify({'visits': visits})
@@ -1725,6 +1736,79 @@ def admin_ai_conversation_thread(session_id):
     return jsonify({'messages': messages})
 
 
+@app.route('/api/superadmin/wlaunch-resources', methods=['GET'])
+@require_superadmin
+def superadmin_wl_resources_list():
+    """List WLaunch resources (specialists)."""
+    try:
+        from wlaunch_api import get_branch_id, HEADERS
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        bid = get_branch_id()
+        r = _req.get('{}/company/{}/branch/{}/resource'.format(WLAUNCH_API_URL, COMPANY_ID, bid),
+                      headers=HEADERS, params={'page': 0, 'size': 50}, timeout=10)
+        resources = []
+        for res in r.json().get('content', []):
+            resources.append({
+                'id': res.get('id', ''),
+                'name': res.get('name', ''),
+                'last_name': res.get('last_name', ''),
+                'phone': res.get('phone', ''),
+                'active': res.get('active', True),
+            })
+        return jsonify({'resources': resources})
+    except Exception as e:
+        return jsonify({'resources': [], 'error': str(e)})
+
+
+@app.route('/api/superadmin/wlaunch-resources', methods=['POST'])
+@require_superadmin
+def superadmin_wl_resources_create():
+    """Create a WLaunch resource (specialist)."""
+    d = request.get_json() or {}
+    name = (d.get('name') or '').strip()
+    last_name = (d.get('last_name') or '').strip()
+    phone = (d.get('phone') or '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+    # Normalize phone
+    if phone and not phone.startswith('+'):
+        phone = '+' + norm_phone(phone)
+    try:
+        from wlaunch_api import get_branch_id, HEADERS
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        bid = get_branch_id()
+        rt_id = '3f31393d-0b21-11ed-8355-65920565acdd'  # default resource_type_id
+        url = '{}/company/{}/branch/{}/resource'.format(WLAUNCH_API_URL, COMPANY_ID, bid)
+        h = dict(HEADERS, **{'Content-Type': 'application/json'})
+        payload = {'resource': {'name': name, 'last_name': last_name, 'resource_type_id': rt_id}}
+        if phone:
+            payload['resource']['phone'] = phone
+        r = _req.post(url, headers=h, json=payload, timeout=10)
+        if r.status_code in (200, 201):
+            return jsonify({'ok': True, 'id': r.json().get('id')})
+        return jsonify({'error': 'WLaunch: {} {}'.format(r.status_code, r.text[:100])}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/superadmin/wlaunch-resources/<rid>', methods=['DELETE'])
+@require_superadmin
+def superadmin_wl_resources_deactivate(rid):
+    """Deactivate a WLaunch resource."""
+    try:
+        from wlaunch_api import get_branch_id, HEADERS
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        bid = get_branch_id()
+        url = '{}/company/{}/branch/{}/resource/{}'.format(WLAUNCH_API_URL, COMPANY_ID, bid, rid)
+        h = dict(HEADERS, **{'Content-Type': 'application/json'})
+        r = _req.post(url, headers=h, json={'resource': {'active': False}}, timeout=10)
+        if r.status_code == 200:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'WLaunch: {}'.format(r.status_code)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/admin/calendar/appointments', methods=['GET'])
 @require_admin
 def admin_cal_get():
@@ -1738,8 +1822,11 @@ def admin_cal_get():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
+    # Visible specialists for calendar
+    vis_cal = _get_visible_specialists('calendar')
+    vis_names = vis_cal if 'all' in vis_cal else [request.admin_specialist if s == 'own' else s for s in vis_cal]
+
     # 1. Manual appointments
-    # Specialist бачить свої записи повністю + чужі як "Зайнято" (без деталей)
     query = "SELECT * FROM manual_appointments WHERE 1=1"
     params = []
     if from_date:
@@ -1752,7 +1839,8 @@ def admin_cal_get():
     for r in conn.execute(query, params).fetchall():
         row_dict = dict(r)
         row_dict['duration_min'] = r['duration'] if r['duration'] else 60
-        if request.admin_role == 'specialist' and row_dict.get('specialist') != request.admin_specialist:
+        spec = row_dict.get('specialist', '')
+        if 'all' not in vis_names and spec not in vis_names:
             row_dict['client_name'] = ''
             row_dict['client_phone'] = ''
             row_dict['procedure_name'] = 'Зайнято'
@@ -1782,7 +1870,7 @@ def admin_cal_get():
             hour = it.get('hour')
             time_str = '{:02d}:00'.format(hour) if hour is not None else ''
             name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
-            is_other_spec = request.admin_role == 'specialist' and specialist != request.admin_specialist
+            is_other_spec = 'all' not in vis_names and specialist not in vis_names
             result.append({
                 'id': 'wl_{}'.format(it.get('appt_id', '')),
                 'client_phone': '' if is_other_spec else row['phone'],
@@ -1806,7 +1894,7 @@ def admin_cal_get():
     if to_date:
         brk_q += ' AND date <= ?'; brk_params.append(to_date)
     for bid, spec, bdate, tf, tt, reason in conn.execute(brk_q, brk_params).fetchall():
-        if request.admin_role == 'specialist' and spec != request.admin_specialist:
+        if 'all' not in vis_names and spec not in vis_names:
             continue
         dur = _time_to_min(tt) - _time_to_min(tf)
         result.append({
@@ -2292,7 +2380,14 @@ def admin_cal_update(appt_id):
         eff_duration   = int(d.get('duration', row['duration'] or 60) or 60)
         new_start = _time_to_min(eff_time)
         new_end   = new_start + eff_duration
-        if _check_overlap(conn, eff_specialist, eff_date, new_start, new_end, exclude_id=appt_id):
+        # Extract WLaunch ID to exclude its copy from overlap check
+        wl_id_to_exclude = row['wlaunch_id'] or None
+        if not wl_id_to_exclude:
+            notes = row['notes'] or ''
+            m = re.search(r'wl:([a-f0-9-]+)', notes, re.IGNORECASE)
+            if m:
+                wl_id_to_exclude = m.group(1)
+        if _check_overlap(conn, eff_specialist, eff_date, new_start, new_end, exclude_id=appt_id, exclude_wl_id=wl_id_to_exclude):
             conn.rollback()
             conn.close()
             return jsonify({'error': 'conflict'}), 409
