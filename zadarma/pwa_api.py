@@ -2824,6 +2824,21 @@ def push_status():
 @require_auth
 def push_procedure_reminder():
     """Надсилає push + SMS нагадування про підібрану процедуру якщо юзер не записався"""
+    # Rate limit: 5/day per phone
+    phone = request.user_phone
+    try:
+        rl_conn = sqlite3.connect(OTP_DB, timeout=5)
+        today = kyiv_now().strftime('%Y-%m-%d')
+        row = rl_conn.execute('SELECT count FROM sms_rate WHERE phone=? AND reset_date=?', (phone, today)).fetchone()
+        if row and row[0] >= 5:
+            rl_conn.close()
+            return jsonify({'error': 'rate_limited'}), 429
+        rl_conn.execute('INSERT INTO sms_rate (phone, count, reset_date) VALUES (?,1,?) ON CONFLICT(phone) DO UPDATE SET count=CASE WHEN reset_date=? THEN count+1 ELSE 1 END, reset_date=?',
+                        (phone, today, today, today))
+        rl_conn.commit()
+        rl_conn.close()
+    except Exception:
+        pass
     data = request.get_json(silent=True) or {}
     procedure = (data.get('procedure') or '').strip()
     if not procedure:

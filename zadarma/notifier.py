@@ -161,6 +161,20 @@ def _log(phone, type_, reference, channel, status, preview=''):
     finally:
         conn.close()
 
+def _is_logged(phone, type_, reference, channel):
+    """Check if notification was already logged (dedup)."""
+    _ensure_notification_log()
+    conn = _db()
+    try:
+        row = conn.execute(
+            'SELECT 1 FROM notification_log WHERE phone=? AND type=? AND reference=? AND channel=?',
+            (phone, type_, reference, channel)).fetchone()
+        return row is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
 # ─── Telegram ────────────────────────────────────────────────────────────────
 
 def _get_tg_id(phone):
@@ -611,8 +625,14 @@ def send_cancellation(appt):
 
     spec = appt.get('specialist')
     if spec:
-        spec_text = fmt_cancel_specialist(appt)
-        results['specialist'] = notify_specialist(spec, spec_text)
+        # Dedup: check if already sent cancel to specialist for this appt
+        spec_ref = 'spec_cancel|{}|{}'.format(appt_id, appt.get('date', ''))
+        spec_phone = SPECIALIST_INFO.get(spec, {}).get('phone_norm', '')
+        if spec_phone and not _is_logged(spec_phone, 'cancel', spec_ref, 'tg'):
+            spec_text = fmt_cancel_specialist(appt)
+            results['specialist'] = notify_specialist(spec, spec_text)
+            if results['specialist']:
+                _log(spec_phone, 'cancel', spec_ref, 'tg', 'sent', '')
 
     logger.info('cancellation phone={} date={} → {}'.format(phone, appt.get('date'), results))
     return results

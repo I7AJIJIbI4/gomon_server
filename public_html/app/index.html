@@ -3279,7 +3279,12 @@ async function loadAiConversations() {
     var r = await fetch('/api/admin/ai-conversations', {headers:{Authorization:'Bearer '+token}});
     var data = await r.json();
     _aiConvs = data.conversations || [];
-    if (!_aiConvs.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Немає AI розмов</div>'; return; }
+    if (!_aiConvs.length) {
+      el.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text3);font-size:14px">' +
+        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:.3;margin-bottom:8px"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5Z"/></svg>' +
+        '<div>Немає діалогів</div></div>';
+      return;
+    }
     el.innerHTML = _aiConvs.map(function(c) {
       var srcIcon = c.source === 'telegram' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#2AABEE" stroke="none"><path d="M20.3 3.5L2.5 10.4c-.7.3-.7.7 0 .9l4.4 1.4 1.7 5.5c.2.5.7.6 1 .3l2.5-2.5 5 3.6c.5.3 1 .1 1.1-.5L21.5 4.7c.2-.8-.3-1.4-1.2-1.2z"/></svg>'
         : c.source === 'app' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7F77DD" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M10 18h4"/></svg>'
@@ -5525,7 +5530,7 @@ document.addEventListener('keydown', function(e) {
         <button class="msg-filter" onclick="filterMsgPlatform('unread')" data-f="unread"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><circle cx="8" cy="8" r="4"/></svg>Непрочитані</button>
         <button class="msg-filter" onclick="filterMsgPlatform('telegram')" data-f="telegram"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M13.6 2.8L1.7 7.5c-.5.2-.5.5 0 .6l3 .9 1.2 3.8c.1.4.5.4.7.2l1.7-1.7 3.4 2.5c.4.2.7.1.8-.4L14.4 3.5c.2-.5-.2-.9-.8-.7zM5.8 9l5.4-3.3L7 9.6l-.4 2.2L5.8 9z"/></svg>TG</button>
         <button class="msg-filter" onclick="filterMsgPlatform('instagram')" data-f="instagram"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="3.5"/><circle cx="8" cy="8" r="2.8"/><circle cx="11.5" cy="4.5" r=".7" fill="currentColor" stroke="none"/></svg>IG</button>
-        <button class="msg-filter" onclick="filterMsgPlatform('ai')" data-f="ai" style="border-color:rgba(127,119,221,.4)"><svg viewBox="0 0 16 16" fill="none" stroke="#7F77DD" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5.5 6.5h5M5.5 9.5h3"/></svg>AI</button>
+        <button class="msg-filter" onclick="filterMsgPlatform('ai')" data-f="ai"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5.5 6.5h5M5.5 9.5h3"/></svg>AI</button>
       </div>
       <div class="msg-conv-list" id="msgConvList"></div>
     </div>

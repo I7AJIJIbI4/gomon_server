@@ -26,6 +26,10 @@ import fcntl
 from datetime import date, datetime, timedelta
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
+try:
+    from tz_utils import kyiv_now
+except ImportError:
+    kyiv_now = datetime.now
 
 LOCK_FILE = '/tmp/appt_reminder.lock'
 _lock_fh  = None
@@ -159,7 +163,7 @@ def run_reminder(dry_run=False):
     Знаходить всі CONFIRMED-записи на завтра і надсилає нагадування.
     Запускати о 10:00 та 18:00.
     """
-    tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    tomorrow = (kyiv_now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
     logger.info('=== REMINDER 24h: перевіряємо записи на {} ==='.format(tomorrow))
 
     appts = _collect_appts(tomorrow)
@@ -213,7 +217,7 @@ def run_feedback(dry_run=False):
     і надсилає подяку + посилання на відгук.
     Запускати о 20:00.
     """
-    today = date.today().strftime('%Y-%m-%d')
+    today = kyiv_now().date().strftime('%Y-%m-%d')
     logger.info('=== FEEDBACK: перевіряємо записи на {} ==='.format(today))
 
     appts = _collect_appts(today)
@@ -269,8 +273,8 @@ def run_specialist_notifications(dry_run=False):
 
     Запускати о 20:00.
     """
-    today    = date.today().strftime('%Y-%m-%d')
-    max_date = (date.today() + timedelta(days=30)).strftime('%Y-%m-%d')
+    today    = kyiv_now().date().strftime('%Y-%m-%d')
+    max_date = (kyiv_now().date() + timedelta(days=30)).strftime('%Y-%m-%d')
     logger.info('=== SPECIALIST NOTIFY: перевіряємо записи (manual created={}, WL range {}..{}) ==='.format(
         today, today, max_date))
 
@@ -382,7 +386,7 @@ def run_tomorrow_briefing(dry_run=False):
     Шаблон спеціалісту: "{spec}, до тебе на завтра {date} о {time}
         записаний клієнт {name} на процедуру "{service}". Вартість {price}, тривалість {duration}."
     """
-    tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    tomorrow = (kyiv_now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
     logger.info('=== TOMORROW BRIEFING: записи на {} ==='.format(tomorrow))
 
     appts = _collect_appts(tomorrow)

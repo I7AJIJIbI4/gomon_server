@@ -7,8 +7,8 @@ if (isset($_GET['zd_echo'])) {
 }
 
 $config = [
-    'zadarma_key' => 'YOUR_ZADARMA_KEY',
-    'zadarma_secret' => 'YOUR_ZADARMA_SECRET',
+    'zadarma_key' => '322168f1b94be856f0de',
+    'zadarma_secret' => 'ae4b189367a9f6de88b3',
     'main_phone' => '0733103110',
     'log_file' => '/home/gomoncli/zadarma/ivr_webhook.log',
 
@@ -30,7 +30,7 @@ $config = [
     ],
 
     'telegram_config' => [
-        'bot_token' => 'YOUR_TELEGRAM_BOT_TOKEN',
+        'bot_token' => '8030228734:AAGYMKVWYfNT5h-UJlVWmmWmul8-KhdaOk4',
         'chat_id' => '573368771'
     ]
 ];

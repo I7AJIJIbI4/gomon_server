@@ -19,8 +19,8 @@ if (empty($data) && !empty($_POST)) {
 error_log("Zadarma webhook: " . json_encode($data));
 
 $config = [
-    'zadarma_key'    => 'YOUR_ZADARMA_KEY',
-    'zadarma_secret' => 'YOUR_ZADARMA_SECRET',
+    'zadarma_key'    => '322168f1b94be856f0de',
+    'zadarma_secret' => 'ae4b189367a9f6de88b3',
     'main_phone'     => '0733103110',
 ];
 
@@ -110,21 +110,21 @@ function handleIvrResponse($data) {
 
     switch ($digits) {
         case '1':
-            // Кнопка 1 → Telegram-сповіщення + SMS клієнту
-            writeLog("IVR: Кнопка 1 — callback → **#518196-103");
-            echo json_encode(['redirect' => '**#518196-103']);
+            // Кнопка 1 → переадресація на лікаря
+            writeLog("IVR: Кнопка 1 — лікар → **#518196-104");
+            echo json_encode(['redirect' => '**#518196-104']);
             break;
 
         case '2':
-            // Кнопка 2 → голосове (Zadarma), PHP нічого не робить
-            writeLog("IVR: Кнопка 2 — голосове меню");
-            echo json_encode(['status' => 'ok']);
+            // Кнопка 2 → callback request (TG + SMS з контактами)
+            writeLog("IVR: Кнопка 2 — callback → **#518196-103");
+            echo json_encode(['redirect' => '**#518196-103']);
             break;
 
         case '3':
-            // Кнопка 3 → переадресація на лікаря
-            writeLog("IVR: Кнопка 3 — лікар → **#518196-104");
-            echo json_encode(['redirect' => '**#518196-104']);
+            // Кнопка 3 → голосове меню (Zadarma обробляє)
+            writeLog("IVR: Кнопка 3 — голосове меню");
+            echo json_encode(['status' => 'ok']);
             break;
 
         default:
@@ -151,14 +151,14 @@ function handleNotifyInternal($data) {
 
     switch ($internal) {
         case '103':
-            writeLog("Кнопка 1 — callback handler від $caller_id");
+            writeLog("Кнопка 2 — callback handler від $caller_id");
             require_once __DIR__ . '/callback_request_handler.php';
             handleCallbackRequest($caller_id);
             break;
 
         case '104':
-            // Дзвінок вже переданий на internal 104 через redirect в handleIvrResponse
-            writeLog("Кнопка 3 — дзвінок переданий на лікаря (ext 104) від $caller_id");
+            // Кнопка 1 — дзвінок переданий на лікаря
+            writeLog("Кнопка 1 — дзвінок переданий на лікаря (ext 104) від $caller_id");
             break;
 
         default:

@@ -18,6 +18,12 @@ import sqlite3
 import sys
 from datetime import date, datetime, timedelta
 
+sys.path.insert(0, '/home/gomoncli/zadarma')
+try:
+    from tz_utils import kyiv_now
+except ImportError:
+    kyiv_now = datetime.now
+
 LOG_FILE = '/home/gomoncli/zadarma/push_reminder.log'
 
 logger = logging.getLogger('push_reminder')
@@ -104,7 +110,7 @@ def send_repeat_push_reminders(dry_run=False):
     init_push_tables()
 
     stats = {'sent': 0, 'skipped': 0, 'no_sub': 0, 'errors': 0}
-    today = date.today()
+    today = kyiv_now().date()
     CANCELLED = {'CANCELLED', 'CANCELED', 'CANCEL', 'ANNULLED', 'REJECTED', 'NO_SHOW'}
     SKIP_SERVICES = ['hyaluronidase', '\u0433\u0456\u0430\u043b\u0443\u0440\u043e\u043d\u0456\u0434\u0430\u0437\u0430',
                      '\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0456\u044f']
@@ -212,7 +218,7 @@ def send_appt_push_reminders(dry_run=False):
     init_push_tables()
 
     stats = {'sent': 0, 'skipped': 0, 'no_sub': 0, 'errors': 0}
-    today = date.today()
+    today = kyiv_now().date()
     tomorrow = today + timedelta(days=1)
     CANCELLED = {'CANCELLED', 'CANCELED', 'CANCEL', 'ANNULLED', 'REJECTED', 'NO_SHOW'}
 

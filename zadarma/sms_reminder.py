@@ -10,6 +10,12 @@ import sqlite3
 import random
 import requests
 from datetime import date, datetime, timedelta
+import sys
+sys.path.insert(0, '/home/gomoncli/zadarma')
+try:
+    from tz_utils import kyiv_now
+except ImportError:
+    kyiv_now = datetime.now
 from user_db import DB_PATH
 from sms_fly import send_sms
 
@@ -263,7 +269,7 @@ def notify_telegram(stats, sent_details, error_details, dry_run):
     Якщо нічого не відправлено і помилок немає — мовчимо.
     """
     from config import TELEGRAM_TOKEN
-    now = datetime.now().strftime('%d.%m.%Y %H:%M')
+    now = kyiv_now().strftime('%d.%m.%Y %H:%M')
     dry_tag = ' [DRY RUN]' if dry_run else ''
 
     if stats['sent'] == 0 and stats['errors'] == 0:
@@ -334,7 +340,7 @@ def log_run(stats, current_hour):
         conn.execute(
             'INSERT INTO sms_reminder_runs (run_at, hour, sent, skipped, errors, dry_run) '
             'VALUES (?, ?, ?, ?, ?, ?)',
-            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), current_hour,
+            (kyiv_now().strftime('%Y-%m-%d %H:%M:%S'), current_hour,
              stats['sent'], stats['skipped'], stats['errors'],
              1 if stats['dry_run'] else 0)
         )
@@ -369,7 +375,7 @@ def mark_reminder_sent(client_id, phone, service, visit_date, category, status='
             'INSERT OR IGNORE INTO sms_reminders '
             '(client_id, phone, service, visit_date, sent_date, status, template_category) '
             'VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (client_id, phone, service, visit_date, date.today().isoformat(), status, category)
+            (client_id, phone, service, visit_date, kyiv_now().date().isoformat(), status, category)
         )
         conn.commit()
     except Exception as e:
@@ -409,8 +415,8 @@ def check_and_send_reminders(dry_run=False):
     stats = {'sent': 0, 'skipped': 0, 'errors': 0, 'dry_run': dry_run}
     sent_details = []    # (phone, name, sms_text) — для Telegram звіту
     error_details = []   # (phone, name, sms_text) — тільки адміну
-    today = date.today()
-    current_hour = datetime.now().hour
+    today = kyiv_now().date()
+    current_hour = kyiv_now().hour
 
     conn = sqlite3.connect(DB_PATH, timeout=30)
     cursor = conn.cursor()
@@ -611,6 +617,15 @@ def check_and_send_reminders(dry_run=False):
 if __name__ == '__main__':
     import sys
     import os
+    import fcntl
+
+    # File lock to prevent overlapping runs
+    _lock_fh = open('/tmp/sms_reminder.lock', 'w')
+    try:
+        fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        print('Already running, exiting')
+        sys.exit(0)
 
     # RotatingFileHandler: 1MB × 7 файлів = max 7MB, ротація автоматична
     file_handler = logging.handlers.RotatingFileHandler(
