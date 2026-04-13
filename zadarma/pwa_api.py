@@ -1193,12 +1193,18 @@ def admin_appointments():
     c = conn.cursor()
     c.execute("""
         SELECT c.first_name, c.last_name, c.phone,
-               json_extract(s.value, '$.date')    as date,
-               json_extract(s.value, '$.service') as service,
-               json_extract(s.value, '$.status')  as status
+               json_extract(s.value, '$.date')       as date,
+               json_extract(s.value, '$.service')    as service,
+               json_extract(s.value, '$.status')     as status,
+               json_extract(s.value, '$.hour')       as hour,
+               json_extract(s.value, '$.minute')     as minute,
+               json_extract(s.value, '$.specialist') as specialist
         FROM clients c, json_each(c.services_json) s
         WHERE json_extract(s.value, '$.date') IS NOT NULL
-        ORDER BY json_extract(s.value, '$.date') DESC
+          AND IFNULL(json_extract(s.value, '$.status'),'') != 'CANCELLED'
+        ORDER BY json_extract(s.value, '$.date') DESC,
+                 json_extract(s.value, '$.hour') ASC,
+                 json_extract(s.value, '$.minute') ASC
     """)
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
