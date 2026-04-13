@@ -93,7 +93,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             service_name = ', '.join(s.get('name', '') for s in services_list_appt if s.get('name'))
 
             # DST-correct UTC->Kyiv conversion via shared parse_appt_time
-            visit_date, visit_hour = parse_appt_time(appt.get('start_time', ''))
+            visit_date, visit_hour, visit_minute = parse_appt_time(appt.get('start_time', ''))
 
             appt_status = (appt.get('status') or '').upper()
             specialist = get_specialist(appt.get('resources', []))
@@ -103,6 +103,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 'appt_id': appt.get('id', ''),
                 'date': visit_date,
                 'hour': visit_hour,
+                'minute': visit_minute,
                 'service': service_name,
                 'status': appt_status,
                 'specialist': specialist,

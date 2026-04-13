@@ -30,23 +30,26 @@ def get_specialist(resources):
 
 
 def parse_appt_time(start_time_str):
-    """Parse WLaunch UTC start_time string to (kyiv_date_str, kyiv_hour).
+    """Parse WLaunch UTC start_time string to (kyiv_date_str, kyiv_hour, kyiv_minute).
     Uses appointment's own UTC datetime for correct DST offset."""
     if not start_time_str:
-        return '', None
+        return '', None, 0
     try:
         utc_dt = datetime.strptime(start_time_str[:19], '%Y-%m-%dT%H:%M:%S')
         kyiv_dt = utc_to_kyiv(utc_dt)
-        return kyiv_dt.strftime('%Y-%m-%d'), kyiv_dt.hour
+        return kyiv_dt.strftime('%Y-%m-%d'), kyiv_dt.hour, kyiv_dt.minute
     except Exception:
         visit_date = start_time_str[:10]
         visit_hour = None
+        visit_minute = 0
         if len(start_time_str) >= 13:
             try:
                 visit_hour = int(start_time_str[11:13])
+                if len(start_time_str) >= 16:
+                    visit_minute = int(start_time_str[14:16])
             except Exception:
                 pass
-        return visit_date, visit_hour
+        return visit_date, visit_hour, visit_minute
 
 
 HEADERS = {
@@ -136,7 +139,7 @@ def fetch_all_clients():
             services_list_appt = appt.get("services", [])
             service_name = ", ".join(s.get("name", "") for s in services_list_appt if s.get("name"))
 
-            visit_date, visit_hour = parse_appt_time(appt.get("start_time", ""))
+            visit_date, visit_hour, visit_minute = parse_appt_time(appt.get("start_time", ""))
 
             appt_status = (appt.get("status") or "").upper()
             specialist = get_specialist(appt.get("resources", []))

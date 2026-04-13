@@ -454,7 +454,7 @@ def parse_services(client: dict) -> list:
             'service': item.get('service', ''),
             'date':    date_str,
             'appt_id': item.get('appt_id', ''),
-            'time':    '{:02d}:00'.format(hour) if hour is not None else '',
+            'time':    '{:02d}:{:02d}'.format(hour, item.get('minute', 0) or 0) if hour is not None else '',
             'specialist': item.get('specialist', ''),
             'duration_min': item.get('duration_min', 60),
             # Якщо дата сьогодні або в майбутньому — "upcoming", інакше — "done"
@@ -1346,7 +1346,7 @@ def admin_client_card(phone):
                         continue  # already have it
                     svcs = appt.get('services', [])
                     svc_name = ', '.join(s.get('name', '') for s in svcs if s.get('name'))
-                    vdate, vhour = parse_appt_time(appt.get('start_time', ''))
+                    vdate, vhour, vmin = parse_appt_time(appt.get('start_time', ''))
                     visits.append({
                         'date': vdate,
                         'service': svc_name,
@@ -1868,7 +1868,8 @@ def admin_cal_get():
                 continue
             specialist = it.get('specialist')
             hour = it.get('hour')
-            time_str = '{:02d}:00'.format(hour) if hour is not None else ''
+            minute = it.get('minute', 0) or 0
+            time_str = '{:02d}:{:02d}'.format(hour, minute) if hour is not None else ''
             name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
             is_other_spec = 'all' not in vis_names and specialist not in vis_names
             result.append({
@@ -2132,7 +2133,7 @@ def admin_calendar_ics():
                 'procedure_name': it.get('service', ''),
                 'specialist': spec,
                 'date': d,
-                'time': '{:02d}:00'.format(hour) if hour is not None else '09:00',
+                'time': '{:02d}:{:02d}'.format(hour, it.get('minute', 0) or 0) if hour is not None else '09:00',
                 'duration': it.get('duration_min') or 60,
                 'notes': '',
                 'status': status,
