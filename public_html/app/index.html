@@ -1200,10 +1200,12 @@ async function loadAdminAppointments() {
             <span class="cal-day-label">${dow}</span>
           </div>`;
         // Сортуємо записи дня по годині
-        const dayAppts = (byMonth[mk][d] || []).slice().sort((x,y) => (x.hour||0)-(y.hour||0));
+        const dayAppts = (byMonth[mk][d] || []).slice().sort((x,y) => (x.hour||0)*60+(x.minute||0) - ((y.hour||0)*60+(y.minute||0)));
         dayAppts.forEach(a => {
           const ph = (a.phone||'').replace(/^38/,'0');
-          const timeStr = a.hour != null ? String(a.hour).padStart(2,'0') + ':00' : '';
+          const timeStr = a.hour != null
+            ? String(a.hour).padStart(2,'0') + ':' + String(a.minute ?? 0).padStart(2,'0')
+            : '';
           const specIcon = a.specialist === 'victoria' ? ' 👩‍⚕️В' : a.specialist === 'anastasia' ? ' 👩‍⚕️А' : '';
           html += `<div class="cal-appt-row">
             <div>

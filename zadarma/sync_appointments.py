@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
 from user_db import add_or_update_client
-from config import WLAUNCH_API_KEY, COMPANY_ID
+from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
+from wlaunch_api import get_specialist, get_branch_id, parse_appt_time, HEADERS
 import requests
 
 logging.basicConfig(
@@ -24,49 +25,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-WLAUNCH_API_URL = 'https://api.wlaunch.net/v1'
-HEADERS = {
-    'Authorization': f'Bearer {WLAUNCH_API_KEY}',
-    'Accept': 'application/json'
-}
-
-
-def get_branch_id():
-    """Отримує ID першої активної філії"""
-    try:
-        url = f'{WLAUNCH_API_URL}/company/{COMPANY_ID}/branch/'
-        params = {'active': 'true', 'sort': 'ordinal', 'page': 0, 'size': 1}
-        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        branches = data.get('content', [])
-        if branches:
-            return branches[0]['id']
-        return None
-    except Exception as e:
-        logger.error(f'Помилка отримання branch_id: {e}')
-        return None
-
 
 def sync_recent_appointments(days_back=7, days_forward=90):
     """
     Синхронізує appointments за останні N днів та майбутні на M днів
     Оптимізована версія для частих запусків
     """
-    logger.info(f'🔄 Синхронізація appointments (назад: {days_back} днів, вперед: {days_forward} днів)')
-    
+    logger.info(f'\U0001f504 Синхронізація appointments (назад: {days_back} днів, вперед: {days_forward} днів)')
+
     branch_id = get_branch_id()
     if not branch_id:
-        logger.error('❌ Не вдалося отримати branch_id')
+        logger.error('\u274c Не вдалося отримати branch_id')
         return 0
 
     url = f'{WLAUNCH_API_URL}/company/{COMPANY_ID}/branch/{branch_id}/appointment'
-    
-    # Період: від days_back днів назад до days_forward днів вперед
+
     end_date = datetime.utcnow() + timedelta(days=days_forward)
     start_date = datetime.utcnow() - timedelta(days=days_back)
-    
-    # Збираємо клієнтів: phone -> {дані}
+
     clients_map = {}
     page = 0
     max_pages = 50
@@ -86,7 +62,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             response.raise_for_status()
             data = response.json()
         except Exception as e:
-            logger.error(f'❌ Помилка на сторінці {page}: {e}')
+            logger.error(f'\u274c Помилка на сторінці {page}: {e}')
             break
 
         appointments = data.get('content', [])
@@ -94,7 +70,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             break
 
         total_appointments += len(appointments)
-        logger.info(f'📄 Сторінка {page + 1}, записів: {len(appointments)}')
+        logger.info(f'\U0001f4c4 Сторінка {page + 1}, записів: {len(appointments)}')
 
         for appt in appointments:
             client = appt.get('client')
@@ -113,25 +89,27 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             first_name = client.get('first_name', '')
             last_name = client.get('last_name', '')
 
-            # Витягуємо послугу
             services_list_appt = appt.get('services', [])
             service_name = ', '.join(s.get('name', '') for s in services_list_appt if s.get('name'))
 
-            # Дата, година та статус запису
-            visit_date = ''
-            visit_hour = None
-            start_time = appt.get('start_time', '')
-            if start_time:
-                try:
-                    visit_date = start_time[:10]
-                    if len(start_time) >= 13:
-                        visit_hour = int(start_time[11:13])
-                except Exception:
-                    pass
+            # DST-correct UTC->Kyiv conversion via shared parse_appt_time
+            visit_date, visit_hour, visit_minute = parse_appt_time(appt.get('start_time', ''))
 
             appt_status = (appt.get('status') or '').upper()
+            specialist = get_specialist(appt.get('resources', []))
+            duration_min = (appt.get('duration') or 0) // 60 or 60
 
-            # Оновлюємо або додаємо
+            entry = {
+                'appt_id': appt.get('id', ''),
+                'date': visit_date,
+                'hour': visit_hour,
+                'minute': visit_minute,
+                'service': service_name,
+                'status': appt_status,
+                'specialist': specialist,
+                'duration_min': duration_min,
+            }
+
             if phone_norm not in clients_map:
                 clients_map[phone_norm] = {
                     'id': client_id,
@@ -141,7 +119,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                     'last_service': service_name,
                     'last_visit': visit_date,
                     'visits_count': 1,
-                    'services_history': [{'appt_id': appt.get('id',''), 'date': visit_date, 'hour': visit_hour, 'service': service_name, 'status': appt_status}] if service_name and visit_date else []
+                    'services_history': [entry] if service_name and visit_date else []
                 }
             else:
                 clients_map[phone_norm]['visits_count'] += 1
@@ -149,30 +127,58 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                     clients_map[phone_norm]['first_name'] = first_name
                 if not clients_map[phone_norm]['last_name'] and last_name:
                     clients_map[phone_norm]['last_name'] = last_name
-                if service_name and visit_date and len(clients_map[phone_norm]['services_history']) < 10:
-                    entry = {'appt_id': appt.get('id',''), 'date': visit_date, 'hour': visit_hour, 'service': service_name, 'status': appt_status}
+                if service_name and visit_date:
                     clients_map[phone_norm]['services_history'].append(entry)
 
-                # Оновлюємо last_visit якщо цей запис новіший
                 if visit_date > clients_map[phone_norm]['last_visit']:
                     clients_map[phone_norm]['last_visit'] = visit_date
                     clients_map[phone_norm]['last_service'] = service_name
 
         page += 1
-        
-        # Якщо це остання сторінка
+
         total_pages = data.get('page', {}).get('total_pages', 0)
         if page >= total_pages:
             break
 
-    # Записуємо в базу
+    # Записуємо в базу — мержимо нові записи зі старими (не перезаписуємо)
+    import sqlite3
+    DB_PATH = '/home/gomoncli/zadarma/users.db'
     updated = 0
     for phone_norm, c in clients_map.items():
         try:
-            # Сортуємо історію по даті (новіші першими) та беремо топ-5
-            c['services_history'].sort(key=lambda x: x['date'], reverse=True)
-            services_json = json.dumps(c['services_history'][:5], ensure_ascii=False)
-            
+            new_entries = c['services_history']
+
+            # Read existing services_json from DB and merge
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            row = conn.execute("SELECT services_json FROM clients WHERE phone=?",
+                               (phone_norm,)).fetchone()
+            conn.close()
+
+            existing = []
+            if row and row[0]:
+                try:
+                    existing = json.loads(row[0])
+                except Exception:
+                    existing = []
+
+            # Merge: index existing by appt_id, update with new data
+            by_id = {}
+            for e in existing:
+                aid = e.get('appt_id')
+                if aid:
+                    by_id[aid] = e
+            for e in new_entries:
+                aid = e.get('appt_id')
+                if aid:
+                    by_id[aid] = e  # new data overwrites old for same appt
+                else:
+                    by_id[id(e)] = e
+
+            merged = list(by_id.values())
+            merged.sort(key=lambda x: x.get('date', ''), reverse=True)
+            # Keep top 50 (enough for full history view)
+            services_json = json.dumps(merged[:50], ensure_ascii=False)
+
             add_or_update_client(
                 client_id=c['id'],
                 first_name=c['first_name'],
@@ -180,21 +186,31 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 phone=c['phone'],
                 last_service=c['last_service'],
                 last_visit=c['last_visit'],
-                visits_count=c['visits_count'],
+                visits_count=max(c['visits_count'], len(merged)),
                 services_json=services_json
             )
             updated += 1
         except Exception as e:
-            logger.error(f'❌ Помилка збереження {c["phone"]}: {e}')
+            logger.error(f'\u274c Помилка збереження {c["phone"]}: {e}')
 
-    logger.info(f'✅ Оброблено {total_appointments} appointments, оновлено {updated} клієнтів')
+    logger.info(f'\u2705 Оброблено {total_appointments} appointments, оновлено {updated} клієнтів')
     return updated
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--deep', action='store_true', help='Deep sync: fetch ALL history (years back)')
+    args = parser.parse_args()
+
     try:
-        result = sync_recent_appointments(days_back=7, days_forward=90)
-        logger.info(f'✅ Синхронізація завершена: {result} клієнтів оновлено')
+        if args.deep:
+            # Deep sync — all appointments from 2020 to now+90 days
+            logger.info('DEEP SYNC: fetching full history...')
+            result = sync_recent_appointments(days_back=2000, days_forward=90)
+        else:
+            result = sync_recent_appointments(days_back=7, days_forward=90)
+        logger.info(f'\u2705 Синхронізація завершена: {result} клієнтів оновлено')
     except Exception as e:
-        logger.error(f'❌ Помилка синхронізації: {e}', exc_info=True)
+        logger.error(f'\u274c Помилка синхронізації: {e}', exc_info=True)
         sys.exit(1)
