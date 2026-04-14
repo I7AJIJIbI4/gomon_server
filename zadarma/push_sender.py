@@ -4,6 +4,10 @@ import logging
 import sqlite3
 import warnings
 from datetime import datetime
+try:
+    from tz_utils import kyiv_now
+except ImportError:
+    kyiv_now = datetime.now
 
 warnings.filterwarnings('ignore')  # suppress Python 3.6 deprecation warnings
 
@@ -60,7 +64,7 @@ def save_subscription(phone, subscription_json_str):
         conn.execute(
             'INSERT OR REPLACE INTO push_subscriptions '
             '(phone, endpoint, subscription, created_at, active) VALUES (?,?,?,?,1)',
-            (phone, endpoint, subscription_json_str, datetime.now().isoformat())
+            (phone, endpoint, subscription_json_str, kyiv_now().isoformat())
         )
         # Залишаємо не більше 2 активних підписок на телефон (найновіші)
         conn.execute("""
@@ -187,7 +191,7 @@ def log_push(phone, push_type, reference, title, status='sent'):
         conn.execute(
             'INSERT INTO push_log (phone, type, reference, title, sent_at, status) '
             'VALUES (?,?,?,?,?,?)',
-            (phone, push_type, reference, title, datetime.now().isoformat(), status)
+            (phone, push_type, reference, title, kyiv_now().isoformat(), status)
         )
         conn.commit()
     except Exception as e:

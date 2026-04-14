@@ -192,8 +192,8 @@ def _build_system_prompt(client_phone=None):
                 services = json.loads(row[2] or '[]')
                 visits = row[3] or 0
                 if services:
-                    from datetime import datetime as _dt
-                    _today = _dt.utcnow().strftime('%Y-%m-%d')
+                    from tz_utils import kyiv_now as _kyiv_now
+                    _today = _kyiv_now().strftime('%Y-%m-%d')
                     _upcoming_active = [s for s in services
                                  if s.get('date', '') >= _today
                                  and s.get('status', '').upper() not in ('CANCELLED',)]
@@ -216,6 +216,7 @@ def _build_system_prompt(client_phone=None):
                         prompt += '\n\n---\n## Майбутні записи клієнта\n{}'.format('\n'.join(_ulines))
                     else:
                         prompt += '\n\n---\n## Майбутні записи клієнта\nНемає майбутніх записів.'
+
                     if _past:
                         _plines = ['- {}: {} ({})'.format(
                             s.get('date', ''), s.get('service', ''), s.get('status', ''))
@@ -224,6 +225,12 @@ def _build_system_prompt(client_phone=None):
                             visits, '\n'.join(_plines))
         except Exception as e:
             logger.warning('Client data lookup error: {}'.format(e))
+    else:
+        prompt += ('\n\n---\n## Дані клієнта\n'
+                   'Телефон клієнта невідомий — він ще не прив\'язав номер через бота. '
+                   'Якщо клієнт питає про свої записи або хоче скасувати — '
+                   'попроси його надіслати команду /start боту @DrGomonConciergeBot '
+                   'і поділитись номером телефону, щоб система могла знайти його записи.')
 
     # Promos
     try:
@@ -403,7 +410,7 @@ def _call_anthropic(system_prompt, messages):
 
 
 def _send_ai_reply(chat_id, text, biz_conn_id):
-    """Send AI reply via Business Bot API."""
+    """Send AI reply via Business Bot API. Markdown first, plain text fallback."""
     payload = {'chat_id': int(chat_id), 'text': text, 'parse_mode': 'Markdown'}
     if biz_conn_id:
         payload['business_connection_id'] = biz_conn_id
@@ -413,6 +420,18 @@ def _send_ai_reply(chat_id, text, biz_conn_id):
             json=payload, timeout=10)
         result = r.json()
         if not result.get('ok'):
+            # Markdown parse error — retry without parse_mode
+            if 'parse' in result.get('description', '').lower() or 'can\'t' in result.get('description', '').lower():
+                logger.warning('Markdown failed, retrying plain: {}'.format(result.get('description', '')))
+                payload.pop('parse_mode', None)
+                r2 = requests.post(
+                    'https://api.telegram.org/bot{}/sendMessage'.format(BOT_TOKEN),
+                    json=payload, timeout=10)
+                result2 = r2.json()
+                if not result2.get('ok'):
+                    logger.error('TG send error (plain fallback): {}'.format(result2.get('description', '')))
+                    return False
+                return True
             logger.error('TG send error: {}'.format(result.get('description', '')))
             return False
         return True
@@ -507,8 +526,8 @@ def _cancel_client_appointment(client_phone, target_date=None):
         services = json.loads(row[3] or '[]')
 
         # Find nearest future confirmed appointment
-        from datetime import datetime as _dt
-        today = _dt.utcnow().strftime('%Y-%m-%d')
+        from tz_utils import kyiv_now as _kyiv_now
+        today = _kyiv_now().strftime('%Y-%m-%d')
         upcoming = [s for s in services
                     if s.get('date', '') >= today
                     and s.get('status', '').upper() not in ('CANCELLED',)]

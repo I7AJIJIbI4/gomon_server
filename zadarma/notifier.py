@@ -161,7 +161,7 @@ def _log(phone, type_, reference, channel, status, preview=''):
     finally:
         conn.close()
 
-def _is_logged(phone, type_, reference, channel):
+def _already_sent(phone, type_, reference, channel):
     """Check if notification was already logged (dedup)."""
     _ensure_notification_log()
     conn = _db()
@@ -628,7 +628,7 @@ def send_cancellation(appt):
         # Dedup: check if already sent cancel to specialist for this appt
         spec_ref = 'spec_cancel|{}|{}'.format(appt_id, appt.get('date', ''))
         spec_phone = SPECIALIST_INFO.get(spec, {}).get('phone_norm', '')
-        if spec_phone and not _is_logged(spec_phone, 'cancel', spec_ref, 'tg'):
+        if spec_phone and not _already_sent(spec_phone, 'cancel', spec_ref, 'tg'):
             spec_text = fmt_cancel_specialist(appt)
             results['specialist'] = notify_specialist(spec, spec_text)
             if results['specialist']:

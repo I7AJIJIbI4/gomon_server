@@ -1131,7 +1131,7 @@ def my_services_command(bot, update):
         conn.close()
 
         # --- split into upcoming / done ---
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        from tz_utils import kyiv_now; today_str = kyiv_now().strftime('%Y-%m-%d')
         upcoming = []
         done = []
         for a in appointments:

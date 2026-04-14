@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Kyiv');
 /**
  * Dr. Gomon Cosmetology — AI Chat Endpoint
  * Розмістити: /api/chat.php
@@ -560,7 +561,7 @@ try {
         . 'user_name TEXT,'
         . 'role TEXT NOT NULL,'
         . 'content TEXT NOT NULL,'
-        . 'created_at TEXT DEFAULT (datetime("now")))'
+        . 'created_at TEXT DEFAULT CURRENT_TIMESTAMP)'
     );
     $ai_db->exec('CREATE INDEX IF NOT EXISTS idx_ai_session ON ai_messages(session_key)');
     $ai_db->exec('CREATE INDEX IF NOT EXISTS idx_ai_created ON ai_messages(created_at)');
