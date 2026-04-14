@@ -580,7 +580,7 @@ def send_otp():
 
     # TG-first, SMS/Viber fallback з WebOTP
     tg_text  = 'Ваш код для входу:\n\n    {code}\n\nДійсний 5 хвилин.\nDr. Gomon Cosmetology'.format(code=code)
-    sms_text = 'Ваш код — {code}. Дійсний 5 хвилин.\n\n@www.gomonclinic.com #{code}'.format(code=code)
+    sms_text = 'Ваш код — {code}. Дійсний 5 хвилин.\n\n@drgomon.beauty #{code}'.format(code=code)
 
     ok = False
     channel = 'sms'
@@ -2158,7 +2158,7 @@ def admin_calendar_ics():
         'X-WR-TIMEZONE:Europe/Kyiv',
     ]
     for a in appts:
-        uid = 'gomon-{}-{}@gomonclinic.com'.format(a.get('id', ''), a['date'])
+        uid = 'gomon-{}-{}@drgomon.beauty'.format(a.get('id', ''), a['date'])
         t = a.get('time', '09:00') or '09:00'
         h, m = int(t[:2]), int(t[3:5]) if len(t) >= 5 else 0
         dur = int(a.get('duration') or 60)
@@ -2470,9 +2470,25 @@ def admin_client_add():
         return jsonify({'error': 'missing_fields'}), 400
     existing = get_client(phone)
     if existing:
-        return jsonify({'ok': True, 'existing': True, 'client': {
+        # Update name/surname if provided and different
+        upd_fields = []
+        upd_vals = []
+        if first_name and first_name != (existing.get('first_name') or ''):
+            upd_fields.append('first_name=?')
+            upd_vals.append(first_name)
+        if last_name and last_name != (existing.get('last_name') or ''):
+            upd_fields.append('last_name=?')
+            upd_vals.append(last_name)
+        if upd_fields:
+            upd_vals.append(phone)
+            conn2 = sqlite3.connect(DB_PATH, timeout=5)
+            conn2.execute('UPDATE clients SET {} WHERE phone=?'.format(', '.join(upd_fields)), upd_vals)
+            conn2.commit()
+            conn2.close()
+            logger.info('Client updated: {} → {} {}'.format(phone, first_name, last_name))
+        return jsonify({'ok': True, 'existing': True, 'updated': bool(upd_fields), 'client': {
             'phone': existing['phone'],
-            'name': ((existing.get('first_name') or '') + ' ' + (existing.get('last_name') or '')).strip()
+            'name': (first_name + ' ' + last_name).strip() if upd_fields else ((existing.get('first_name') or '') + ' ' + (existing.get('last_name') or '')).strip()
         }})
     conn = sqlite3.connect(DB_PATH)
     try:
@@ -3107,6 +3123,78 @@ def _tg_notify_cancel(name, phone, date_str, service):
             )
         except Exception:
             pass
+
+
+@app.route('/api/chat/cancel-appointment', methods=['POST'])
+def chat_cancel_appointment():
+    """Cancel nearest upcoming appointment by phone (called from chat.php AI)."""
+    data = request.get_json() or {}
+    phone = data.get('phone', '').strip()
+    if not phone:
+        return jsonify({'error': 'missing phone'}), 400
+
+    target_date = data.get('date', '').strip()
+    phone = norm_phone(phone)
+    client = get_client(phone)
+    if not client:
+        return jsonify({'error': 'Клієнта не знайдено в базі.'}), 404
+
+    client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()
+                   if client else '')
+    services = json.loads(client.get('services_json', '[]') or '[]')
+
+    from tz_utils import kyiv_now
+    today = kyiv_now().strftime('%Y-%m-%d')
+    upcoming = [s for s in services
+                if s.get('date', '') >= today
+                and s.get('status', '').upper() not in ('CANCELLED',)]
+    upcoming.sort(key=lambda x: (x.get('date', ''), x.get('hour', 0)))
+
+    if not upcoming:
+        return jsonify({'error': 'У вас немає майбутніх записів.'}), 404
+
+    if target_date:
+        targeted = [s for s in upcoming if s.get('date', '') == target_date]
+        if targeted:
+            upcoming = targeted
+
+    appt = upcoming[0]
+    date = appt.get('date', '')
+    service = appt.get('service', '')
+    specialist = appt.get('specialist', '')
+    appt_id = appt.get('appt_id', '')
+
+    from wlaunch_api import get_branch_id as _get_bid
+    _branch_id = _get_bid()
+
+    if not appt_id:
+        appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
+    if not appt_id:
+        return jsonify({'error': 'Не вдалося знайти запис у системі.'}), 404
+
+    ok, err = _cancel_wlaunch_appt(appt_id, branch_id=_branch_id)
+    if not ok:
+        return jsonify({'error': 'Помилка скасування: {}'.format(err)}), 502
+
+    _update_local_appt_cancelled(phone, date, service)
+
+    try:
+        from notifier import send_cancellation
+        send_cancellation({
+            'appt_id': appt_id,
+            'client_phone': phone,
+            'client_name': client_name,
+            'procedure_name': service,
+            'specialist': specialist,
+            'date': date,
+            'time': '',
+            'duration_min': 60,
+        })
+    except Exception as _e:
+        logger.error('chat cancel notification error: {}'.format(_e))
+
+    logger.info('Chat AI cancelled: {} {} {}'.format(phone, date, service))
+    return jsonify({'ok': True, 'message': 'Запис на {} ({}) скасовано.'.format(date, service or 'процедура')})
 
 
 @app.route('/api/me/appointments/cancel', methods=['POST'])

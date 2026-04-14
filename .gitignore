@@ -138,3 +138,13 @@ public_html/app/config.php
 google-play/android-sdk/
 google-play/twa-project/
 google-play/gomon-release.keystore
+google-play/.gradle/
+google-play/app/
+google-play/build.gradle
+google-play/gradle/
+google-play/gradle.properties
+google-play/gradlew
+google-play/gradlew.bat
+google-play/*.apk
+google-play/*.apk.idsig
+google-play/gomon-release-OLD.keystore

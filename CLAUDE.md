@@ -2,12 +2,16 @@
 
 ## Загальна архітектура
 
-**Сайт:** https://drgomon.beauty (redirect від https://www.gomonclinic.com)
-**Сервер:** 31.131.18.79:21098, user `gomoncli`, key `~/.ssh/id_rsa`
-**PWA:** `/home/gomoncli/public_html/app/` → доступна за `/app/`
-**API:** Flask Python, порт 5001 (127.0.0.1), проксі через LiteSpeed `/api/*`
-**БД:** SQLite3, `/home/gomoncli/zadarma/users.db`
+**Сайт:** https://drgomon.beauty (redirect від gomonclinic.com та drgomon.com)
+**Сервер:** 45.94.157.127, root SSH (key-only), Ubuntu 24.04, nginx
+**App path:** `/opt/gomon/app/` (symlink `/home/gomoncli/` → `/opt/gomon/app/`)
+**Python:** 3.12, venv `/opt/gomon/venv`
+**API:** Flask Python, порт 5001 (127.0.0.1), проксі через nginx `/api/*`
+**БД:** SQLite3, `/opt/gomon/app/zadarma/users.db`
 **CRM:** WLaunch (api.wlaunch.net/v1), Company ID у config.py
+**SSL:** certbot auto-renew, HSTS enabled
+**Security:** UFW (22, 80, 443), fail2ban, SSH key-only
+**Backups:** daily SQLite 03:00 → `/opt/gomon/backups/` (14 day retention)
 
 ---
 
@@ -30,8 +34,8 @@
 ### Месенджер (Адмін + AI)
 | Файл | Призначення |
 |------|-------------|
-| `public_html/app/tg_media.php` | PHP-проксі для TG Business media (обхід LiteSpeed Content-Type) |
-| `public_html/app/msg_upload.php` | PHP-проксі для upload файлів у месенджері (обхід LiteSpeed multipart) |
+| `public_html/app/tg_media.php` | PHP-проксі для TG Business media |
+| `public_html/app/msg_upload.php` | PHP-проксі для upload файлів у месенджері |
 | `public_html/messenger/auth.php` | Instagram OAuth (code → short → long-lived token) |
 | `public_html/messenger/send.php` | Instagram Graph API v25.0 send proxy |
 
@@ -48,12 +52,12 @@
 | `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
 | `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
-### Watchdog / DevOps
-| Файл | Призначення |
-|------|-------------|
-| `zadarma/check_flask.sh` | **Watchdog API** (*/2 cron): health check + auto-restart + graceful reload при зміні pwa_api.py (HUP) |
-| `zadarma/check_and_run_bot.sh` | Watchdog для Telegram бота |
-| `zadarma/check_tg_business.sh` | Watchdog для TG Business listener |
+### Systemd Services
+| Сервіс | Призначення |
+|--------|-------------|
+| `gomon-api.service` | Flask API (pwa_api.py), auto-restart on failure |
+| `gomon-bot.service` | Telegram бот (bot.py) |
+| `gomon-tgbiz.service` | TG Business listener (tg_business_listener.py) |
 
 ### Frontend (PWA)
 | Файл | Призначення |
@@ -238,7 +242,7 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
 
 ## Формати даних
 
-### prices.json (`/home/gomoncli/private_data/prices.json`)
+### prices.json (`/opt/gomon/app/private_data/prices.json`)
 ```json
 [
   {
@@ -315,19 +319,22 @@ Cron (09:00 і 21:00)
 
 ## Cron (crontab -l)
 
-```cron
-*/5 * * * *     /home/gomoncli/zadarma/check_flask.sh
-*/5 * * * *     /home/gomoncli/zadarma/check_and_run_bot.sh
-@reboot         sleep 15 && /home/gomoncli/zadarma/check_flask.sh
-0 * * * *       python3 /home/gomoncli/zadarma/sync_appointments.py
-0 9,21 * * *    /home/gomoncli/zadarma/sync_with_notification.sh
-0 9 * * *       python3 /home/gomoncli/zadarma/sms_reminder.py
-*/15 8-22 * * * python3 /home/gomoncli/zadarma/push_reminder.py
-# Сповіщення спеціалістам про нові записи (АКТИВНО з 2026-03-31)
-0 20 * * *      python3 /home/gomoncli/zadarma/appt_reminder.py --specialist
+```
+VENV=/opt/gomon/venv/bin/python
+
+0 * * * *       $VENV /opt/gomon/app/zadarma/sync_appointments.py >> /var/log/gomon/sync.log 2>&1
+0 9,21 * * *    /opt/gomon/app/zadarma/sync_with_notification.sh >> /var/log/gomon/sync.log 2>&1
+0 9 * * *       $VENV /opt/gomon/app/zadarma/sms_reminder.py >> /var/log/gomon/sms.log 2>&1
+*/15 8-22 * * * $VENV /opt/gomon/app/zadarma/push_reminder.py >> /var/log/gomon/push.log 2>&1
+0 17 * * *      $VENV /opt/gomon/app/zadarma/appt_reminder.py --specialist --tomorrow >> /var/log/gomon/appt.log 2>&1
+30 18 * * *     $VENV /opt/gomon/app/zadarma/photo_reminder.py --create >> /var/log/gomon/photo.log 2>&1
+0 8 * * *       $VENV /opt/gomon/app/zadarma/photo_reminder.py --check >> /var/log/gomon/photo.log 2>&1
+0 3 * * *       /opt/gomon/backup.sh >> /var/log/gomon/backup.log 2>&1
 # (НЕ В CRON) Нагадування за 24 год: 0 10,18 * * * appt_reminder.py --reminder
 # (НЕ В CRON) Відгук після процедури:  0 20   * * * appt_reminder.py --feedback
 ```
+
+> **Примітка:** Watchdog cron-скрипти (`check_flask.sh`, `check_and_run_bot.sh`, `check_tg_business.sh`) більше не потрібні — замінені на systemd services з auto-restart.
 
 ---
 
@@ -343,51 +350,46 @@ Cron (09:00 і 21:00)
 
 ## Deploy Flow
 
+Код знаходиться на сервері у `/opt/gomon/app/` (git repo). Деплой через `git pull` + restart.
+
 ### Зміни в API (pwa_api.py)
 ```bash
-# 1. Скопіювати змінений файл на сервер
-scp -i ~/.ssh/id_rsa -P 21098 pwa_api.py gomoncli@31.131.18.79:/home/gomoncli/zadarma/
+# 1. На сервері: pull змін
+ssh root@45.94.157.127
+cd /opt/gomon/app && git pull
 
-# 2. check_flask.sh перезапустить автоматично через ≤5хв
-#    Або вручну для негайного ефекту:
-ssh -i ~/.ssh/id_rsa -p 21098 gomoncli@31.131.18.79 \
-  'pkill -f pwa_api; sleep 1; nohup python3 /home/gomoncli/zadarma/pwa_api.py >> /home/gomoncli/zadarma/pwa_api.log 2>&1 &'
+# 2. Перезапуск API
+systemctl restart gomon-api
 
-# 3. ВАЖЛИВО: перевірити що процес стартував ПІСЛЯ зміни файлу
-ssh ... 'ps -o pid,lstart -p $(pgrep -f pwa_api); stat -c "%y" /home/gomoncli/zadarma/pwa_api.py'
-# lstart повинен бути ПІЗНІШЕ ніж mtime pwa_api.py
+# 3. Перевірити статус
+systemctl status gomon-api
+```
+
+### Зміни в Telegram боті / TG Business
+```bash
+systemctl restart gomon-bot       # Telegram бот
+systemctl restart gomon-tgbiz     # TG Business listener
 ```
 
 ### Зміни у frontend (index.html)
 > **ОБОВ'ЯЗКОВО після КОЖНОЇ зміни frontend:**
 > 1. Збільшити CACHE в `sw.js` (формат `gomon-YYYY-MM-DDx`, де x — літера a/b/c/...)
-> 2. Деплоїти **обидва** файли разом: `index.html` + `sw.js`
+> 2. Коммітити **обидва** файли разом: `index.html` + `sw.js`
 > Без цього браузери клієнтів бачать стару версію.
 
 ```bash
 # 1. Bump CACHE в sw.js: "gomon-2026-03-30a" → "gomon-2026-03-30b"
-# 2. Скопіювати файли:
-scp -i ~/.ssh/id_rsa -P 21098 \
-  public_html/app/index.html \
-  public_html/app/sw.js \
-  gomoncli@31.131.18.79:/home/gomoncli/public_html/app/
-```
-
-### Зміни на сайті (sitepro)
-```bash
-scp -i ~/.ssh/id_rsa -P 21098 \
-  public_html/sitepro/modal_prices.php \
-  public_html/sitepro/a188dd94d37a0374c81c636d09cd1f05.php \
-  gomoncli@31.131.18.79:/home/gomoncli/public_html/sitepro/
+# 2. git pull на сервері (frontend файли оновляться автоматично через symlink)
+ssh root@45.94.157.127 'cd /opt/gomon/app && git pull'
 ```
 
 ### Перевірка
 ```bash
 # API живий
-curl -si https://www.gomonclinic.com/api/health
+curl -si https://drgomon.beauty/api/health
 
 # SW версія (має відповідати sw.js)
-curl -si https://www.gomonclinic.com/app/sw.js | grep CACHE
+curl -si https://drgomon.beauty/app/sw.js | grep CACHE
 ```
 
 ---
@@ -428,8 +430,8 @@ navigator.serviceWorker.addEventListener('message', e => {
 4. **Дублікати функцій**: `grep -n 'function _fmtDate'` — не повинно бути двох однакових
 
 ### Після деплою перевірити:
-1. `curl -s http://127.0.0.1:5001/api/health` — API живий
-2. `ps -o pid,lstart -p $(pgrep -f pwa_api)` — процес стартував ПІСЛЯ зміни файлу
+1. `curl -s https://drgomon.beauty/api/health` — API живий
+2. `systemctl status gomon-api` — сервіс активний
 3. SW версія збільшена → браузери отримають оновлення
 
 ---
@@ -442,25 +444,37 @@ navigator.serviceWorker.addEventListener('message', e => {
 - `private_data/prices.json` — прайс-лист
 - `public_html/app/config.php` — конфіг чату
 
+> На сервері шляхи з префіксом `/opt/gomon/app/` (symlink `/home/gomoncli/` → `/opt/gomon/app/`)
+
 ---
 
-## Міграція на новий сервер
+## Сервер (міграція виконана 2026-04)
 
-### Що потрібно від нового сервера
-- ОС (Ubuntu/Debian/CentOS), IP, SSH доступ, root/sudo
-- Веб-сервер (nginx/apache або чистий), реєстратор домену + DNS
+### Поточний сервер
+- **IP:** 45.94.157.127, root SSH (key-only)
+- **OS:** Ubuntu 24.04, Python 3.12
+- **Web:** nginx, certbot SSL (auto-renew), HSTS
+- **Security:** UFW (22, 80, 443), fail2ban
+- **Domain:** drgomon.beauty (primary), redirect від gomonclinic.com та drgomon.com
 
-### Що переносимо
-| Що | Звідки | Примітка |
-|----|--------|----------|
-| Код | `git clone` з GitHub | Автоматично |
-| `users.db` | `/home/gomoncli/zadarma/` | Клієнти, бот-юзери, push |
-| `otp_sessions.db` | `/home/gomoncli/zadarma/` | PWA сесії |
-| `feed.db` | `/home/gomoncli/zadarma/` | Telegram feed |
-| `config.py` | `/home/gomoncli/zadarma/` | **НЕ в git** — вручну |
-| `vapid_private.key` | `/home/gomoncli/zadarma/` | **Критично** — push підписки прив'язані |
-| `prices.json` | `/home/gomoncli/private_data/` | |
-| `public_html/` | весь каталог | Сайт + PWA + фото |
+### Структура
+| Шлях | Призначення |
+|------|-------------|
+| `/opt/gomon/app/` | Код (git repo) |
+| `/opt/gomon/venv/` | Python venv |
+| `/opt/gomon/backups/` | Daily SQLite backups (14 day retention) |
+| `/home/gomoncli/` | Symlink → `/opt/gomon/app/` (backward compat) |
+| `/var/log/gomon/` | Логи cron-скриптів |
+
+### Конфіденційні файли на сервері
+| Що | Шлях | Примітка |
+|----|------|----------|
+| `users.db` | `/opt/gomon/app/zadarma/` | Клієнти, бот-юзери, push |
+| `otp_sessions.db` | `/opt/gomon/app/zadarma/` | PWA сесії |
+| `feed.db` | `/opt/gomon/app/zadarma/` | Telegram feed |
+| `config.py` | `/opt/gomon/app/zadarma/` | **НЕ в git** — вручну |
+| `vapid_private.key` | `/opt/gomon/app/zadarma/` | **Критично** — push підписки прив'язані |
+| `prices.json` | `/opt/gomon/app/private_data/` | |
 
 ---
 
@@ -549,8 +563,8 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ## Відомі особливості
 
-- **Python 3.6** на сервері — f-strings підтримуються, але деякі сучасні конструкції ні
-- **LiteSpeed** веб-сервер, без CDN/проксі
+- **Python 3.12** на сервері (venv `/opt/gomon/venv`)
+- **nginx** веб-сервер, certbot SSL, HSTS
 - **WLaunch cancel**: `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
 - **WLaunch обов'язковий**: при створенні записів WLaunch повинен підтвердити. Якщо WLaunch відхиляє (unavailable, 422) — запис НЕ створюється. Fallback local тільки при network/500 помилках
 - **WLaunch breaks**: перерви синхронізуються через `/resource/{rid}/schedule/day` (type=OFF). Видалення через POST з `{frame:{active:false}}`
@@ -724,20 +738,20 @@ var conversionMap = {
 - **Busy слоти** — відображаються напівпрозоро, не клікабельні
 - Адмін (`full`/`superadmin`) бачить ВСЕ як раніше
 
-### Cron (оновлено 2026-04-11)
+### Cron (оновлено 2026-04-14, post-migration)
 
-```cron
-*/2 * * * *     /home/gomoncli/zadarma/check_flask.sh        # API watchdog + auto-reload on code change
-*/5 * * * *     /home/gomoncli/zadarma/check_and_run_bot.sh   # TG bot watchdog
-*/5 * * * *     /home/gomoncli/zadarma/check_tg_business.sh   # TG Business listener watchdog
-@reboot         sleep 15 && /home/gomoncli/zadarma/check_flask.sh
-0 * * * *       python3 /home/gomoncli/zadarma/sync_appointments.py
-0 9,21 * * *    /home/gomoncli/zadarma/sync_with_notification.sh
-0 9 * * *       python3 /home/gomoncli/zadarma/sms_reminder.py
-*/15 8-22 * * * python3 /home/gomoncli/zadarma/push_reminder.py
-0 17 * * *      python3 /home/gomoncli/zadarma/appt_reminder.py --specialist --tomorrow
-30 18 * * *     python3 /home/gomoncli/zadarma/photo_reminder.py --create   # 21:30 Kyiv — Drive folders + TG specialists
-0 8 * * *       python3 /home/gomoncli/zadarma/photo_reminder.py --check    # 11:00 Kyiv — check uploads + TG admin
+```
+VENV=/opt/gomon/venv/bin/python
+
+# Watchdog cron більше не потрібен — systemd services (gomon-api, gomon-bot, gomon-tgbiz)
+0 * * * *       $VENV /opt/gomon/app/zadarma/sync_appointments.py >> /var/log/gomon/sync.log 2>&1
+0 9,21 * * *    /opt/gomon/app/zadarma/sync_with_notification.sh >> /var/log/gomon/sync.log 2>&1
+0 9 * * *       $VENV /opt/gomon/app/zadarma/sms_reminder.py >> /var/log/gomon/sms.log 2>&1
+*/15 8-22 * * * $VENV /opt/gomon/app/zadarma/push_reminder.py >> /var/log/gomon/push.log 2>&1
+0 17 * * *      $VENV /opt/gomon/app/zadarma/appt_reminder.py --specialist --tomorrow >> /var/log/gomon/appt.log 2>&1
+30 18 * * *     $VENV /opt/gomon/app/zadarma/photo_reminder.py --create >> /var/log/gomon/photo.log 2>&1   # 21:30 Kyiv
+0 8 * * *       $VENV /opt/gomon/app/zadarma/photo_reminder.py --check >> /var/log/gomon/photo.log 2>&1    # 11:00 Kyiv
+0 3 * * *       /opt/gomon/backup.sh >> /var/log/gomon/backup.log 2>&1
 ```
 
 ---
@@ -756,7 +770,7 @@ GomonAI працює в **трьох незалежних каналах** з є
 
 ### System prompt
 
-Єдиний файл: `/home/gomoncli/public_html/app/system_prompt.txt` (~22KB)
+Єдиний файл: `/opt/gomon/app/public_html/app/system_prompt.txt` (~22KB)
 
 Кожен канал додає свій контекст:
 - **Сайт**: "Ти спілкуєшся з відвідувачем сайту..." + пропонує записатись через IG/TG/додаток
@@ -773,7 +787,7 @@ GomonAI працює в **трьох незалежних каналах** з є
 ```
 claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claude-haiku-4-5
 ```
-- Кешована модель у `/home/gomoncli/private_data/active_model.txt`
+- Кешована модель у `/opt/gomon/app/private_data/active_model.txt`
 - 429 (rate limit) НЕ пробує наступну модель (key-level, не model-level)
 - Rate limit списується ПІСЛЯ успішної відповіді (не до)
 - Клієнтський timeout: 25с, серверний: 20с (primary) / 12с (fallback)
@@ -866,6 +880,7 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 - `private_data/gdrive_sa.json` — Google Drive Service Account key
 
 **ВАЖЛИВО:** Всі токени/секрети тільки в config.py та config.php. НІКОЛИ не хардкодити в інших файлах.
+**Шляхи на сервері:** `/opt/gomon/app/zadarma/config.py`, `/opt/gomon/app/public_html/app/config.php` тощо.
 
 ---
 

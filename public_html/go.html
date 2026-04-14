@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dr. Gomon Cosmetology — Завантажити додаток</title>
+<meta name="description" content="Завантажте додаток Dr. Gomon Cosmetology — особистий кабінет клієнта. Записи, нагадування, акції та зв'язок з вашим косметологом.">
+<meta property="og:title" content="Dr. Gomon Cosmetology — Додаток">
+<meta property="og:description" content="Особистий кабінет клієнта. Записи, нагадування, акції та зв'язок з вашим косметологом.">
+<meta property="og:image" content="https://www.gomonclinic.com/app/icons/icon-512-gomon.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:url" content="https://drgomon.beauty/go">
+<meta property="og:type" content="website">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#111010;color:#f5f1ea;font-family:'Jost',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
@@ -96,17 +104,12 @@ if (/android/i.test(ua)) {
   var isDesktop = !isAndroid && !isIOS;
 
   if (isAndroid) {
-    // Android: показати Play Store + браузер, сховати iOS
+    // Android: кнопки Android + браузер
     document.getElementById('btn-ios').style.display = 'none';
-  } else if (isIOS) {
-    // iOS: показати iPhone кнопку + браузер, сховати Android
-    document.getElementById('btn-android').style.display = 'none';
-    document.getElementById('btn-ios').className = 'btn btn-android';
   } else {
-    // Desktop: тільки веб-версія
-    document.getElementById('btn-android').style.display = 'none';
-    document.getElementById('btn-ios').style.display = 'none';
-    document.getElementById('btn-web').className = 'btn btn-android';
+    // Desktop + iOS: одразу у кабінет
+    window.location.replace('https://www.gomonclinic.com/app/');
+    return;
   }
 })();
 </script>

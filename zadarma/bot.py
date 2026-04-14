@@ -57,7 +57,7 @@ def create_pid_file():
 
 def send_error_to_admin(bot, message):
     try:
-        bot.send_message(chat_id=ADMIN_USER_ID, text=message, parse_mode=None)
+        bot.send_message(chat_id=ADMIN_USER_ID, text=message, parse_mode='Markdown')
         logger.info(f"📤 Повідомлення про помилку відправлено адміну: {message}")
     except Exception as e:
         logger.error(f"❌ Не вдалося відправити повідомлення адміну: {e}")
@@ -90,7 +90,7 @@ def start_command(bot, update):
                 logger.info(f"Deep link connect: {user_id} already has phone {_existing[0]}, ignoring {digits}")
                 bot.send_message(chat_id=update.message.chat_id,
                     text=f"Telegram вже підключено до номеру {_existing[0][-10:].replace('380','0',1)}",
-                    parse_mode=None)
+                    parse_mode='Markdown')
                 return
             from user_db import store_user
             store_user(user_id, digits, username, first_name)
@@ -109,7 +109,7 @@ def start_command(bot, update):
                     f"/call - Зателефонувати лікарю Вікторії\n\n"
                     f"Швидкий доступ: кнопка ☰ (меню) зліва внизу"
                 ),
-                parse_mode=None
+                parse_mode='Markdown'
             )
             return
         else:
@@ -129,7 +129,7 @@ def start_command(bot, update):
                 "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=welcome_message, parse_mode=None)
+            bot.send_message(chat_id=update.message.chat_id, text=welcome_message, parse_mode='Markdown')
         else:
             unauthorized_message = (
                 f"Вітаємо, {first_name}!\n\n"
@@ -139,7 +139,7 @@ def start_command(bot, update):
                 "Якщо код не приходить у Telegram -- перевiрте SMS."
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=unauthorized_message, parse_mode=None)
+            bot.send_message(chat_id=update.message.chat_id, text=unauthorized_message, parse_mode='Markdown')
 
             try:
                 from telegram import KeyboardButton, ReplyKeyboardMarkup
@@ -163,21 +163,21 @@ def start_command(bot, update):
                         chat_id=update.message.chat_id,
                         text=button_message,
                         reply_markup=reply_markup,
-                        parse_mode=None
+                        parse_mode='Markdown'
                     )
             except Exception:
                 fallback_message = (
                     "📱 Відправте свій номер телефону текстом\n\n"
                     "📝 Формат: +380XXXXXXXXX"
                 )
-                bot.send_message(chat_id=update.message.chat_id, text=fallback_message, parse_mode=None)
+                bot.send_message(chat_id=update.message.chat_id, text=fallback_message, parse_mode='Markdown')
             
     except Exception as e:
         logger.exception(f"❌ Критична помилка в start_command: {e}")
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Технічна помилка. Зверніться до підтримки: 073-310-31-10",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def contact_handler(bot, update):
@@ -207,7 +207,7 @@ def contact_handler(bot, update):
             chat_id=update.message.chat_id, 
             text=success_message,
             reply_markup=ReplyKeyboardRemove(),
-            parse_mode=None
+            parse_mode='Markdown'
         )
         
         if is_authenticated(user_id):
@@ -223,7 +223,7 @@ def contact_handler(bot, update):
                 "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=authorized_message, parse_mode=None)
+            bot.send_message(chat_id=update.message.chat_id, text=authorized_message, parse_mode='Markdown')
         else:
             denied_message = (
                 "Ваш номер не зареєстровано в системі Dr. Gomon Cosmetology\n\n"
@@ -242,7 +242,7 @@ def contact_handler(bot, update):
                 "/call - Зателефонувати лiкарю Вiкторiї"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode=None)
+            bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode='Markdown')
             
     except Exception as e:
         logger.exception(f"❌ Помилка в contact_handler: {e}")
@@ -251,7 +251,7 @@ def contact_handler(bot, update):
             chat_id=update.message.chat_id,
             text="❌ Виникла помилка. Спробуйте пізніше",
             reply_markup=ReplyKeyboardRemove(),
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def call_command(bot, update):
@@ -265,12 +265,12 @@ def call_command(bot, update):
             "💡 Натисніть на номер для виклику"
         )
         
-        bot.send_message(chat_id=update.message.chat_id, text=call_message, parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text=call_message, parse_mode='Markdown')
         logger.info(f"📞 Телефон лікаря відправлено користувачу {user_id}")
         
     except Exception as e:
         logger.exception(f"❌ Помилка в call_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання телефону", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання телефону", parse_mode='Markdown')
 
 def map_command(bot, update):
     user_id = update.effective_user.id
@@ -283,12 +283,12 @@ def map_command(bot, update):
             "🚗 Оберіть зручний маршрут"
         )
         
-        bot.send_message(chat_id=update.message.chat_id, text=map_message, parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text=map_message, parse_mode='Markdown')
         logger.info(f"🗺️ Карта відправлена користувачу {user_id}")
         
     except Exception as e:
         logger.exception(f"❌ Помилка в map_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання карти", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання карти", parse_mode='Markdown')
 
 def scheme_command(bot, update):
     user_id = update.effective_user.id
@@ -319,20 +319,20 @@ def scheme_command(bot, update):
                 chat_id=update.message.chat_id,
                 photo=media[0],
                 caption="📍 Схема проїзду до Dr. Gómon\nЖК Графський — другі ворота/хвіртка, ліворуч",
-                parse_mode=None
+                parse_mode='Markdown'
             )
         else:
             bot.send_message(
                 chat_id=update.message.chat_id,
                 text="📍 ЖК Графський, другі ворота/хвіртка, ліворуч\n🗺️ /map — посилання на карту",
-                parse_mode=None
+                parse_mode='Markdown'
             )
 
         logger.info(f"🧭 Схема ({len(media)} фото) відправлена користувачу {user_id}")
 
     except Exception as e:
         logger.exception(f"❌ Помилка в scheme_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання схеми", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання схеми", parse_mode='Markdown')
     finally:
         for f in media:
             f.close()
@@ -345,7 +345,7 @@ def app_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="Наш застосунок, який точно Вам допоможе:\n\nhttps://drgomon.beauty/go",
-            parse_mode=None
+            parse_mode='Markdown'
         )
     except Exception as e:
         logger.exception(f"❌ Помилка в app_command: {e}")
@@ -366,12 +366,12 @@ def channel_command(bot, update):
             chat_id=update.message.chat_id,
             text="Актуальні новини та акції в нашому ТГ каналі:",
             reply_markup=reply_markup,
-            parse_mode=None
+            parse_mode='Markdown'
         )
         logger.info(f"📢 Канал відправлено користувачу {user_id}")
     except Exception as e:
         logger.exception(f"❌ Помилка в channel_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання посилання на канал", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання посилання на канал", parse_mode='Markdown')
 
 def test_command(bot, update):
     user_id = update.effective_user.id
@@ -386,12 +386,12 @@ def test_command(bot, update):
             f"🔐 Авторизований: {'✅ Так' if is_authenticated(user_id) else '❌ Ні'}"
         )
         
-        bot.send_message(chat_id=update.message.chat_id, text=test_message, parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text=test_message, parse_mode='Markdown')
         logger.info(f"🧪 Тест відправлено користувачу {user_id}")
         
     except Exception as e:
         logger.exception(f"❌ Помилка в test_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка тестування", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка тестування", parse_mode='Markdown')
 
 def status_command(bot, update):
     user_id = update.effective_user.id
@@ -417,12 +417,12 @@ def status_command(bot, update):
                 phone = user_info['user_data'][1]
                 status_text += f"  📞 Ваш телефон: {phone}\n"
         
-        bot.send_message(chat_id=update.message.chat_id, text=status_text, parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text=status_text, parse_mode='Markdown')
         logger.info(f"📊 Статус відправлено користувачу {user_id}")
         
     except Exception as e:
         logger.exception(f"❌ Помилка в status_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка при отриманні статусу", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка при отриманні статусу", parse_mode='Markdown')
 
 def restart_command(bot, update):
     user_id = update.effective_user.id
@@ -432,18 +432,18 @@ def restart_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id, 
             text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
     
     try:
-        bot.send_message(chat_id=update.message.chat_id, text="🔄 Перезапуск бота...", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="🔄 Перезапуск бота...", parse_mode='Markdown')
         logger.info("🔄 Перезапуск бота...")
         os._exit(0)
         
     except Exception as e:
         logger.exception(f"❌ Помилка перезапуску: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка перезапуску", parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка перезапуску", parse_mode='Markdown')
 
 def sync_command(bot, update):
     user_id = update.effective_user.id
@@ -453,7 +453,7 @@ def sync_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id, 
             text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
     
@@ -469,7 +469,7 @@ def sync_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id, 
             text=sync_message,
-            parse_mode=None
+            parse_mode='Markdown'
         )
         
         import subprocess
@@ -482,7 +482,7 @@ def sync_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id, 
             text="❌ Помилка при запуску ручної синхронізації",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def help_command(bot, update):
@@ -534,7 +534,7 @@ def help_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text=help_message,
-            parse_mode=None
+            parse_mode='Markdown'
         )
         logger.info(f"❓ Довідка відправлена користувачу {user_id}")
         
@@ -547,7 +547,7 @@ def help_command(bot, update):
             "/map - Карта\n"
             "Техпідтримка: +380733103110"
         )
-        bot.send_message(chat_id=update.message.chat_id, text=simple_help, parse_mode=None)
+        bot.send_message(chat_id=update.message.chat_id, text=simple_help, parse_mode='Markdown')
 
 def monitor_command(bot, update):
     user_id = update.effective_user.id
@@ -557,7 +557,7 @@ def monitor_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
 
@@ -566,7 +566,7 @@ def monitor_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="📊 Запускаю API моніторинг...",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         
         # Запустити api_monitor.py та зберегти результат у файл
@@ -582,13 +582,13 @@ def monitor_command(bot, update):
             bot.send_message(
                 chat_id=update.message.chat_id,
                 text=f"📊 МОНІТОРИНГ API:\n\n{output}",
-                parse_mode=None
+                parse_mode='Markdown'
             )
         except Exception as e:
             bot.send_message(
                 chat_id=update.message.chat_id,
                 text=f"❌ Помилка читання результату: {e}",
-                parse_mode=None
+                parse_mode='Markdown'
             )
         
         logger.info(f"📊 Моніторинг API відправлено адміну")
@@ -598,7 +598,7 @@ def monitor_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Помилка моніторингу API",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def diagnostic_command(bot, update):
@@ -609,7 +609,7 @@ def diagnostic_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
 
@@ -695,7 +695,7 @@ def diagnostic_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text=output,
-            parse_mode=None
+            parse_mode='Markdown'
         )
         logger.info(f"🔧 Діагностика відправлена адміну")
 
@@ -704,7 +704,7 @@ def diagnostic_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Помилка при виконанні діагностики",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def logs_command(bot, update):
@@ -715,7 +715,7 @@ def logs_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
 
@@ -774,7 +774,7 @@ def logs_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text=output,
-            parse_mode=None
+            parse_mode='Markdown'
         )
         logger.info(f"📋 Логи відправлені адміну")
 
@@ -783,7 +783,7 @@ def logs_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="❌ Помилка при читанні логів",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 def _show_admin_panel(bot, chat_id):
@@ -798,7 +798,7 @@ def _show_admin_panel(bot, chat_id):
         chat_id=chat_id,
         text="👑 Адмін-панель Dr. Gomon",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=None
+        parse_mode='Markdown'
     )
 
 
@@ -810,7 +810,7 @@ def admin_command(bot, update):
 
 
 def _do_monitor(bot, chat_id):
-    bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...", parse_mode=None)
+    bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...", parse_mode='Markdown')
     with open("/tmp/monitor_result.txt", "w") as _mf:
         subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT, timeout=120)
     try:
@@ -818,9 +818,9 @@ def _do_monitor(bot, chat_id):
             output = f.read()
         if len(output) > 3900:
             output = output[:3900] + "\n\n... (обрізано)"
-        bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output), parse_mode=None)
+        bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output), parse_mode='Markdown')
     except Exception as e:
-        bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e), parse_mode=None)
+        bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e), parse_mode='Markdown')
 
 
 def _do_logs(bot, chat_id):
@@ -847,7 +847,7 @@ def _do_logs(bot, chat_id):
     output = '\n'.join(logs_info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output, parse_mode=None)
+    bot.send_message(chat_id=chat_id, text=output, parse_mode='Markdown')
 
 
 def _do_diagnostic(bot, chat_id):
@@ -876,12 +876,12 @@ def _do_diagnostic(bot, chat_id):
     output = '\n'.join(info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output, parse_mode=None)
+    bot.send_message(chat_id=chat_id, text=output, parse_mode='Markdown')
 
 
 def _do_sync(bot, chat_id):
     import subprocess
-    bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...", parse_mode=None)
+    bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...", parse_mode='Markdown')
     subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])  # fire-and-forget
     subprocess.Popen(["/usr/bin/python3", "/home/gomoncli/zadarma/sync_appointments.py"],  # fire-and-forget
                      cwd="/home/gomoncli/zadarma")
@@ -948,7 +948,7 @@ def general_text_handler(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="⚠️ Некоректна сума. Спробуйте ще раз.",
-            parse_mode=None
+            parse_mode='Markdown'
         )
         return
 
@@ -992,7 +992,7 @@ def error_handler(bot, update, error):
             if update.message:
                 update.message.reply_text(
                     "❌ Сталася помилка при обробці команди. Будь ласка, спробуйте ще раз або зверніться до підтримки",
-                    parse_mode=None
+                    parse_mode='Markdown'
                 )
         except Exception:
             pass
@@ -1075,7 +1075,7 @@ def my_services_command(bot, update):
                     "Поділіться номером через кнопку нижче "
                     "або відкрийте додаток: https://drgomon.beauty/go"
                 ),
-                parse_mode=None
+                parse_mode='Markdown'
             )
             return
 
@@ -1091,33 +1091,41 @@ def my_services_command(bot, update):
             try:
                 services = json.loads(client_row[0])
                 for s in services:
-                    if s.get('status', '').upper() == 'CANCELLED':
-                        continue
+                    is_cancelled = s.get('status', '').upper() == 'CANCELLED'
+                    proc_name = s.get('service', '')
+                    if is_cancelled:
+                        proc_name = '~' + proc_name + '~ (скасовано)'
                     appointments.append({
                         'date': s.get('date', ''),
                         'time': '{:02d}:00'.format(int(s['hour'])) if s.get('hour') is not None else '',
-                        'procedure': s.get('service', ''),
+                        'procedure': proc_name,
                         'specialist': SPECIALIST_NAMES.get(
                             (s.get('specialist') or '').lower(), ''
                         ),
+                        'cancelled': is_cancelled,
                     })
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # --- collect from manual_appointments ---
         manual_rows = conn.execute(
-            "SELECT date, time, procedure_name, specialist FROM manual_appointments "
-            "WHERE client_phone=? AND status != 'CANCELLED'",
+            "SELECT date, time, procedure_name, specialist, status FROM manual_appointments "
+            "WHERE client_phone=?",
             (phone,)
         ).fetchall()
         for mr in manual_rows:
+            m_cancelled = (mr[4] or '').upper() == 'CANCELLED'
+            m_proc = mr[2] or ''
+            if m_cancelled:
+                m_proc = '~' + m_proc + '~ (скасовано)'
             appointments.append({
                 'date': mr[0] or '',
                 'time': mr[1] or '',
-                'procedure': mr[2] or '',
+                'procedure': m_proc,
                 'specialist': SPECIALIST_NAMES.get(
                     (mr[3] or '').lower(), ''
                 ),
+                'cancelled': m_cancelled,
             })
 
         conn.close()
@@ -1183,7 +1191,7 @@ def my_services_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text='\n'.join(lines),
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
     except Exception as e:
@@ -1191,7 +1199,7 @@ def my_services_command(bot, update):
         bot.send_message(
             chat_id=update.message.chat_id,
             text="Помилка при завантаженні записів. Спробуйте пізніше.",
-            parse_mode=None
+            parse_mode='Markdown'
         )
 
 

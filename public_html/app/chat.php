@@ -217,15 +217,36 @@ if ($user_phone) {
             $services = json_decode($row['services_json'] ?? '[]', true) ?: [];
             $visits_count = (int)($row['visits_count'] ?? 0);
             if (!empty($services)) {
-                usort($services, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
-                $appt_lines = [];
-                foreach (array_slice($services, 0, 15) as $s) {
-                    $appt_lines[] = "- {$s['date']}: {$s['service']}";
+                $today = date('Y-m-d');
+                $upcoming_active = array_filter($services, fn($s) =>
+                    ($s['date'] ?? '') >= $today && strtoupper($s['status'] ?? '') !== 'CANCELLED');
+                $upcoming_cancelled = array_filter($services, fn($s) =>
+                    ($s['date'] ?? '') >= $today && strtoupper($s['status'] ?? '') === 'CANCELLED');
+                $upcoming = array_merge(array_values($upcoming_active), array_values($upcoming_cancelled));
+                $past = array_filter($services, fn($s) =>
+                    ($s['date'] ?? '') < $today || strtoupper($s['status'] ?? '') === 'CANCELLED');
+                usort($upcoming, fn($a, $b) => strcmp($a['date'] ?? '', $b['date'] ?? ''));
+                usort($past, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
+                if (!empty($upcoming)) {
+                    $ulines = [];
+                    foreach ($upcoming as $s) {
+                        $line = "- {$s['date']} о " . ($s['hour'] ?? '?') . ":00: {$s['service']} (спеціаліст: " . ($s['specialist'] ?? '?') . ")";
+                        if (strtoupper($s['status'] ?? '') === 'CANCELLED') $line .= ' [СКАСОВАНО]';
+                        $ulines[] = $line;
+                    }
+                    $system_prompt .= "\n\n---\n## Майбутні записи клієнта\n" . implode("\n", $ulines);
+                } else {
+                    $system_prompt .= "\n\n---\n## Майбутні записи клієнта\nНемає майбутніх записів.";
                 }
-                $system_prompt .= "\n\n---\n## Попередні візити клієнта (всього: {$visits_count})\n"
-                    . implode("\n", $appt_lines);
+                if (!empty($past)) {
+                    $plines = [];
+                    foreach (array_slice(array_values($past), 0, 5) as $s) {
+                        $plines[] = "- {$s['date']}: {$s['service']} ({$s['status']})";
+                    }
+                    $system_prompt .= "\n\n## Історія візитів (всього: {$visits_count})\n" . implode("\n", $plines);
+                }
             } else {
-                $system_prompt .= "\n\n---\n## Попередні візити клієнта\nКлієнт ще не має записаних візитів.";
+                $system_prompt .= "\n\n---\n## Записи клієнта\nКлієнт ще не має записаних візитів.";
             }
         }
         $db->close();
@@ -244,7 +265,7 @@ if (file_exists($promos_file)) {
             $desc  = $p['desc']  ?? '';
             $promo_lines[] = "- [{$tag}] {$title} — {$desc}";
         }
-        $system_prompt .= "\n\n---\n## Поточні акції клініки\n" . implode("\n", $promo_lines);
+        $system_prompt .= "\n\n---\n## Поточні актуальні акції\n" . implode("\n", $promo_lines);
     }
 }
 
@@ -359,10 +380,10 @@ if (file_exists($prices_file)) {
 
 // ── 5. Контекст канала (сайт / додаток) ──────────────────────
 if ($source === 'site') {
-    $system_prompt .= "\n\n---\n## Контекст: сайт gomonclinic.com\nТи спілкуєшся з відвідувачем сайту gomonclinic.com. Людина ще не є зареєстрованим клієнтом. Після відповіді на питання природно запропонуй записатись через [Instagram](https://ig.me/m/dr.gomon) або [Telegram](https://t.me/DrGomonCosmetology), або зателефонувати [073-310-31-10](tel:+380733103110). Також можна порадити завантажити додаток https://drgomon.beauty/app — там діє -10% на ін'єкційні процедури.\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
+    $system_prompt .= "\n\n---\n## Контекст: сайт drgomon.beauty\nТи спілкуєшся з відвідувачем сайту drgomon.beauty. Людина ще не є зареєстрованим клієнтом. Після відповіді на питання природно запропонуй записатись через [Instagram](https://ig.me/m/dr.gomon) або [Telegram](https://t.me/DrGomonCosmetology), або зателефонувати [073-310-31-10](tel:+380733103110). Також можна порадити завантажити додаток https://drgomon.beauty/app — там діє -10% на ін'єкційні процедури.\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
 } else {
     // source === 'app' (включно з незареєстрованими, що використовують inline chat)
-    $system_prompt .= "\n\n---\n## Контекст: додаток Dr. Gómon\nТи вбудований асистент у мобільному додатку клініки. Для запису пропонуй написати в чаті додатку, зателефонувати [073-310-31-10](tel:+380733103110), або написати лікарю в [Instagram](https://ig.me/m/dr.gomon) чи [Telegram](https://t.me/DrGomonCosmetology).\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
+    $system_prompt .= "\n\n---\n## Контекст: додаток Dr. Gómon\nТи вбудований асистент у мобільному додатку Dr. Gomon. Для запису пропонуй написати в чаті додатку, зателефонувати [073-310-31-10](tel:+380733103110), або написати лікарю в [Instagram](https://ig.me/m/dr.gomon) чи [Telegram](https://t.me/DrGomonCosmetology).\nЗавжди використовуй клікабельні markdown-лінки для контактів.";
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -472,6 +493,38 @@ if (isset($rl_db) && $rl_db) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  ДЕТЕКЦІЯ СКАСУВАННЯ ЗАПИСУ
+// ═══════════════════════════════════════════════════════════════
+
+$cancelled = false;
+if (preg_match('/<CANCEL(?:\s+date="(\d{4}-\d{2}-\d{2})")?\s*>/', $reply, $cm) && $phone_norm) {
+    $cancel_date = $cm[1] ?? null;
+    $reply = trim(preg_replace('/<CANCEL[^>]*>/', '', $reply));
+    $cancel_payload = ['phone' => $phone_norm];
+    if ($cancel_date) $cancel_payload['date'] = $cancel_date;
+    $cancel_ch = curl_init('http://127.0.0.1:5001/api/chat/cancel-appointment');
+    curl_setopt_array($cancel_ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($cancel_payload),
+    ]);
+    $cancel_raw = curl_exec($cancel_ch);
+    $cancel_code = curl_getinfo($cancel_ch, CURLINFO_HTTP_CODE);
+    curl_close($cancel_ch);
+    $cancel_data = json_decode($cancel_raw, true) ?: [];
+    if ($cancel_code === 200 && !empty($cancel_data['ok'])) {
+        $reply .= "\n\n\u{2705} " . ($cancel_data['message'] ?? 'Запис скасовано.');
+        $cancelled = true;
+    } else {
+        $reply .= "\n\n\u{26a0}\u{fe0f} " . ($cancel_data['error'] ?? 'Не вдалося скасувати запис.');
+    }
+} elseif (preg_match('/<CANCEL[^>]*>/', $reply) && !$phone_norm) {
+    $reply = trim(preg_replace('/<CANCEL[^>]*>/', '', $reply));
+    $reply .= "\n\n\u{26a0}\u{fe0f} Для скасування потрібно авторизуватись у додатку.";
+}
+
 //  ДЕТЕКЦІЯ ПІДІБРАНОЇ ПРОЦЕДУРИ
 // ═══════════════════════════════════════════════════════════════
 

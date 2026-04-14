@@ -1,12 +1,12 @@
-[
-    {
-        "relation": ["delegate_permission/common.handle_all_urls"],
-        "target": {
-            "namespace": "android_app",
-            "package_name": "com.gomonclinic.www.twa",
-            "sha256_cert_fingerprints": [
-                "B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:31:E5:ED:A6:B0:69:9A:EC:55:0F"
-            ]
-        }
-    }
-]
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.gomonclinic.www.twa",
+    "sha256_cert_fingerprints": [
+      "12:D7:91:31:33:F0:17:ED:31:6E:BD:8A:19:52:3E:03:E3:FF:BE:A8:69:8A:D5:91:3A:B9:16:AF:9B:75:56:C0",
+      "B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:31:E5:ED:A6:B0:69:9A:EC:55:0F",
+      "18:5B:13:A5:87:1B:81:CA:46:C8:10:7D:9A:4C:27:16:2A:82:A7:14:66:53:3D:26:40:45:70:41:24:3F:DE:D0"
+    ]
+  }
+}]

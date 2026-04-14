@@ -55,7 +55,7 @@ if ($origin) {
     }
 } else {
     // Same-origin requests (no Origin header) — allow
-    header('Access-Control-Allow-Origin: https://gomonclinic.com');
+    header('Access-Control-Allow-Origin: https://drgomon.beauty');
 }
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Authorization, Content-Type');

@@ -192,11 +192,36 @@ def _build_system_prompt(client_phone=None):
                 services = json.loads(row[2] or '[]')
                 visits = row[3] or 0
                 if services:
-                    services.sort(key=lambda x: x.get('date', ''), reverse=True)
-                    lines = ['- {}: {}'.format(s.get('date', ''), s.get('service', ''))
-                             for s in services[:10]]
-                    prompt += '\n\n---\n## Попередні візити клієнта (всього: {})\n{}'.format(
-                        visits, '\n'.join(lines))
+                    from datetime import datetime as _dt
+                    _today = _dt.utcnow().strftime('%Y-%m-%d')
+                    _upcoming_active = [s for s in services
+                                 if s.get('date', '') >= _today
+                                 and s.get('status', '').upper() not in ('CANCELLED',)]
+                    _upcoming_cancelled = [s for s in services
+                                 if s.get('date', '') >= _today
+                                 and s.get('status', '').upper() == 'CANCELLED']
+                    _upcoming = _upcoming_active + _upcoming_cancelled
+                    _past = [s for s in services
+                             if s.get('date', '') < _today or s.get('status', '').upper() == 'CANCELLED']
+                    _upcoming.sort(key=lambda x: x.get('date', ''))
+                    _past.sort(key=lambda x: x.get('date', ''), reverse=True)
+                    if _upcoming:
+                        _ulines = []
+                        for s in _upcoming:
+                            _line = '- {} о {}:00: {} (спеціаліст: {})'.format(
+                                s.get('date', ''), s.get('hour', '?'), s.get('service', ''), s.get('specialist', '?'))
+                            if s.get('status', '').upper() == 'CANCELLED':
+                                _line += ' [СКАСОВАНО]'
+                            _ulines.append(_line)
+                        prompt += '\n\n---\n## Майбутні записи клієнта\n{}'.format('\n'.join(_ulines))
+                    else:
+                        prompt += '\n\n---\n## Майбутні записи клієнта\nНемає майбутніх записів.'
+                    if _past:
+                        _plines = ['- {}: {} ({})'.format(
+                            s.get('date', ''), s.get('service', ''), s.get('status', ''))
+                            for s in _past[:5]]
+                        prompt += '\n\n## Історія візитів (всього: {})\n{}'.format(
+                            visits, '\n'.join(_plines))
         except Exception as e:
             logger.warning('Client data lookup error: {}'.format(e))
 
@@ -207,7 +232,7 @@ def _build_system_prompt(client_phone=None):
         if promos:
             lines = ['- [{}] {} — {}'.format(p.get('tag', ''), p.get('title', ''), p.get('desc', ''))
                      for p in promos]
-            prompt += '\n\n---\n## Поточні акції клініки\n' + '\n'.join(lines)
+            prompt += '\n\n---\n## Поточні актуальні акції\n' + '\n'.join(lines)
     except Exception:
         pass
 
@@ -238,20 +263,28 @@ def _build_system_prompt(client_phone=None):
 
     # Telegram context + escalation rules
     prompt += ('\n\n---\n## Контекст: Telegram бізнес-акаунт'
-               '\nТи спілкуєшся з клієнтом у Telegram бізнес-акаунті клініки Dr. Gomon. '
+               '\nТи спілкуєшся з клієнтом у Telegram бізнес-акаунті Dr. Gomon Cosmetology. '
                'Відповідай коротко і по суті (це месенджер, не лист). '
                'Для запису пропонуй написати сюди в чат, зателефонувати 073-310-31-10, або написати лікарю в Instagram (https://ig.me/m/dr.gomon). '
-               'Також можна записатись через додаток gomonclinic.com/app — там діє -10% на ін\'єкційні процедури.'
+               'Також можна записатись через додаток drgomon.beauty/app — там діє -10% на ін\'єкційні процедури.'
                '\n\n## Ескалація до спеціаліста'
                '\nЯкщо виникає одна з цих ситуацій — передай розмову людині, написавши ТОЧНО цей тег: <ESCALATE>'
                '\n- Клієнт наполегливо просить поговорити з живою людиною'
                '\n- Клієнт скаржиться на якість послуг або має претензію'
                '\n- Клієнт описує медичну проблему, що потребує огляду лікаря'
-               '\n- Клієнт хоче записатись на конкретну дату/час (потрібна перевірка розкладу)'
+               '\n- Клієнт хоче записатись на конкретну дату/час (збери ПІБ, номер телефону, бажану процедуру та зручний час — і передай через ескалацію)'
                '\n- Клієнт питає про щось, чого немає в прайсі або акціях'
                '\n- Ти не впевнений у відповіді'
+               '\n\n## Скасування запису'
+               '\nЯкщо клієнт просить скасувати свій запис — додай тег <CANCEL> або <CANCEL date="YYYY-MM-DD"> у свою відповідь.'
+               '\nПравила:'
+               '\n- Якщо у клієнта кілька майбутніх записів — перерахуй їх і запитай який скасувати'
+               '\n- Після вибору клієнта додай <CANCEL date="YYYY-MM-DD">'
+               '\n- Якщо тільки один запис — <CANCEL> (без дати)'
+               '\n- Спочатку уточни: Ви точно хочете скасувати?'
+               '\n- НЕ ВИГАДУЙ результат — система автоматично додасть статус скасування'
                '\n\nПри ескалації завжди додай коротке пояснення для клієнта, наприклад:'
-               '\n"Зараз я з\'єднаю вас зі спеціалістом клініки, щоб допомогти точніше. '
+               '\n"Зараз я з\'єднаю вас зі спеціалістом, щоб допомогти точніше. '
                'Очікуйте відповідь протягом робочого часу (9:00–21:00)."')
     return prompt
 
@@ -371,7 +404,7 @@ def _call_anthropic(system_prompt, messages):
 
 def _send_ai_reply(chat_id, text, biz_conn_id):
     """Send AI reply via Business Bot API."""
-    payload = {'chat_id': int(chat_id), 'text': text}
+    payload = {'chat_id': int(chat_id), 'text': text, 'parse_mode': 'Markdown'}
     if biz_conn_id:
         payload['business_connection_id'] = biz_conn_id
     try:
@@ -449,6 +482,136 @@ def _notify_admin_escalation(conv_id, chat_id, client_name):
         logger.error('Escalation notify error: {}'.format(e))
 
 
+def _cancel_client_appointment(client_phone, target_date=None):
+    """Cancel the nearest upcoming appointment for client. Returns (ok, message)."""
+    if not client_phone:
+        return False, 'Не вдалося визначити ваш номер телефону.'
+
+    try:
+        # Find upcoming appointments from services_json
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        try:
+            tail = client_phone[-9:] if len(client_phone) >= 9 else client_phone
+            row = conn.execute(
+                "SELECT first_name, last_name, phone, services_json FROM clients "
+                "WHERE REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ','') LIKE ?",
+                ('%' + tail,)).fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            return False, 'Не знайдено вашого запису в базі.'
+
+        client_name = ((row[0] or '') + ' ' + (row[1] or '')).strip()
+        phone = row[2]
+        services = json.loads(row[3] or '[]')
+
+        # Find nearest future confirmed appointment
+        from datetime import datetime as _dt
+        today = _dt.utcnow().strftime('%Y-%m-%d')
+        upcoming = [s for s in services
+                    if s.get('date', '') >= today
+                    and s.get('status', '').upper() not in ('CANCELLED',)]
+        if target_date:
+            targeted = [s for s in upcoming if s.get('date', '') == target_date]
+            if targeted:
+                upcoming = targeted
+        upcoming.sort(key=lambda x: (x.get('date', ''), x.get('hour', 0)))
+
+        if not upcoming:
+            return False, 'У вас немає майбутніх записів для скасування.'
+
+        appt = upcoming[0]
+        date = appt.get('date', '')
+        service = appt.get('service', '')
+        specialist = appt.get('specialist', '')
+        appt_id = appt.get('appt_id', '')
+
+        # Import cancel functions from pwa_api context
+        sys.path.insert(0, '/home/gomoncli/zadarma')
+        from wlaunch_api import get_branch_id
+
+        from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
+        headers = {
+            'Authorization': 'Bearer ' + WLAUNCH_API_KEY,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+        branch_id = get_branch_id()
+
+        # Find WLaunch appointment ID if not in local data
+        if not appt_id:
+            from datetime import timedelta as _td
+            d = _dt.strptime(date, '%Y-%m-%d')
+            start_d = (d - _td(days=1)).strftime('%Y-%m-%d')
+            end_d = (d + _td(days=1)).strftime('%Y-%m-%d')
+            phone_digits = ''.join(filter(str.isdigit, phone))
+            url = '{}/company/{}/branch/{}/appointment'.format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
+            params = {
+                'sort': 'start_time,desc', 'page': 0, 'size': 100,
+                'start': start_d + 'T00:00:00.000Z',
+                'end': end_d + 'T23:59:59.999Z'
+            }
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp.raise_for_status()
+            for wl_appt in resp.json().get('content', []):
+                client = wl_appt.get('client') or {}
+                cp = ''.join(filter(str.isdigit, client.get('phone', '')))
+                if phone_digits[-9:] == cp[-9:]:
+                    appt_id = wl_appt.get('id')
+                    break
+
+        if not appt_id:
+            return False, 'Не вдалося знайти запис у системі для скасування.'
+
+        # Cancel in WLaunch
+        url = '{}/company/{}/branch/{}/appointment/{}'.format(WLAUNCH_API_URL, COMPANY_ID, branch_id, appt_id)
+        resp = requests.post(url, headers=headers,
+                             json={'appointment': {'id': appt_id, 'status': 'CANCELLED'}},
+                             timeout=10)
+        resp.raise_for_status()
+
+        # Update local DB
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        try:
+            raw = conn.execute(
+                "SELECT services_json FROM clients WHERE phone=?", (phone,)).fetchone()
+            if raw:
+                items = json.loads(raw[0] or '[]')
+                for item in items:
+                    if item.get('date') == date and (not service or item.get('service') == service):
+                        item['status'] = 'CANCELLED'
+                        break
+                conn.execute("UPDATE clients SET services_json=? WHERE phone=?",
+                             (json.dumps(items, ensure_ascii=False), phone))
+                conn.commit()
+        finally:
+            conn.close()
+
+        # Send notifications (same as admin cancel)
+        try:
+            from notifier import send_cancellation
+            send_cancellation({
+                'appt_id': appt_id,
+                'client_phone': phone,
+                'client_name': client_name,
+                'procedure_name': service,
+                'specialist': specialist,
+                'date': date,
+                'time': '',
+                'duration_min': 60,
+            })
+        except Exception as e:
+            logger.error('cancel notification error: {}'.format(e))
+
+        logger.info('AI cancelled appointment: {} {} {}'.format(phone, date, service))
+        return True, 'Запис на {} ({}) скасовано.'.format(date, service or 'процедура')
+
+    except Exception as e:
+        logger.error('_cancel_client_appointment error: {}'.format(e))
+        return False, 'Помилка при скасуванні: {}'.format(e)
+
+
 def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None):
     """Process AI auto-reply in a separate thread."""
     conv_id = 'tg_{}'.format(chat_id)
@@ -473,6 +636,23 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None):
         # Call AI
         reply = _call_anthropic(prompt, history)
         if not reply:
+            return
+
+        # Check for cancel tag
+        import re as _re
+        _cancel_match = _re.search(r'<CANCEL(?:\s+date="(\d{4}-\d{2}-\d{2})")?\s*>', reply)
+        if _cancel_match:
+            _cancel_date = _cancel_match.group(1)
+            reply = _re.sub(r'<CANCEL[^>]*>', '', reply).strip()
+            ok, msg = _cancel_client_appointment(client_phone, target_date=_cancel_date)
+            if ok:
+                cancel_note = "\n\n\u2705 " + msg
+            else:
+                cancel_note = "\n\n\u26a0\ufe0f " + msg
+            reply = (reply + cancel_note) if reply else cancel_note
+            if _send_ai_reply(chat_id, reply, biz_conn_id):
+                _save_ai_message(conv_id, chat_id, reply)
+            logger.info("AI cancel for {}: ok={}".format(conv_id, ok))
             return
 
         # Check for escalation tag
@@ -699,3 +879,4 @@ if __name__ == '__main__':
             _backoff = min(_backoff * 2, 300)  # exponential backoff, max 5 min
         logger.info('Auto-restarting in {}s...'.format(_backoff))
         time.sleep(_backoff)
+

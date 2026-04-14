@@ -1,6 +1,6 @@
 {
-  "packageId": "com.gomonclinic.app",
-  "host": "www.gomonclinic.com",
+  "packageId": "com.gomonclinic.www.twa",
+  "host": "drgomon.beauty",
   "name": "Dr. Gomon Cosmetology",
   "launcherName": "Dr. Gomon",
   "display": "standalone",
@@ -13,21 +13,27 @@
   "backgroundColor": "#111010",
   "enableNotifications": true,
   "startUrl": "/app/",
-  "iconUrl": "https://www.gomonclinic.com/app/icons/icon-512-gomon.png",
-  "maskableIconUrl": "https://www.gomonclinic.com/app/icons/icon-512-gomon.png",
-  "monochromeIconUrl": "https://www.gomonclinic.com/app/icons/badge-white.png",
-  "shortcuts": [],
+  "iconUrl": "https://drgomon.beauty/app/icons/icon-512-gomon.png",
+  "maskableIconUrl": "https://drgomon.beauty/app/icons/icon-512-gomon.png",
+  "monochromeIconUrl": "https://drgomon.beauty/app/icons/badge-white.png",
+  "splashScreenFadeOutDuration": 300,
   "signingKey": {
-    "path": "./gomon-release.keystore",
+    "path": "./gomon-release-new.keystore",
     "alias": "gomon"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
-  "splashScreenFadeOutDuration": 300,
+  "appVersionName": "0.2",
+  "appVersionCode": 5,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://www.gomonclinic.com/app/",
+  "fullScopeUrl": "https://drgomon.beauty/app/",
   "minSdkVersion": 23,
   "orientation": "portrait",
   "fingerprints": [
@@ -35,5 +41,9 @@
       "name": "gomon",
       "value": "B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:31:E5:ED:A6:B0:69:9A:EC:55:0F"
     }
-  ]
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "0.2"
 }

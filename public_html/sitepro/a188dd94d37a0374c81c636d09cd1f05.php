@@ -164,10 +164,10 @@
   /* Chat conversion (WaavCKa45JAcELuXlNcC) тепер викликається з gomon-chat.js і gomon-widget.js
      при першому повідомленні користувача */
 </script>
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/app/icons/favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/app/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/app/icons/icon-192-gomon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dr. Gomon Cosmetology - Професійна косметологія у Черкасах</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -180,51 +180,148 @@
     --cream: #F7F3EE; --warm-white: #FDFAF7; --dark: #1A1612; --dark-mid: #2E2920;
     --gold: #B8955A; --gold-light: #D4B07A; --gold-pale: #E8D5B0;
     --text-mid: #6B5E4E; --text-light: #9B8E80;
+    /* ── theme surfaces ── */
+    --surface-card: rgba(247,243,238,0.025); --surface-card-hover: rgba(247,243,238,0.04);
+    --surface-subtle: rgba(247,243,238,0.02); --surface-modal: #17140f;
+    --border-gold: rgba(184,149,90,0.1); --border-gold-md: rgba(184,149,90,0.15);
+    --border-gold-lg: rgba(184,149,90,0.2); --border-gold-xl: rgba(184,149,90,0.35);
+    --gold-glow-bg: rgba(184,149,90,0.04); --gold-glow-md: rgba(184,149,90,0.08);
+    --gold-icon: rgba(184,149,90,0.6); --gold-icon-border: rgba(184,149,90,0.25);
+    --gold-num: rgba(184,149,90,0.06); --gold-tag: rgba(184,149,90,0.7);
+    --gold-more: rgba(184,149,90,0.5); --gold-modal-num: rgba(184,149,90,0.45);
+    --overlay-dark: rgba(15,13,10,0.97); --overlay-modal: rgba(14,12,10,0.78);
+    --overlay-black: rgba(0,0,0,0.92); --overlay-deal: rgba(0,0,0,0.75);
+    --nav-scrolled: rgba(26,22,18,0.95);
+    --hero-grad-1: #1A1612; --hero-grad-2: #0F0D0A;
+    --hero-ornament: rgba(184,149,90,0.08); --hero-ornament-inner: rgba(184,149,90,0.05);
+    --deal-card-bg: #1a1612; --deal-title-color: #f7f3ee; --deal-desc-color: #c8bfb2;
+    --deal-note-color: #8a7f74; --deal-sub-color: #6a6460;
+    --price-note-bg: rgba(184,149,90,0.06); --price-note-border: rgba(184,149,90,0.25);
+    --pay-rect: rgba(255,255,255,0.06); --pay-stroke: rgba(184,149,90,0.25);
+    --pay-tip-bg: #1a1410; --pay-tip-border: rgba(184,149,90,0.7); --pay-tip-color: #f0ece4;
+    --logo-filter: invert(1) sepia(1) saturate(0.6) hue-rotate(5deg) brightness(1.1);
+    --logo-filter-nav: invert(1) sepia(1) saturate(0.5) brightness(0.9);
+    --logo-filter-footer: invert(1) sepia(1) saturate(0.4) brightness(0.7);
+    --grain-opacity: 0.4;
   }
-  html { scroll-behavior: smooth; overflow-x: hidden; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --cream: #1E1A14; --warm-white: #2A2520; --dark: #F5F0E8; --dark-mid: #EDE7DC;
+      --gold: #7A5E28; --gold-light: #5C4520; --gold-pale: #4A3818;
+      --text-mid: #8B7E6E; --text-light: #7A6E60;
+      --surface-card: rgba(30,26,20,0.04); --surface-card-hover: rgba(30,26,20,0.06);
+      --surface-subtle: rgba(30,26,20,0.03); --surface-modal: #F0EBE2;
+      --border-gold: rgba(122,94,40,0.12); --border-gold-md: rgba(122,94,40,0.18);
+      --border-gold-lg: rgba(122,94,40,0.22); --border-gold-xl: rgba(122,94,40,0.35);
+      --gold-glow-bg: rgba(122,94,40,0.05); --gold-glow-md: rgba(122,94,40,0.08);
+      --gold-icon: rgba(122,94,40,0.7); --gold-icon-border: rgba(122,94,40,0.3);
+      --gold-num: rgba(122,94,40,0.07); --gold-tag: rgba(122,94,40,0.8);
+      --gold-more: rgba(122,94,40,0.55); --gold-modal-num: rgba(122,94,40,0.5);
+      --overlay-dark: rgba(245,240,232,0.97); --overlay-modal: rgba(245,240,232,0.85);
+      --overlay-black: rgba(245,240,232,0.95); --overlay-deal: rgba(245,240,232,0.82);
+      --nav-scrolled: rgba(245,240,232,0.95);
+      --hero-grad-1: #F5F0E8; --hero-grad-2: #EDE7DC;
+      --hero-ornament: rgba(122,94,40,0.1); --hero-ornament-inner: rgba(122,94,40,0.06);
+      --deal-card-bg: #F0EBE2; --deal-title-color: #1E1A14; --deal-desc-color: #5C5347;
+      --deal-note-color: #8A7F74; --deal-sub-color: #9A9088;
+      --price-note-bg: rgba(122,94,40,0.06); --price-note-border: rgba(122,94,40,0.25);
+      --pay-rect: rgba(0,0,0,0.04); --pay-stroke: rgba(122,94,40,0.25);
+      --pay-tip-bg: #F0EBE2; --pay-tip-border: rgba(122,94,40,0.5); --pay-tip-color: #1E1A14;
+      --logo-filter: sepia(1) saturate(2) hue-rotate(5deg) brightness(0.35);
+      --logo-filter-nav: sepia(1) saturate(2) hue-rotate(5deg) brightness(0.4);
+      --logo-filter-footer: sepia(1) saturate(1.5) hue-rotate(5deg) brightness(0.5);
+      --grain-opacity: 0.15;
+    }
+  }
+  /* Manual light theme override (button toggle) */
+  [data-theme="light"] {
+    --cream: #1E1A14; --warm-white: #2A2520; --dark: #F5F0E8; --dark-mid: #EDE7DC;
+    --gold: #7A5E28; --gold-light: #5C4520; --gold-pale: #4A3818;
+    --text-mid: #8B7E6E; --text-light: #7A6E60;
+    --surface-card: rgba(30,26,20,0.04); --surface-card-hover: rgba(30,26,20,0.06);
+    --surface-subtle: rgba(30,26,20,0.03); --surface-modal: #F0EBE2;
+    --border-gold: rgba(122,94,40,0.12); --border-gold-md: rgba(122,94,40,0.18);
+    --border-gold-lg: rgba(122,94,40,0.22); --border-gold-xl: rgba(122,94,40,0.35);
+    --gold-glow-bg: rgba(122,94,40,0.05); --gold-glow-md: rgba(122,94,40,0.08);
+    --gold-icon: rgba(122,94,40,0.7); --gold-icon-border: rgba(122,94,40,0.3);
+    --gold-num: rgba(122,94,40,0.07); --gold-tag: rgba(122,94,40,0.8);
+    --gold-more: rgba(122,94,40,0.55); --gold-modal-num: rgba(122,94,40,0.5);
+    --overlay-dark: rgba(245,240,232,0.97); --overlay-modal: rgba(245,240,232,0.85);
+    --overlay-black: rgba(245,240,232,0.95); --overlay-deal: rgba(245,240,232,0.82);
+    --nav-scrolled: rgba(245,240,232,0.95);
+    --hero-grad-1: #F5F0E8; --hero-grad-2: #EDE7DC;
+    --hero-ornament: rgba(122,94,40,0.1); --hero-ornament-inner: rgba(122,94,40,0.06);
+    --deal-card-bg: #F0EBE2; --deal-title-color: #1E1A14; --deal-desc-color: #5C5347;
+    --deal-note-color: #8A7F74; --deal-sub-color: #9A9088;
+    --price-note-bg: rgba(122,94,40,0.06); --price-note-border: rgba(122,94,40,0.25);
+    --pay-rect: rgba(0,0,0,0.04); --pay-stroke: rgba(122,94,40,0.25);
+    --pay-tip-bg: #F0EBE2; --pay-tip-border: rgba(122,94,40,0.5); --pay-tip-color: #1E1A14;
+    --logo-filter: sepia(1) saturate(2) hue-rotate(5deg) brightness(0.35);
+    --logo-filter-nav: sepia(1) saturate(2) hue-rotate(5deg) brightness(0.4);
+    --logo-filter-footer: sepia(1) saturate(1.5) hue-rotate(5deg) brightness(0.5);
+    --grain-opacity: 0.15;
+  }
+  html[data-theme="light"]{scrollbar-color:rgba(122,94,40,0.25) transparent}
+  html[data-theme="light"]::-webkit-scrollbar-thumb{background:rgba(122,94,40,0.25)}
+  html { scroll-behavior: smooth; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(201,169,110,0.3) transparent; }
+  html::-webkit-scrollbar { width: 8px; }
+  html::-webkit-scrollbar-track { background: transparent; }
+  html::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.3); border-radius: 4px; }
+  html::-webkit-scrollbar-thumb:hover { background: rgba(201,169,110,0.5); }
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) { scrollbar-color: rgba(122,94,40,0.25) transparent; }
+    html:not([data-theme="dark"])::-webkit-scrollbar-thumb { background: rgba(122,94,40,0.25); }
+    html:not([data-theme="dark"])::-webkit-scrollbar-thumb:hover { background: rgba(122,94,40,0.4); }
+  }
   body { font-family: 'Jost', sans-serif; background: var(--dark); color: var(--cream); overflow-x: hidden; max-width: 100vw; }
 
   /* ── HERO ── */
   .hero { min-height: 100svh; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 80px 24px 60px; overflow: hidden; }
   @media (max-width: 480px) { .hero { min-height: 90svh; padding: 48px 20px 32px; } .hero-eyebrow { margin-bottom: 16px; } }
-  .hero-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(184,149,90,0.12) 0%, transparent 60%), radial-gradient(ellipse 50% 80% at 10% 90%, rgba(184,149,90,0.06) 0%, transparent 50%), linear-gradient(165deg, #1A1612 0%, #0F0D0A 60%, #1A1612 100%); }
-  .hero-grain { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); opacity: 0.4; }
+  .hero-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(184,149,90,0.12) 0%, transparent 60%), radial-gradient(ellipse 50% 80% at 10% 90%, rgba(184,149,90,0.06) 0%, transparent 50%), linear-gradient(165deg, var(--hero-grad-1) 0%, var(--hero-grad-2) 60%, var(--hero-grad-1) 100%); }
+  .hero-grain { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); opacity: var(--grain-opacity); }
   .hero-line-top { position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.6; }
-  .hero-ornament { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(600px, 90vw); height: min(600px, 90vw); border-radius: 50%; border: 1px solid rgba(184,149,90,0.08); pointer-events: none; }
-  .hero-ornament::before { content: ''; position: absolute; inset: 30px; border-radius: 50%; border: 1px solid rgba(184,149,90,0.05); }
+  .hero-ornament { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(600px, 90vw); height: min(600px, 90vw); pointer-events: none; animation: ornamentPulse 12s ease-in-out infinite; }
+  .hero-ornament svg { width: 100%; height: 100%; }
+  .hero-ornament .orn-outer { fill: none; stroke: var(--hero-ornament); stroke-width: 0.15; }
+  .hero-ornament .orn-mid { fill: none; stroke: var(--hero-ornament-inner); stroke-width: 0.1; stroke-dasharray: 1 1.5; animation: ornamentRotate 120s linear infinite; transform-origin: center; }
+  .hero-ornament .orn-inner { display: none; }
+  @media (max-width: 480px) { .hero-ornament .orn-outer { stroke-width: 0.3; } .hero-ornament .orn-mid { stroke-width: 0.2; } }
+  @keyframes ornamentPulse { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 50% { transform: translate(-50%,-50%) scale(1.02); opacity: .8; } }
+  @keyframes ornamentRotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .hero-content { position: relative; z-index: 1; max-width: 700px; }
-  .hero-tagline { font-family: 'Cormorant Garamond', serif; font-size: clamp(15px, 2.5vw, 18px); font-style: italic; font-weight: 300; color: var(--gold-pale); letter-spacing: 0.03em; margin-bottom: 20px; opacity: 0; animation: fadeUp 0.8s 0.1s ease forwards; }
-  .hero-eyebrow { font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 28px; opacity: 0; animation: fadeUp 0.8s 0.2s ease forwards; }
+  .hero-tagline { font-family: 'Cormorant Garamond', serif; font-size: clamp(16px, 2.5vw, 19px); font-style: italic; font-weight: 300; color: var(--gold-pale); letter-spacing: 0.03em; margin-bottom: 20px; opacity: 0; animation: fadeUp 0.8s 0.1s ease forwards; }
+  .hero-eyebrow { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 400; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 28px; opacity: 0; animation: fadeUp 0.8s 0.2s ease forwards; }
   @media (max-width: 480px) { .hero-eyebrow .mob-br { display: block; } }
   .hero-eyebrow .mob-br { display: none; }
-  .hero-logo { width: clamp(200px, 50vw, 340px); height: auto; margin: 0 auto 0; display: block; filter: invert(1) sepia(1) saturate(0.6) hue-rotate(5deg) brightness(1.1); opacity: 0; animation: fadeUp 0.8s 0.4s ease forwards; }
+  .hero-logo { width: clamp(200px, 50vw, 340px); height: auto; margin: 0 auto 0; display: block; filter: var(--logo-filter); opacity: 0; animation: fadeUp 0.8s 0.4s ease forwards; }
   .hero-divider { width: 60px; height: 1px; background: var(--gold); margin: -60px auto 24px; opacity: 0; animation: fadeUp 0.8s 0.7s ease forwards; }
-  .hero-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 24px; max-width: 460px; margin-left: auto; margin-right: auto; text-align: center; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
+  .hero-desc { font-size: 18px; font-weight: 300; color: var(--text-light); line-height: 1.8; margin-bottom: 24px; max-width: 460px; margin-left: auto; margin-right: auto; text-align: center; opacity: 0; animation: fadeUp 0.8s 0.8s ease forwards; }
   .cta-group { display: flex; flex-direction: column; gap: 14px; align-items: center; opacity: 0; animation: fadeUp 0.8s 1s ease forwards; }
-  .btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 36px; border-radius: 2px; font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; transition: all 0.3s ease; justify-content: center; width: 300px; max-width: 90vw; }
+  .btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 36px; border-radius: 2px; font-family: 'Jost', sans-serif; font-size: 15px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; transition: all 0.3s ease; justify-content: center; width: 300px; max-width: 90vw; }
   .btn-primary { background: var(--gold); color: var(--dark); border: 1px solid var(--gold); }
   .btn-primary:hover { background: var(--gold-light); border-color: var(--gold-light); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(184,149,90,0.3); }
   .btn-outline { background: transparent; color: var(--gold-light); border: 1px solid var(--gold); }
-  .btn-outline:hover { background: rgba(184,149,90,0.1); border-color: var(--gold-light); transform: translateY(-2px); }
+  .btn-outline:hover { background: var(--gold-glow-md); border-color: var(--gold-light); transform: translateY(-2px); }
   .btn svg { flex-shrink: 0; }
-  .location-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-bottom: 60px; opacity: 0; animation: fadeUp 0.8s 1.2s ease forwards; }
+  .location-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-bottom: 60px; opacity: 0; animation: fadeUp 0.8s 1.2s ease forwards; }
   @media (max-width: 480px) { .hero-desc { margin-bottom: 20px; font-size: 15px; } .hero-divider { margin: -35px auto 20px; width: 44px; } .location-tag { margin-bottom: 24px; } }
   .location-tag::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
 
   /* ── TRUST BAR ── */
-  .trust-bar { border-top: 1px solid rgba(184,149,90,0.15); border-bottom: 1px solid rgba(184,149,90,0.15); padding: 28px 24px; background: rgba(184,149,90,0.04); }
-  @media (max-width: 480px) { .trust-bar { padding: 20px 16px; } .trust-num { font-size: 26px; } .trust-label { font-size: 10px; letter-spacing: 1px; } .trust-inner { gap: 16px; } }
+  .trust-bar { border-top: 1px solid var(--border-gold-md); border-bottom: 1px solid var(--border-gold-md); padding: 28px 24px; background: var(--gold-glow-bg); }
+  @media (max-width: 480px) { .trust-bar { padding: 20px 16px; } .trust-num { font-size: 26px; } .trust-label { font-size: 11px; letter-spacing: 1px; } .trust-inner { gap: 16px; } }
   .trust-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: center; gap: clamp(24px, 6vw, 80px); flex-wrap: wrap; }
   .trust-item { text-align: center; }
-  .trust-num { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-weight: 300; color: var(--gold-light); line-height: 1; }
-  .trust-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-top: 4px; }
+  .trust-num { font-family: 'Cormorant Garamond', serif; font-size: 37px; font-weight: 300; color: var(--gold-light); line-height: 1; }
+  .trust-label { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); margin-top: 4px; }
 
   /* ── SECTIONS ── */
   .section { padding: clamp(44px, 7vw, 80px) 24px; }
   @media (max-width: 480px) { .section { padding: 32px 20px; } }
   .section-inner { max-width: 960px; margin: 0 auto; }
-  .section-label { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
-  .section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 6vw, 58px); font-weight: 300; line-height: 1.1; color: var(--cream); margin-bottom: 50px; }
+  .section-label { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+  .section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(37px, 6vw, 59px); font-weight: 300; line-height: 1.1; color: var(--cream); margin-bottom: 50px; }
   .section-title em { font-style: italic; color: var(--gold-light); }
 
   /* ── PROMO SECTION ── */
@@ -233,112 +330,130 @@
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
   .deals-scroll { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; margin-top: 36px; }
   .deals-scroll::-webkit-scrollbar { display: none; }
-  .deal-tile { flex-shrink: 0; width: 240px; background: rgba(247,243,238,0.03); border: 1px solid rgba(184,149,90,0.12); padding: 24px 20px; position: relative; overflow: hidden; transition: border-color 0.3s ease, background 0.3s ease; cursor: pointer; text-decoration: none; display: block; }
-  .deal-tile.featured { border-color: rgba(184,149,90,0.35); }
+  .deal-tile { flex-shrink: 0; width: 240px; background: var(--surface-card); border: 1px solid var(--border-gold); padding: 24px 20px; position: relative; overflow: hidden; transition: border-color 0.3s ease, background 0.3s ease; cursor: pointer; text-decoration: none; display: block; }
+  .deal-tile.featured { border-color: var(--border-gold-xl); }
   .deal-tile::after { content: ''; position: absolute; bottom: 0; right: 0; width: 80px; height: 80px; background: radial-gradient(circle at bottom right, rgba(184,149,90,0.07), transparent 70%); }
-  .deal-tile:hover { border-color: rgba(184,149,90,0.4); background: rgba(247,243,238,0.04); }
-  .deal-tag { font-size: 10px; color: var(--gold); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; font-family: 'Jost', sans-serif; }
-  .deal-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 300; color: var(--cream); line-height: 1.3; margin-bottom: 10px; }
-  .deal-desc { font-size: 13px; color: var(--text-light); line-height: 1.6; }
+  .deal-tile:hover { border-color: rgba(184,149,90,0.4); background: var(--surface-card-hover); }
+  .deal-tag { font-size: 13px; color: var(--gold); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; font-family: 'Jost', sans-serif; }
+  .deal-title { font-family: 'Cormorant Garamond', serif; font-size: 21px; font-weight: 300; color: var(--cream); line-height: 1.3; margin-bottom: 10px; }
+  .deal-desc { font-size: 15px; color: var(--text-light); line-height: 1.6; }
   @media (max-width: 480px) { .deal-tile { width: 200px; padding: 20px 16px; } .deal-title { font-size: 17px; } }
 
   .promo-section { padding: clamp(28px, 5vw, 80px) 0; position: relative; }
   .promo-section-inner { max-width: 960px; margin: 0 auto; padding: 0 24px; margin-bottom: 40px; }
   .promo-elfsight-wrap, .promo-section-inner { max-width: 1100px; margin-left: auto; margin-right: auto; padding-left: clamp(16px, 5vw, 60px); padding-right: clamp(16px, 5vw, 60px); }
   .promo-elfsight-wrap { padding-top: 0; }
-  .promo-section-inner .section-sub { font-size: 16px; color: var(--text-light); font-weight: 300; margin-top: -16px; margin-bottom: 40px; max-width: 560px; }
+  .promo-section-inner .section-sub { font-size: 17px; color: var(--text-light); font-weight: 300; margin-top: -16px; margin-bottom: 40px; max-width: 560px; }
   .promo-title-row { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
   .promo-title-row .section-title { margin-bottom: 0; }
-  .promo-ig-btn { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); text-decoration: none; border: 1px solid rgba(184,149,90,0.35); border-radius: 2px; padding: 7px 14px; font-size: 12px; letter-spacing: 1.5px; font-family: 'Jost', sans-serif; white-space: nowrap; transition: all 0.3s ease; flex-shrink: 0; }
-  .promo-ig-btn:hover { border-color: var(--gold); background: rgba(184,149,90,0.08); color: var(--gold-light); }
+  .promo-ig-btn { display: inline-flex; align-items: center; gap: 8px; color: var(--gold); text-decoration: none; border: 1px solid var(--border-gold-xl); border-radius: 2px; padding: 7px 14px; font-size: 14px; letter-spacing: 1.5px; font-family: 'Jost', sans-serif; white-space: nowrap; transition: all 0.3s ease; flex-shrink: 0; }
+  .promo-ig-btn:hover { border-color: var(--gold); background: var(--gold-glow-md); color: var(--gold-light); }
   @media (max-width: 480px) { .promo-ig-btn span { display: none; } .promo-ig-btn { padding: 8px; } }
 
   /* ── SERVICES ── */
   .services-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; margin-top: 48px; }
   @media (max-width: 768px) { .services-grid { grid-template-columns: 1fr 1fr; } }
-  .service-card { position: relative; padding: 32px 28px 30px; background: rgba(247,243,238,0.025); border: 1px solid rgba(184,149,90,0.1); overflow: hidden; cursor: pointer; transition: background 0.35s ease, border-color 0.35s ease; -webkit-tap-highlight-color: transparent; user-select: none; }
+  .service-card { position: relative; padding: 32px 28px 30px; background: var(--surface-card); border: 1px solid var(--border-gold); overflow: hidden; cursor: pointer; transition: background 0.35s ease, border-color 0.35s ease; -webkit-tap-highlight-color: transparent; user-select: none; }
   .service-card::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: linear-gradient(to right, transparent, var(--gold), transparent); opacity: 0; transition: opacity 0.35s ease; }
-  .service-card:hover { border-color: rgba(184,149,90,0.22); }
+  .service-card:hover { border-color: var(--border-gold-lg); }
   .service-card:hover::before { opacity: 1; }
-  .service-num { position: absolute; top: -8px; right: 18px; font-family: 'Cormorant Garamond', serif; font-size: 80px; font-weight: 300; line-height: 1; color: rgba(184,149,90,0.06); user-select: none; pointer-events: none; transition: color 0.35s ease; }
+  .service-num { position: absolute; top: -8px; right: 18px; font-family: 'Cormorant Garamond', serif; font-size: 81px; font-weight: 300; line-height: 1; color: var(--gold-num); user-select: none; pointer-events: none; transition: color 0.35s ease; }
   .service-card:hover .service-num { color: rgba(184,149,90,0.11); }
-  .service-icon-wrap { width: 34px; height: 34px; border: 1px solid rgba(184,149,90,0.25); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: rgba(184,149,90,0.6); transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease; }
+  .service-icon-wrap { width: 34px; height: 34px; border: 1px solid var(--gold-icon-border); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: var(--gold-icon); transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease; }
   .service-card:hover .service-icon-wrap { border-color: rgba(184,149,90,0.55); background: rgba(184,149,90,0.05); color: rgba(184,149,90,1); }
-  .service-icon { font-size: 12px; line-height: 1; }
-  .service-name { font-family: 'Cormorant Garamond', serif; font-size: clamp(16px, 2vw, 20px); font-weight: 400; color: var(--cream); line-height: 1.2; margin-bottom: 14px; letter-spacing: 0.01em; }
-  .service-more { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(184,149,90,0.5); font-family: 'Jost', sans-serif; transition: color 0.3s ease; }
+  .service-icon { font-size: 14px; line-height: 1; }
+  .service-name { font-family: 'Cormorant Garamond', serif; font-size: clamp(17px, 2vw, 21px); font-weight: 400; color: var(--cream); line-height: 1.2; margin-bottom: 14px; letter-spacing: 0.01em; }
+  .service-more { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-more); font-family: 'Jost', sans-serif; transition: color 0.3s ease; }
   .service-more::after { content: '→'; transition: transform 0.3s ease; display: inline-block; }
   .service-card:hover .service-more { color: rgba(184,149,90,0.85); }
   .service-card:hover .service-more::after { transform: translateX(3px); }
   @media (max-width: 480px) { .services-grid { grid-template-columns: 1fr; } .service-card { padding: 24px 18px 22px; } .service-num { font-size: 64px; } }
 
   /* ── MODAL ── */
-  .service-modal-backdrop { position: fixed; inset: 0; background: rgba(14,12,10,0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; display: flex; align-items: center; justify-content: center; }
+  .service-modal-backdrop { position: fixed; inset: 0; background: var(--overlay-modal); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; display: flex; align-items: center; justify-content: center; }
   .service-modal-backdrop.is-open { opacity: 1; pointer-events: all; }
-  .service-modal { position: relative; width: min(640px, 92vw); background: #17140f; border: 1px solid rgba(184,149,90,0.2); border-radius: 2px; padding: 40px clamp(24px, 5vw, 56px) 52px; max-height: 85vh; overflow-y: auto; transform: translateY(16px); opacity: 0; transition: transform 0.4s cubic-bezier(0.33,1,0.68,1), opacity 0.35s ease; }
+  .service-modal { position: relative; width: min(640px, 92vw); background: var(--surface-modal); border: 1px solid var(--border-gold-lg); border-radius: 2px; padding: 40px clamp(24px, 5vw, 56px) 52px; max-height: 85vh; overflow-y: auto; transform: translateY(16px); opacity: 0; transition: transform 0.4s cubic-bezier(0.33,1,0.68,1), opacity 0.35s ease; }
   .service-modal-backdrop.is-open .service-modal { transform: translateY(0); opacity: 1; }
-  .modal-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: rgba(184,149,90,0.4); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 8px; transition: color 0.2s ease; }
+  .modal-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: rgba(184,149,90,0.4); font-size: 23px; cursor: pointer; line-height: 1; padding: 4px 8px; transition: color 0.2s ease; }
   .modal-close:hover { color: var(--gold); }
-  .modal-num { font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 3px; color: rgba(184,149,90,0.45); text-transform: uppercase; margin-bottom: 8px; }
-  .modal-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(22px, 4vw, 28px); font-weight: 400; color: var(--cream); line-height: 1.2; margin-bottom: 16px; }
+  .modal-num { font-family: 'Jost', sans-serif; font-size: 13px; letter-spacing: 3px; color: var(--gold-modal-num); text-transform: uppercase; margin-bottom: 8px; }
+  .modal-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(23px, 4vw, 29px); font-weight: 400; color: var(--cream); line-height: 1.2; margin-bottom: 16px; }
   .modal-divider { width: 36px; height: 1px; background: var(--gold); opacity: 0.35; margin-bottom: 20px; }
-  .modal-desc { font-size: 16px; font-weight: 300; color: var(--text-light); line-height: 1.85; margin-bottom: 24px; }
+  .modal-desc { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.85; margin-bottom: 24px; }
   .modal-tags { display: flex; flex-wrap: wrap; gap: 7px; }
-  .modal-tag { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(184,149,90,0.7); border: 1px solid rgba(184,149,90,0.2); padding: 4px 11px; font-family: 'Jost', sans-serif; }
+  .modal-tag { font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold-tag); border: 1px solid var(--border-gold-lg); padding: 4px 11px; font-family: 'Jost', sans-serif; }
 
   /* ── PRICE TABLE IN MODAL ── */
   .modal-prices { margin-top: 28px; }
   .price-group { margin-bottom: 24px; }
-  .price-group-title { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 400; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid rgba(184,149,90,0.15); margin-bottom: 12px; }
+  .price-group-title { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 400; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid var(--border-gold-md); margin-bottom: 12px; }
   .price-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; gap: 12px; }
   .price-row + .price-row { border-top: 1px solid rgba(184,149,90,0.06); }
-  .price-name { font-size: 14px; font-weight: 300; color: var(--cream); line-height: 1.4; flex: 1; }
-  .price-name small { display: block; font-size: 11px; color: var(--text-light); margin-top: 2px; line-height: 1.3; }
-  .price-val { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; color: var(--gold-light); white-space: nowrap; flex-shrink: 0; }
-  .price-note { font-size: 12px; color: var(--gold); font-style: italic; margin-top: 8px; padding: 8px 12px; background: rgba(184,149,90,0.06); border-left: 2px solid rgba(184,149,90,0.25); }
+  .price-name { font-size: 16px; font-weight: 300; color: var(--cream); line-height: 1.4; flex: 1; }
+  .price-name small { display: block; font-size: 13px; color: var(--text-light); margin-top: 2px; line-height: 1.3; }
+  .price-name-link { color: var(--gold-light); cursor: pointer; border-bottom: 1px dotted var(--border-gold); transition: color .2s; }
+  .price-name-link:hover { color: var(--gold); }
+
+  /* Procedure detail bottom sheet */
+  .proc-detail-backdrop { position: fixed; inset: 0; z-index: 2000; background: var(--overlay-modal); opacity: 0; pointer-events: none; transition: opacity .3s; display: flex; align-items: flex-end; justify-content: center; }
+  @media (min-width: 768px) { .proc-detail-backdrop { align-items: center; padding: 20px; } .proc-detail-sheet { border-radius: 16px; border: 1px solid var(--border-gold-lg); max-height: 75vh; } }
+  .proc-detail-backdrop.is-open { opacity: 1; pointer-events: all; }
+  .proc-detail-sheet { background: var(--surface-modal, var(--dark-mid)); border-top: 1px solid var(--border-gold-lg); border-radius: 20px 20px 0 0; padding: 24px 28px 36px; width: 100%; max-width: 520px; max-height: 80vh; overflow-y: auto; transform: translateY(100%); transition: transform .35s cubic-bezier(.33,1,.68,1); }
+  .proc-detail-backdrop.is-open .proc-detail-sheet { transform: translateY(0); }
+  .proc-detail-handle { width: 36px; height: 3px; background: var(--border-gold); border-radius: 2px; margin: 0 auto 18px; }
+  .proc-detail-title { font-family: 'Cormorant Garamond', serif; font-size: 23px; font-weight: 300; color: var(--gold); margin-bottom: 4px; }
+  .proc-detail-price { font-size: 15px; color: var(--text-light); margin-bottom: 16px; }
+  .proc-detail-dur { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-card); border-radius: 8px; padding: 6px 12px; font-size: 14px; color: var(--text-light); margin-bottom: 16px; }
+  .proc-detail-section { margin-bottom: 14px; }
+  .proc-detail-label { font-size: 12px; color: var(--text-mid, var(--text-light)); letter-spacing: .6px; text-transform: uppercase; margin-bottom: 6px; }
+  .proc-detail-text { font-size: 15px; color: var(--cream); line-height: 1.7; font-weight: 300; }
+  .proc-detail-close { display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border-gold); border-radius: 6px; padding: 10px 28px; color: var(--text-light); font-size: 14px; font-family: 'Jost', sans-serif; cursor: pointer; transition: border-color .2s; }
+  .proc-detail-close:hover { border-color: var(--gold); }
+  .price-val { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 400; color: var(--gold-light); white-space: nowrap; flex-shrink: 0; }
+  .price-note { font-size: 14px; color: var(--gold); font-style: italic; margin-top: 8px; padding: 8px 12px; background: var(--price-note-bg); border-left: 2px solid var(--price-note-border); }
 
   /* ── ABOUT ── */
-  .about-section { padding: clamp(28px, 5vw, 80px) 24px; background: rgba(247,243,238,0.02); border-top: 1px solid rgba(184,149,90,0.1); border-bottom: 1px solid rgba(184,149,90,0.1); }
+  .about-section { padding: clamp(28px, 5vw, 80px) 24px; background: var(--surface-subtle); border-top: 1px solid var(--border-gold); border-bottom: 1px solid var(--border-gold); }
   .about-inner { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 0 60px; max-width: 900px; margin: 0 auto; }
   .about-inner .section-label { grid-column: 1 / -1; }
   .about-text { grid-column: 1; grid-row: 2; }
-  .about-text p { font-size: 16px; font-weight: 300; color: var(--text-light); line-height: 1.9; }
-  .about-pullquote { grid-column: 2; grid-row: 2; align-self: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: clamp(1.5rem, 2.5vw, 2rem); color: var(--gold-light); line-height: 1.5; letter-spacing: 0.02em; border-left: 1px solid rgba(184,149,90,0.3); padding-left: 40px; margin: 0; }
-  @media (max-width: 768px) { .about-inner { grid-template-columns: 1fr; } .about-pullquote { grid-column: 1; grid-row: auto; border-left: none; border-top: 1px solid rgba(184,149,90,0.3); padding-left: 0; padding-top: 24px; font-size: 1.1rem; text-align: center; } }
+  .about-text p { font-size: 17px; font-weight: 300; color: var(--text-light); line-height: 1.9; }
+  .about-pullquote { grid-column: 2; grid-row: 2; align-self: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: clamp(1.5rem, 2.5vw, 2rem); color: var(--gold-light); line-height: 1.5; letter-spacing: 0.02em; border-left: 1px solid var(--border-gold-lg); padding-left: 40px; margin: 0; }
+  @media (max-width: 768px) { .about-inner { grid-template-columns: 1fr; } .about-pullquote { grid-column: 1; grid-row: auto; border-left: none; border-top: 1px solid var(--border-gold-lg); padding-left: 0; padding-top: 24px; font-size: 1.1rem; text-align: center; } }
 
   /* ── CTA BOTTOM ── */
   .cta-section { padding: 40px 24px clamp(44px, 6vw, 80px); text-align: center; position: relative; overflow: hidden; }
   .cta-section::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(184,149,90,0.08) 0%, transparent 70%); pointer-events: none; }
   .cta-inner { position: relative; max-width: 600px; margin: 0 auto; }
-  .cta-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(40px, 7vw, 70px); font-weight: 300; line-height: 1.05; color: var(--cream); margin-bottom: 20px; }
+  .cta-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(41px, 7vw, 71px); font-weight: 300; line-height: 1.05; color: var(--cream); margin-bottom: 20px; }
   .cta-title em { font-style: italic; color: var(--gold-light); }
-  .cta-sub { font-size: 16px; font-weight: 300; color: var(--text-light); margin-bottom: 44px; letter-spacing: 1px; }
+  .cta-sub { font-size: 17px; font-weight: 300; color: var(--text-light); margin-bottom: 44px; letter-spacing: 1px; }
 
   /* ── FOOTER ── */
-  footer { padding: 28px 24px; border-top: 1px solid rgba(184,149,90,0.15); text-align: center; }
-  footer p { font-size: 13px; color: var(--text-light); letter-spacing: 1px; }
+  footer { padding: 28px 24px; border-top: 1px solid var(--border-gold-md); text-align: center; }
+  footer p { font-size: 15px; color: var(--text-light); letter-spacing: 1px; }
   footer span { color: var(--gold); }
   .footer-payments { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 48px; opacity: 0.45; }
   .pay-item { position: relative; cursor: pointer; display: inline-flex; }
   .pay-item svg { height: 34px; width: auto; transition: opacity 0.2s; }
   .pay-item:hover svg { opacity: 0.75; }
-  .pay-item::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1a1410; border: 1px solid rgba(184,149,90,0.7); color: #f0ece4; box-shadow: 0 4px 16px rgba(0,0,0,0.8); font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.5px; white-space: nowrap; padding: 6px 12px; border-radius: 3px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
+  .pay-item::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--pay-tip-bg); border: 1px solid var(--pay-tip-border); color: var(--pay-tip-color); box-shadow: 0 4px 16px rgba(0,0,0,0.8); font-family: 'Jost', sans-serif; font-size: 13px; letter-spacing: 0.5px; white-space: nowrap; padding: 6px 12px; border-radius: 3px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
   .pay-item:hover::after, .pay-item.tip-on::after { opacity: 1; }
   .footer-logo-btn { background: none; border: none; cursor: pointer; padding: 0; display: block; margin: 0 auto 10px; }
 
   /* ── BURGER NAV ── */
   .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; transition: background 0.4s ease, box-shadow 0.4s ease; }
-  .nav.scrolled { background: rgba(26,22,18,0.95); backdrop-filter: blur(12px); box-shadow: 0 1px 0 rgba(184,149,90,0.15); }
-  .nav-logo { height: 32px; filter: invert(1) sepia(1) saturate(0.5) brightness(0.9); opacity: 0.85; transition: opacity 0.3s; }
+  .nav.scrolled { background: var(--nav-scrolled); backdrop-filter: blur(12px); box-shadow: 0 1px 0 var(--border-gold-md); }
+  .nav-logo { height: 32px; filter: var(--logo-filter-nav); opacity: 0.85; transition: opacity 0.3s; }
   .nav-logo:hover { opacity: 1; }
   .burger { width: 40px; height: 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; cursor: pointer; background: none; border: none; padding: 6px; z-index: 110; }
   .burger span { display: block; width: 22px; height: 1.5px; background: var(--gold); transition: transform 0.35s ease, opacity 0.35s ease, width 0.35s ease; transform-origin: center; }
   .burger.open span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
   .burger.open span:nth-child(2) { opacity: 0; width: 0; }
   .burger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
-  .nav-overlay { position: fixed; inset: 0; z-index: 99; background: rgba(15,13,10,0.97); backdrop-filter: blur(20px); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
+  .nav-overlay { position: fixed; inset: 0; z-index: 99; background: var(--overlay-dark); backdrop-filter: blur(20px); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; padding: max(72px, calc(env(safe-area-inset-top,0px) + 60px)) 0 24px; overflow-y: auto; }
   .nav-overlay.open { opacity: 1; pointer-events: all; }
-  .nav-link { font-family: 'Cormorant Garamond', serif; font-size: clamp(32px, 6vw, 52px); font-weight: 300; color: var(--cream); text-decoration: none; letter-spacing: 2px; padding: 10px 24px; position: relative; opacity: 0; transform: translateY(20px); transition: color 0.3s ease, opacity 0.4s ease, transform 0.4s ease; }
+  .nav-link { font-family: 'Cormorant Garamond', serif; font-size: clamp(33px, 6vw, 53px); font-weight: 300; color: var(--cream); text-decoration: none; letter-spacing: 2px; padding: 10px 24px; position: relative; opacity: 0; transform: translateY(20px); transition: color 0.3s ease, opacity 0.4s ease, transform 0.4s ease; }
   .nav-overlay.open .nav-link { opacity: 1; transform: translateY(0); }
   .nav-overlay.open .nav-link:nth-child(1) { transition-delay: 0.05s; }
   .nav-overlay.open .nav-link:nth-child(2) { transition-delay: 0.10s; }
@@ -353,17 +468,17 @@
   .nav-link:hover::after { transform: scaleX(1); }
   .nav-overlay-cta { margin-top: 24px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; opacity: 0; transform: translateY(20px); transition: opacity 0.4s ease 0.35s, transform 0.4s ease 0.35s; }
   .nav-overlay.open .nav-overlay-cta { opacity: 1; transform: translateY(0); }
-  .nav-overlay-cta a { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); text-decoration: none; border: 1px solid rgba(184,149,90,0.3); padding: 10px 24px; border-radius: 2px; transition: all 0.3s ease; }
+  .nav-overlay-cta a { font-size: 15px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-light); text-decoration: none; border: 1px solid var(--border-gold-lg); padding: 10px 24px; border-radius: 2px; transition: all 0.3s ease; }
   .nav-overlay-cta a:hover { border-color: var(--gold); color: var(--gold-light); }
 
   /* ── LOCATION ── */
   .location-block { display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: start; }
   @media (max-width: 700px) { .location-block { grid-template-columns: 1fr; } }
   .location-info-group { margin-bottom: 28px; }
-  .location-info-label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
-  .location-info-text { font-size: 17px; color: var(--cream); line-height: 1.7; font-weight: 300; }
-  .location-landmarks { list-style: none; font-size: 15px; color: var(--text-light); line-height: 2.2; font-weight: 300; }
-  .location-map { overflow: hidden; min-height: 300px; height: 100%; border-radius: 2px; border: 1px solid rgba(184,149,90,0.12); }
+  .location-info-label { font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  .location-info-text { font-size: 18px; color: var(--cream); line-height: 1.7; font-weight: 300; }
+  .location-landmarks { list-style: none; font-size: 16px; color: var(--text-light); line-height: 2.2; font-weight: 300; }
+  .location-map { overflow: hidden; min-height: 300px; height: 100%; border-radius: 2px; border: 1px solid var(--border-gold); }
   .location-map iframe { display: block; width: 100%; height: 100%; min-height: 360px; }
   .location-exterior { display: grid; grid-template-columns: 1.55fr 1fr; gap: 6px; margin-bottom: 28px; border-radius: 2px; overflow: hidden; }
   .location-exterior img { width: 100%; height: 150px; object-fit: cover; display: block; filter: brightness(0.9) saturate(0.85); transition: filter 0.4s ease; cursor: zoom-in; }
@@ -394,47 +509,47 @@
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } }
 
   /* ── LIGHTBOX ── */
-  .lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; cursor: zoom-out; }
+  .lightbox { position: fixed; inset: 0; z-index: 1000; background: var(--overlay-black); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; cursor: zoom-out; }
   .lightbox.is-open { opacity: 1; pointer-events: all; }
   .lightbox img { max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 2px; transform: scale(0.94); transition: transform 0.3s cubic-bezier(0.33,1,0.68,1); cursor: default; }
   .lightbox.is-open img { transform: scale(1); }
-  .lightbox-close { position: absolute; top: 20px; right: 24px; background: none; border: none; color: var(--gold-light); font-size: 28px; line-height: 1; cursor: pointer; padding: 8px; opacity: 0.7; transition: opacity 0.2s ease, transform 0.2s ease; font-weight: 300; font-family: 'Jost', sans-serif; }
+  .lightbox-close { position: absolute; top: 20px; right: 24px; background: none; border: none; color: var(--gold-light); font-size: 29px; line-height: 1; cursor: pointer; padding: 8px; opacity: 0.7; transition: opacity 0.2s ease, transform 0.2s ease; font-weight: 300; font-family: 'Jost', sans-serif; }
   .lightbox-close:hover { opacity: 1; transform: rotate(90deg); }
 
   /* === Deal Modal === */
-  .deal-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center; padding:20px; }
+  .deal-modal-overlay { display:none; position:fixed; inset:0; background:var(--overlay-deal); z-index:9999; align-items:center; justify-content:center; padding:20px; }
   .deal-modal-overlay.open { display:flex; }
-  .deal-modal-card { background:#1a1612; border:1px solid rgba(184,149,90,0.35); padding:36px 32px; max-width:420px; width:100%; position:relative; text-align:center; }
-  .deal-modal-tag { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#b8955a; margin-bottom:12px; }
-  .deal-modal-title { font-size:22px; color:#f7f3ee; margin-bottom:10px; font-weight:600; }
-  .deal-modal-desc { font-size:15px; color:#c8bfb2; margin-bottom:28px; line-height:1.5; }
-  .deal-modal-btn { display:inline-block; padding:14px 32px; background:#b8955a; color:#1a1612; font-size:14px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; text-decoration:none; }
-  .deal-modal-btn:hover { background:#c9a86b; }
-  .deal-modal-close { position:absolute; top:12px; right:16px; background:none; border:none; color:#c8bfb2; font-size:22px; cursor:pointer; line-height:1; padding:4px; }
-  .deal-modal-card .promo-modal-subtitle { font-size:11px; color:#b8955a; letter-spacing:.08em; text-transform:uppercase; margin:16px 0 8px; }
-  .deal-modal-card .promo-modal-desc { font-size:14px; color:#c8bfb2; line-height:1.7; margin-bottom:16px; }
-  .deal-modal-card .promo-modal-note { font-size:12px; color:#8a7f74; margin-top:12px; font-style:italic; }
+  .deal-modal-card { background:var(--deal-card-bg); border:1px solid var(--border-gold-xl); padding:36px 32px; max-width:420px; width:100%; position:relative; text-align:center; }
+  .deal-modal-tag { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); margin-bottom:12px; }
+  .deal-modal-title { font-size:23px; color:var(--deal-title-color); margin-bottom:10px; font-weight:600; }
+  .deal-modal-desc { font-size:16px; color:var(--deal-desc-color); margin-bottom:28px; line-height:1.5; }
+  .deal-modal-btn { display:inline-block; padding:14px 32px; background:var(--gold); color:var(--dark); font-size:16px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; text-decoration:none; }
+  .deal-modal-btn:hover { background:var(--gold-light); }
+  .deal-modal-close { position:absolute; top:12px; right:16px; background:none; border:none; color:var(--deal-desc-color); font-size:23px; cursor:pointer; line-height:1; padding:4px; }
+  .deal-modal-card .promo-modal-subtitle { font-size:13px; color:var(--gold); letter-spacing:.08em; text-transform:uppercase; margin:16px 0 8px; }
+  .deal-modal-card .promo-modal-desc { font-size:16px; color:var(--deal-desc-color); line-height:1.7; margin-bottom:16px; }
+  .deal-modal-card .promo-modal-note { font-size:14px; color:var(--deal-note-color); margin-top:12px; font-style:italic; }
   .deal-modal-card .promo-price-table { width:100%; border-collapse:collapse; margin-bottom:4px; }
-  .deal-modal-card .promo-price-table td { padding:6px 4px; font-size:13px; color:#c8bfb2; vertical-align:middle; }
-  .deal-modal-card .promo-price-table td:first-child { color:#f7f3ee; width:55%; }
-  .deal-modal-card .promo-price-table td small { font-size:11px; color:#6a6460; display:block; margin-top:2px; }
+  .deal-modal-card .promo-price-table td { padding:6px 4px; font-size:15px; color:var(--deal-desc-color); vertical-align:middle; }
+  .deal-modal-card .promo-price-table td:first-child { color:var(--deal-title-color); width:55%; }
+  .deal-modal-card .promo-price-table td small { font-size:13px; color:var(--deal-sub-color); display:block; margin-top:2px; }
   .deal-modal-card .promo-price-table tr+tr td { border-top:1px solid rgba(255,255,255,0.07); }
-  .deal-modal-card .promo-price-old { text-decoration:line-through; color:#6a6460 !important; text-align:right; white-space:nowrap; }
-  .deal-modal-card .promo-price-new { color:#b8955a !important; font-weight:500; text-align:right; white-space:nowrap; }
+  .deal-modal-card .promo-price-old { text-decoration:line-through; color:var(--deal-sub-color) !important; text-align:right; white-space:nowrap; }
+  .deal-modal-card .promo-price-new { color:var(--gold) !important; font-weight:500; text-align:right; white-space:nowrap; }
   .deal-modal-card .promo-list { padding-left:18px; margin:0 0 8px; }
-  .deal-modal-card .promo-list li { font-size:13px; color:#c8bfb2; line-height:1.8; }
+  .deal-modal-card .promo-list li { font-size:15px; color:var(--deal-desc-color); line-height:1.8; }
 
   /* AI SECTION */
-  .ai-section { padding: 60px 20px 40px; background: linear-gradient(180deg, var(--bg) 0%, rgba(184,149,90,0.04) 50%, var(--bg) 100%); border-top: 1px solid rgba(184,149,90,0.12); }
+  .ai-section { padding: 60px 20px 40px; background: linear-gradient(180deg, var(--dark) 0%, var(--gold-glow-bg) 50%, var(--dark) 100%); border-top: 1px solid var(--border-gold); }
   .ai-section-inner { max-width: 820px; margin: 0 auto; text-align: center; }
-  .ai-section-badge { display: inline-flex; align-items: center; gap: 10px; background: rgba(184,149,90,0.08); border: 1px solid rgba(184,149,90,0.22); border-radius: 40px; padding: 8px 18px 8px 12px; margin-bottom: 24px; }
+  .ai-section-badge { display: inline-flex; align-items: center; gap: 10px; background: var(--gold-glow-md); border: 1px solid var(--border-gold-lg); border-radius: 40px; padding: 8px 18px 8px 12px; margin-bottom: 24px; }
   .ai-section-badge svg { flex-shrink: 0; }
-  .ai-section-badge span { font-family: 'Jost', sans-serif; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-light); }
-  .ai-section-sub { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
-  .ai-section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(34px, 6vw, 56px); font-weight: 300; color: var(--cream); line-height: 1.1; margin-bottom: 20px; }
+  .ai-section-badge span { font-family: 'Jost', sans-serif; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold-light); }
+  .ai-section-sub { font-size: 14px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
+  .ai-section-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(35px, 6vw, 57px); font-weight: 300; color: var(--cream); line-height: 1.1; margin-bottom: 20px; }
   .ai-section-title em { font-style: italic; color: var(--gold-light); }
-  .ai-section-desc { color: var(--text-light); font-size: 16px; line-height: 1.7; margin-bottom: 32px; }
-  .ai-section-btn { font-size: 13px; letter-spacing: 2px; padding: 16px 40px; display: inline-flex; align-items: center; gap: 10px; }
+  .ai-section-desc { color: var(--text-light); font-size: 17px; line-height: 1.7; margin-bottom: 32px; }
+  .ai-section-btn { font-size: 15px; letter-spacing: 2px; padding: 16px 40px; display: inline-flex; align-items: center; gap: 10px; }
   @media (max-width: 480px) { .ai-section { padding: 44px 16px 28px; } .ai-section-badge { font-size: 11px; padding: 6px 14px 6px 10px; margin-bottom: 16px; } .ai-section-sub { margin-bottom: 12px; } .ai-section-desc { font-size: 14px; margin-bottom: 24px; } }
 </style>
 <script src="https://static.elfsight.com/platform/platform.js" defer></script>
@@ -444,9 +559,14 @@
 <!-- NAV -->
 <nav class="nav" id="mainNav">
   <a href="#hero"><picture><source srcset="logo-80.webp" type="image/webp"><img src="logo.png" alt="Dr. Gomon" class="nav-logo" width="32" height="32"></picture></a>
-  <button class="burger" id="burger" aria-label="Меню" aria-expanded="false">
+  <div style="display:flex;align-items:center;gap:8px">
+    <button onclick="toggleSiteTheme()" id="site-theme-btn" style="width:40px;height:40px;background:none;border:none;cursor:pointer;color:var(--gold-light,#e8d5b0);display:flex;align-items:center;justify-content:center;opacity:.6;transition:opacity .2s" title="Змінити тему">
+      <svg id="site-theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+    <button class="burger" id="burger" aria-label="Меню" aria-expanded="false">
     <span></span><span></span><span></span>
   </button>
+  </div>
 </nav>
 <div class="nav-overlay" id="navOverlay">
   <a href="#promo" class="nav-link" data-nav>Акції</a>
@@ -460,7 +580,7 @@
     <a href="tel:+380733103110">073-310-31-10</a>
     <a href="//ig.me/m/dr.gomon" target="_blank" rel="noopener">Instagram</a>
     <a href="https://t.me/DrGomonCosmetology" target="_blank" rel="noopener">Telegram</a>
-    <a href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Наш APP</a>
+    <a href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Мій кабінет</a>
   </div>
 </div>
 
@@ -469,7 +589,7 @@
   <div class="hero-bg"></div>
   <div class="hero-grain"></div>
   <div class="hero-line-top"></div>
-  <div class="hero-ornament"></div>
+  <div class="hero-ornament"><svg viewBox="0 0 56 56" fill="none"><circle class="orn-outer" cx="28" cy="28" r="27"/><circle class="orn-mid" cx="28" cy="28" r="23.5"/></svg></div>
   <div class="hero-content">
     <p class="hero-tagline">Краса — коли відчуваєш себе собою.</p>
     <p class="hero-eyebrow">Лікар-косметолог · Черкаси<span class="mob-br"></span> · 7+ років досвіду</p>
@@ -512,17 +632,22 @@
         <p class="deal-title">-10% на ін'єкційні процедури</p>
         <p class="deal-desc">При записі через додаток на будь-яку ін'єкційну процедуру</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(1)'>
+      <div class="deal-tile featured reveal" onclick='openDealModal(1)'>
+        <p class="deal-tag">Beta-тестерам</p>
+        <p class="deal-title">-10% на будь-яку процедуру</p>
+        <p class="deal-desc">За участь у закритому бета-тестуванні Android-додатку</p>
+      </div>
+      <div class="deal-tile reveal" onclick='openDealModal(2)'>
         <p class="deal-tag">Новим клієнтам</p>
         <p class="deal-title">-40% на перший DrumRoll</p>
         <p class="deal-desc">Знижка 40% на першу процедуру масажу тіла DrumRoll</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(2)'>
+      <div class="deal-tile reveal" onclick='openDealModal(3)'>
         <p class="deal-tag">Постійним клієнтам</p>
         <p class="deal-title">DrumRoll масаж тіла</p>
         <p class="deal-desc">Кожна 5-та процедура — безкоштовно</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(3)'>
+      <div class="deal-tile reveal" onclick='openDealModal(4)'>
         <p class="deal-tag">Косметика</p>
         <p class="deal-title">Професійна косметика зі знижками</p>
         <p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p>
@@ -700,7 +825,7 @@
 <section class="ai-section" id="ai-section"><a name="ai" id="ai"></a>
   <div class="ai-section-inner">
     <div class="ai-section-badge reveal visible">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/><path d="M5 17l.6 1.4L7 19l-1.4.6L5 21l-.6-1.4L3 19l1.4-.6L5 17z"/></svg>
       <span>AI-асистент Dr. Gomon</span>
     </div>
     <p class="ai-section-sub reveal visible">Залишились питання?</p>
@@ -734,10 +859,10 @@
 <!-- FOOTER -->
 <footer>
   <button class="footer-logo-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Вгору">
-    <picture><source srcset="logo-80.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon" width="80" height="80" style="width:80px; filter:invert(1) sepia(1) saturate(0.4) brightness(0.7); opacity:0.5;"></picture>
+    <picture><source srcset="logo-80.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon" width="80" height="80" style="width:80px; filter:var(--logo-filter-footer); opacity:0.5;"></picture>
   </button>
   <p>© 2026 <span>Dr. Gómon Cosmetology</span> · Черкаси · Тільки за попереднім записом</p>
-  <p style="margin-top:6px;"><a href="tel:+380733103110" style="color:var(--text-light); text-decoration:none; font-size:13px; letter-spacing:1px; transition:color 0.3s;">073-310-31-10</a></p>
+  <p style="margin-top:6px;"><a href="tel:+380733103110" style="color:var(--text-light); text-decoration:none; font-size:15px; letter-spacing:1px; transition:color 0.3s;">073-310-31-10</a></p>
   <div class="footer-payments" aria-label="Способи оплати">
     <span class="pay-item" data-tip="Розрахунок по терміналу"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Visa"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><text x="50%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.5" fill="#B8955A">VISA</text></svg></span>
     <span class="pay-item" data-tip="Приймаємо безконтактну оплату"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 38" role="img" aria-label="Mastercard"><rect width="60" height="38" rx="5" fill="rgba(255,255,255,0.06)" stroke="rgba(184,149,90,0.25)" stroke-width="1"/><circle cx="24" cy="19" r="10" fill="rgba(184,149,90,0.55)"/><circle cx="36" cy="19" r="10" fill="rgba(184,149,90,0.35)"/><path d="M30 12.2a10 10 0 0 1 0 13.6A10 10 0 0 1 30 12.2z" fill="rgba(184,149,90,0.45)"/></svg></span>
@@ -754,12 +879,63 @@
     el.addEventListener('pointerleave', function() { el.classList.remove('tip-on'); });
     el.addEventListener('pointercancel', function() { el.classList.remove('tip-on'); });
   });
+
+  // ── SITE THEME TOGGLE ──
+  (function() {
+    var modes = ['dark', 'light', 'auto'];
+    var saved = localStorage.getItem('site_theme') || 'dark';
+    function apply(mode) {
+      localStorage.setItem('site_theme', mode);
+      document.documentElement.setAttribute('data-theme', mode);
+      var label = document.getElementById('site-theme-label');
+      var icon = document.getElementById('site-theme-icon');
+      var btn = document.getElementById('site-theme-btn');
+      if (btn) btn.title = mode === 'dark' ? 'Світла тема' : mode === 'light' ? 'Авто' : 'Темна тема';
+      if (icon) {
+        if (mode === 'light') icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+        else if (mode === 'dark') icon.innerHTML = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+        else icon.innerHTML = '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 000 20z" fill="currentColor" opacity=".3"/>';
+      }
+    }
+    apply(saved);
+    window.toggleSiteTheme = function() {
+      var cur = localStorage.getItem('site_theme') || 'auto';
+      var next = modes[(modes.indexOf(cur) + 1) % modes.length];
+      apply(next);
+    };
+  })();
 </script>
 
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
   <button class="lightbox-close" id="lightboxClose" aria-label="Закрити">✕</button>
   <img id="lightboxImg" src="" alt="">
+</div>
+
+<!-- PROCEDURE DETAIL SHEET -->
+<div class="proc-detail-backdrop" id="procDetailBackdrop" onclick="if(event.target===this)closeProcDetail()">
+  <div class="proc-detail-sheet">
+    <div class="proc-detail-handle"></div>
+    <div class="proc-detail-title" id="procDetailTitle"></div>
+    <div class="proc-detail-price" id="procDetailPrice"></div>
+    <div class="proc-detail-dur" id="procDetailDur" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <span id="procDetailDurText"></span>
+    </div>
+    <div class="proc-detail-section" id="procDetailDescWrap" style="display:none">
+      <div class="proc-detail-label">Про процедуру</div>
+      <div class="proc-detail-text" id="procDetailDesc"></div>
+    </div>
+    <div class="proc-detail-section" id="procDetailPrepWrap" style="display:none">
+      <div class="proc-detail-label">Підготовка</div>
+      <div class="proc-detail-text" id="procDetailPrep"></div>
+    </div>
+    <div class="proc-detail-section" id="procDetailAfterWrap" style="display:none">
+      <div class="proc-detail-label">Після процедури</div>
+      <div class="proc-detail-text" id="procDetailAfter"></div>
+    </div>
+    <button class="proc-detail-close" onclick="closeProcDetail()">Закрити</button>
+  </div>
 </div>
 
 <script>
@@ -888,6 +1064,80 @@
     window.addEventListener('hashchange', checkHash);
   })();
 
+  // ── PROCEDURE DETAILS (click on price name → bottom sheet with description) ──
+  (function() {
+    var procData = null; // cache from /api/prices
+
+    function loadProcData() {
+      if (procData) return Promise.resolve(procData);
+      return fetch('/api/prices').then(function(r) { return r.json(); }).then(function(data) {
+        // Build flat lookup: name → item
+        var lookup = {};
+        (data || []).forEach(function(cat) {
+          (cat.items || []).forEach(function(it) {
+            if (it.desc) lookup[it.name.toLowerCase()] = it;
+          });
+        });
+        procData = lookup;
+        return lookup;
+      });
+    }
+
+    window.openProcDetail = function(name) {
+      loadProcData().then(function(lookup) {
+        var item = lookup[(name || '').toLowerCase()];
+        if (!item) return;
+        document.getElementById('procDetailTitle').textContent = item.name;
+        document.getElementById('procDetailPrice').textContent = item.price || '';
+
+        var durEl = document.getElementById('procDetailDur');
+        if (item.duration) { document.getElementById('procDetailDurText').textContent = item.duration; durEl.style.display = ''; }
+        else durEl.style.display = 'none';
+
+        var dw = document.getElementById('procDetailDescWrap');
+        if (item.desc) { document.getElementById('procDetailDesc').textContent = item.desc; dw.style.display = ''; }
+        else dw.style.display = 'none';
+
+        var pw = document.getElementById('procDetailPrepWrap');
+        if (item.prep) { document.getElementById('procDetailPrep').textContent = item.prep; pw.style.display = ''; }
+        else pw.style.display = 'none';
+
+        var aw = document.getElementById('procDetailAfterWrap');
+        if (item.aftercare) { document.getElementById('procDetailAfter').textContent = item.aftercare; aw.style.display = ''; }
+        else aw.style.display = 'none';
+
+        document.getElementById('procDetailBackdrop').classList.add('is-open');
+      });
+    };
+
+    window.closeProcDetail = function() {
+      document.getElementById('procDetailBackdrop').classList.remove('is-open');
+    };
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeProcDetail();
+    });
+
+    // Preload data when service modal opens
+    var origOpen = window.openServiceModal || function(){};
+    // Will hook after modal renders
+  })();
+
+  // Override renderPrices to make names clickable
+  var _origRenderPrices = renderPrices;
+  renderPrices = function(prices) {
+    if (!prices || !prices.length) return '';
+    return prices.map(function(g) {
+      var rows = g.rows.map(function(r) {
+        var name = r[0] || '';
+        var sub = r[1] ? '<small>' + r[1] + '</small>' : '';
+        var nameHtml = '<span class="price-name-link" onclick="openProcDetail(\'' + name.replace(/'/g, "\\'") + '\')">' + name + '</span>';
+        return '<div class="price-row"><span class="price-name">' + nameHtml + sub + '</span><span class="price-val">' + r[2] + '</span></div>';
+      }).join('');
+      var note = g.note ? '<div class="price-note">' + g.note + '</div>' : '';
+      return '<div class="price-group"><div class="price-group-title">' + g.title + '</div>' + rows + note + '</div>';
+    }).join('');
+  };
 
   // ── LIGHTBOX ──
   document.addEventListener('DOMContentLoaded', function() {
@@ -981,7 +1231,7 @@ document.addEventListener('keydown', function(e) {
     <button class="deal-modal-close" onclick="document.getElementById('dealModal').classList.remove('open')">&times;</button>
     <p class="deal-modal-tag" id="dealModalTag"></p>
     <p class="deal-modal-title" id="dealModalTitle"></p>
-    <div class="deal-modal-desc" id="dealModalDesc" style="font-size:14px;line-height:1.7;margin-bottom:0"></div>
+    <div class="deal-modal-desc" id="dealModalDesc" style="font-size:16px;line-height:1.7;margin-bottom:0"></div>
     <a class="deal-modal-btn" href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">До додатку</a>
   </div>
 </div>

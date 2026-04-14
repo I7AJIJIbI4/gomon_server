@@ -156,7 +156,7 @@ function sendCallbackSMS($caller_id, $client) {
         CURLOPT_HTTPHEADER     => ['Content-Type: application/json; charset=utf-8'],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYPEER => true,
     ]);
     $response  = curl_exec($ch);
     $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);

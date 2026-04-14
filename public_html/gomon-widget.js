@@ -313,7 +313,7 @@
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      color: rgba(247,243,238,0.45);
+      color: #8a7a5a;
       transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
     #gw-mic.listening, #gw-inline-mic.listening {
@@ -334,6 +334,7 @@
       gap: 10px;
       background: rgba(184,149,90,0.06);
       border: 1px solid rgba(184,149,90,0.28);
+      color: var(--cream, #f7f3ee);
       border-radius: 14px;
       padding: 10px 12px 10px 16px;
       margin-top: 32px;
@@ -350,7 +351,7 @@
       background: transparent;
       border: none;
       outline: none;
-      color: #f7f3ee;
+      color: inherit;
       font-family: 'Jost', sans-serif;
       font-size: 15px;
       line-height: 1.5;
@@ -358,7 +359,7 @@
       max-height: 90px;
       padding: 4px 0;
     }
-    #gw-inline-textarea::placeholder { color: rgba(247,243,238,0.35); }
+    #gw-inline-textarea::placeholder { color: #8a7a5a; }
     #gw-inline-send {
       width: 40px; height: 40px;
       border-radius: 10px;
@@ -702,11 +703,13 @@
       els.panel.style.maxHeight = '';
     }
 
+    var _chatOpenConvSent = false;
     function openModal() {
       if (isOpen) return;
       isOpen = true;
-      if (typeof gtag === 'function') {
+      if (!_chatOpenConvSent && typeof gtag === 'function') {
         gtag('event', 'conversion', {'send_to': 'AW-719653819/WaavCKa45JAcELuXlNcC'});
+        _chatOpenConvSent = true;
       }
       document.body.style.overflow = 'hidden';
       renderAllMessages(messages, els.messagesEl);

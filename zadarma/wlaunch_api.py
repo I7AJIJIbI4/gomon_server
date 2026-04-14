@@ -283,10 +283,10 @@ def find_wlaunch_client_id(phone):
     if not normalized:
         return None
 
-    # 1. Direct client search
+    # 1. Direct client search (with phone filter)
     url = "{}/company/{}/client".format(WLAUNCH_API_URL, COMPANY_ID)
     try:
-        resp = requests.get(url, headers=HEADERS, params={"page": 0, "size": 50, "sort": "created,desc"}, timeout=10)
+        resp = requests.get(url, headers=HEADERS, params={"page": 0, "size": 50, "sort": "created,desc", "phone": normalized}, timeout=10)
         resp.raise_for_status()
         for c in resp.json().get("content", []):
             cp = ''.join(filter(str.isdigit, c.get("phone", "") or ""))

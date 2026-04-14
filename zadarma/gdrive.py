@@ -319,7 +319,7 @@ def create_visit_folder(client_name, date, procedure_name):
     # GomonClinic / ClientName / YYYY-MM-DD_ProcedureName / До
     before_id = _find_or_create_folder('До', visit_folder_id)
     # GomonClinic / ClientName / YYYY-MM-DD_ProcedureName / Після
-    after_id = _find_or_create_folder('��ісля', visit_folder_id)
+    after_id = _find_or_create_folder('Після', visit_folder_id)
 
     # Share visit folder with anyone (editor) — subfolders inherit
     _share_anyone_editor(visit_folder_id)

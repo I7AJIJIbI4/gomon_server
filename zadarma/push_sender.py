@@ -11,7 +11,7 @@ logger = logging.getLogger('push_sender')
 
 DB_PATH          = '/home/gomoncli/zadarma/users.db'
 VAPID_PRIVATE_KEY = '/home/gomoncli/zadarma/vapid_private.pem'
-VAPID_CLAIMS     = {'sub': 'mailto:admin@gomonclinic.com'}
+VAPID_CLAIMS     = {'sub': 'mailto:admin@drgomon.beauty'}
 
 
 def init_push_tables():
