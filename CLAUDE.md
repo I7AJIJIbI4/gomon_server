@@ -200,6 +200,7 @@ admAiToggleMic()     // Web Speech API (uk-UA), автосабміт після 
 | `/api/me` | GET | Дані авторизованого клієнта + `is_admin`, `admin_role`, `specialist` |
 | `/api/me/appointments` | GET | Записи клієнта: WLaunch (services_json) + manual_appointments, фільтрує CANCELLED |
 | `/api/me/appointments/cancel` | POST | Скасовує запис у WLaunch + оновлює БД |
+| `/api/chat/cancel-appointment` | POST | AI-скасування: `{phone, date?}` → cancel nearest/specific → WLaunch + notifier |
 | `/api/prices` | GET | Прайс у форматі `[{cat, items:[{name,price}]}]` |
 | `/api/feed` | GET | Пости з Telegram (feed.db) |
 | `/api/health` | GET | Стан БД, кількість клієнтів |
@@ -319,22 +320,27 @@ Cron (09:00 і 21:00)
 
 ## Cron (crontab -l)
 
+Всі часи — **Kyiv** (`TZ=Europe/Kyiv` в crontab).
+
 ```
+TZ=Europe/Kyiv
 VENV=/opt/gomon/venv/bin/python
+APP=/opt/gomon/app/zadarma
 
-0 * * * *       $VENV /opt/gomon/app/zadarma/sync_appointments.py >> /var/log/gomon/sync.log 2>&1
-0 9,21 * * *    /opt/gomon/app/zadarma/sync_with_notification.sh >> /var/log/gomon/sync.log 2>&1
-0 9 * * *       $VENV /opt/gomon/app/zadarma/sms_reminder.py >> /var/log/gomon/sms.log 2>&1
-*/15 8-22 * * * $VENV /opt/gomon/app/zadarma/push_reminder.py >> /var/log/gomon/push.log 2>&1
-0 17 * * *      $VENV /opt/gomon/app/zadarma/appt_reminder.py --specialist --tomorrow >> /var/log/gomon/appt.log 2>&1
-30 18 * * *     $VENV /opt/gomon/app/zadarma/photo_reminder.py --create >> /var/log/gomon/photo.log 2>&1
-0 8 * * *       $VENV /opt/gomon/app/zadarma/photo_reminder.py --check >> /var/log/gomon/photo.log 2>&1
-0 3 * * *       /opt/gomon/backup.sh >> /var/log/gomon/backup.log 2>&1
-# (НЕ В CRON) Нагадування за 24 год: 0 10,18 * * * appt_reminder.py --reminder
-# (НЕ В CRON) Відгук після процедури:  0 20   * * * appt_reminder.py --feedback
+0 * * * *       cd $APP && $VENV sync_appointments.py          # Sync WLaunch
+0 9,21 * * *    cd $APP && bash sync_with_notification.sh       # Sync clients + TG звіт
+0 9-21 * * *    cd $APP && $VENV sms_reminder.py                # Повторні процедури (TG→SMS)
+*/15 8-22 * * * cd $APP && $VENV push_reminder.py               # Push нагадування
+0 20 * * *      cd $APP && $VENV appt_reminder.py --specialist --tomorrow  # Брифінг спеціалістам
+30 21 * * *     cd $APP && $VENV photo_reminder.py --create     # Drive папки + TG
+0 11 * * *      cd $APP && $VENV photo_reminder.py --check      # Перевірка фото
+0 7,19 * * *    cd $APP && $VENV photo_cache.py                 # Кеш фото
+0 3 * * *       SQLite backup → /opt/gomon/backups/ (14 днів)
 ```
 
-> **Примітка:** Watchdog cron-скрипти (`check_flask.sh`, `check_and_run_bot.sh`, `check_tg_business.sh`) більше не потрібні — замінені на systemd services з auto-restart.
+**НЕ В CRON** (обслуговується WLaunch): нагадування за 24 год, відгук після процедури.
+
+> **Примітка:** Watchdog cron-скрипти замінені на systemd services (`gomon-api`, `gomon-bot`, `gomon-tgbiz`) з auto-restart.
 
 ---
 
@@ -570,7 +576,7 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **WLaunch breaks**: перерви синхронізуються через `/resource/{rid}/schedule/day` (type=OFF). Видалення через POST з `{frame:{active:false}}`
 - **Sync**: `sync_appointments.py` мержить нові записи зі старими по `appt_id` (до 50). `--deep` для повної історії
 - **Parse services**: `pwa_api.py::parse_services()` фільтрує CANCELLED при поверненні клієнту
-- **OTP доставка**: TG-first (plain text, без Viber-суфіксу) → SMS з `@www.gomonclinic.com #code` для Viber auto-fill
+- **OTP доставка**: TG-first (plain text, без Viber-суфіксу) → SMS з `@drgomon.beauty #code` для Viber auto-fill
 - **Notification stack (notifier.py)**: Push (завжди, fire-and-forget) → TG (основний) → SMS (fallback тільки якщо TG fail/невідомий). Дедуплікація через `notification_log` (UNIQUE phone+type+reference+channel). АКТИВНО: cancellation клієнт+спеціаліст, spec_new_appt (о 20:00 дня створення). НЕ АКТИВНО: reminder_24h, post_visit.
 - **send_cancellation**: викликається в `DELETE /api/admin/calendar/appointments/<id>`. Надсилає клієнту підтвердження + спеціалісту внутрішнє повідомлення. WLaunch-запис: specialist витягується з services_json.
 - **PWA vs Бот юзери**: `users` таблиця в users.db = Telegram-бот. Реальні PWA-юзери = `otp_sessions.db::sessions`
@@ -581,6 +587,13 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються. Картка показує `procedure.price` (з prices.json). Якщо клієнт новий — картка показує поле вводу телефону; при підтвердженні клієнт автоматично зберігається через `POST /api/admin/clients/add`. `_load_clients_for_ai()` сортує клієнтів без `NULLS LAST` (не підтримується SQLite 3.6).
 - **Specialist stats filter**: `/api/admin/stats` для ролі `specialist` фільтрує `visits_month` і `recent` по `specialist` полю у `services_json`. Тестовий акаунт `16452040153` → `'anastasia'` в `SPECIALIST_MAP`.
 - **Push dedup**: `push_sender.py::save_subscription()` лімітує до 2 активних підписок на телефон (найновіші), щоб уникнути дублікатів push.
+- **Часові зони**: СКРІЗЬ kyiv_now() — Python (tz_utils), PHP (date_default_timezone_set), cron (TZ=Europe/Kyiv). НІКОЛИ datetime.now() або utcnow() для порівняння дат.
+- **Слово "клініка"**: ЗАБОРОНЕНО у всіх текстах для клієнтів. Замість цього: "Dr. Gomon Cosmetology", "простір Dr. Gomon", "студія", "ми"/"у нас". Правило прописане в system_prompt.txt.
+- **AI скасування записів**: TG Business бот і GomonAI в додатку можуть скасовувати записи клієнтів через теги `<CANCEL>` / `<CANCEL date="YYYY-MM-DD">`. AI спочатку уточнює, потім скасовує найближчий або вказаний запис. Скасування проходить через WLaunch + local DB + notifier (як при скасуванні адміном). Гостям — відмова з порадою авторизуватись.
+- **AI НЕ записує**: Бот не створює записи. При запиті на запис збирає ПІБ, телефон, процедуру, час → ескалює до лікаря через `<ESCALATE>`.
+- **TG Markdown fallback**: `parse_mode='Markdown'` з автоматичним retry без parse_mode якщо TG API відхиляє (кривий markdown).
+- **Admin client update**: `POST /api/admin/clients/add` оновлює ім'я/прізвище існуючого клієнта (не тільки створює нового).
+- **WLaunch client search**: `phone` фільтр в API запиті (не тільки перші 50 клієнтів).
 
 ---
 
@@ -738,21 +751,9 @@ var conversionMap = {
 - **Busy слоти** — відображаються напівпрозоро, не клікабельні
 - Адмін (`full`/`superadmin`) бачить ВСЕ як раніше
 
-### Cron (оновлено 2026-04-14, post-migration)
+### Cron (оновлено 2026-04-14)
 
-```
-VENV=/opt/gomon/venv/bin/python
-
-# Watchdog cron більше не потрібен — systemd services (gomon-api, gomon-bot, gomon-tgbiz)
-0 * * * *       $VENV /opt/gomon/app/zadarma/sync_appointments.py >> /var/log/gomon/sync.log 2>&1
-0 9,21 * * *    /opt/gomon/app/zadarma/sync_with_notification.sh >> /var/log/gomon/sync.log 2>&1
-0 9 * * *       $VENV /opt/gomon/app/zadarma/sms_reminder.py >> /var/log/gomon/sms.log 2>&1
-*/15 8-22 * * * $VENV /opt/gomon/app/zadarma/push_reminder.py >> /var/log/gomon/push.log 2>&1
-0 17 * * *      $VENV /opt/gomon/app/zadarma/appt_reminder.py --specialist --tomorrow >> /var/log/gomon/appt.log 2>&1
-30 18 * * *     $VENV /opt/gomon/app/zadarma/photo_reminder.py --create >> /var/log/gomon/photo.log 2>&1   # 21:30 Kyiv
-0 8 * * *       $VENV /opt/gomon/app/zadarma/photo_reminder.py --check >> /var/log/gomon/photo.log 2>&1    # 11:00 Kyiv
-0 3 * * *       /opt/gomon/backup.sh >> /var/log/gomon/backup.log 2>&1
-```
+Дивись головну секцію "Cron (crontab -l)" вище — єдине джерело правди. `TZ=Europe/Kyiv`.
 
 ---
 
@@ -778,8 +779,11 @@ GomonAI працює в **трьох незалежних каналах** з є
 - **Telegram**: "Ти спілкуєшся в Telegram бізнес-акаунті..." + правила ескалації
 
 Динамічні доповнення (при кожному запиті):
-- Дані клієнта (ім'я, телефон, попередні візити) — з `users.db`
-- Актуальний прайс — з `prices.json` (перше речення опису кожної процедури)
+- Дані клієнта (ім'я, телефон) — з `users.db`
+- **Майбутні записи** (активні + скасовані з позначкою) — з `services_json`
+- **Історія візитів** (останні 5) — з `services_json`
+- Якщо телефон невідомий (TG) — підказка прив'язати через `/start @DrGomonConciergeBot`
+- Актуальний прайс — з `prices.json`
 - Поточні акції — з `promos.json`
 
 ### chat.php — модель fallback chain
@@ -805,8 +809,9 @@ claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claud
    - `_build_system_prompt()` — prompt + клієнт + прайс + акції
    - `_get_conversation_history()` — останні 20 повідомлень з БД, alternating roles
    - `_call_anthropic()` → claude-sonnet-4-5
-   - Перевірка `<ESCALATE>` тегу
-   - `_send_ai_reply()` — через Business Bot API з `business_connection_id`
+   - Перевірка `<CANCEL>` / `<CANCEL date="YYYY-MM-DD">` → `_cancel_client_appointment()` → WLaunch + DB + notifier
+   - Перевірка `<ESCALATE>` тегу → повідомлення адміну
+   - `_send_ai_reply()` — через Business Bot API з `business_connection_id`, `parse_mode='Markdown'` з plain text fallback
    - `_save_ai_message()` — зберігає з `sender_id='ai_bot'`
 
 **Ескалація:**
