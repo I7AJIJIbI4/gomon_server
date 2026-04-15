@@ -4733,8 +4733,9 @@ function closePromoModal() {
 
 function renderAppointments() {
   const el       = document.getElementById('appts-list');
-  const upcoming = appointments.filter(a => a.status === 'upcoming');
-  const done     = appointments.filter(a => a.status === 'done');
+  const upcoming  = appointments.filter(a => a.status === 'upcoming');
+  const cancelled = appointments.filter(a => a.status === 'cancelled');
+  const done      = appointments.filter(a => a.status === 'done');
   let html = '';
 
   if (upcoming.length) {
@@ -4742,6 +4743,15 @@ function renderAppointments() {
     html += upcoming.map((a,i) => `<div class="appt-card upcoming" onclick="openApptDetail(${i},'upcoming')" style="cursor:pointer">
       <span class="appt-status status-upcoming">Заплановано</span>
       <p class="appt-name">${_esc(a.service || a.name || '')}</p>
+      <p class="appt-meta"><span>${fmtDate(a.date)}</span>${a.time ? '<span>' + _esc(a.time) + '</span>' : ''}</p>
+    </div>`).join('');
+  }
+
+  if (cancelled.length) {
+    html += '<p class="appt-group-label">Скасовані</p>';
+    html += cancelled.map((a,i) => `<div class="appt-card cancelled" onclick="openApptDetail(${i},'cancelled')" style="cursor:pointer;opacity:0.6">
+      <span class="appt-status" style="color:var(--cancel-fg)">Скасовано</span>
+      <p class="appt-name" style="text-decoration:line-through">${_esc(a.service || a.name || '')}</p>
       <p class="appt-meta"><span>${fmtDate(a.date)}</span>${a.time ? '<span>' + _esc(a.time) + '</span>' : ''}</p>
     </div>`).join('');
   }
@@ -4797,26 +4807,26 @@ function openApptDetail(idx, type) {
 
   var rows = '';
   // Дата
-  rows += '<div class="appt-detail-row"><span class="appt-detail-icon">📅</span><div><div class="appt-detail-label">Дата</div><div class="appt-detail-val">' + _esc(fmtDate(a.date)) + '</div></div></div>';
+  rows += '<div class="appt-detail-row"><span class="appt-detail-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><div><div class="appt-detail-label">Дата</div><div class="appt-detail-val">' + _esc(fmtDate(a.date)) + '</div></div></div>';
   // Час
   if (a.time) {
-    rows += '<div class="appt-detail-row"><span class="appt-detail-icon">🕐</span><div><div class="appt-detail-label">Час</div><div class="appt-detail-val">' + _esc(a.time.slice(0,5)) + '</div></div></div>';
+    rows += '<div class="appt-detail-row"><span class="appt-detail-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><div><div class="appt-detail-label">Час</div><div class="appt-detail-val">' + _esc(a.time.slice(0,5)) + '</div></div></div>';
   }
   // Спеціаліст
   if (a.specialist) {
     var specName = _specDisplayName(a.specialist);
     var dotClass = a.specialist === 'victoria' || a.specialist === 'anastasia' ? a.specialist : '';
-    rows += '<div class="appt-detail-row"><span class="appt-detail-icon">👩‍⚕️</span><div><div class="appt-detail-label">Спеціаліст</div><div class="appt-detail-val"><span class="appt-detail-spec">' + (dotClass ? '<span class="appt-detail-spec-dot ' + dotClass + '"></span>' : '') + _esc(specName) + '</span></div></div></div>';
+    rows += '<div class="appt-detail-row"><span class="appt-detail-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><div><div class="appt-detail-label">Спеціаліст</div><div class="appt-detail-val"><span class="appt-detail-spec">' + (dotClass ? '<span class="appt-detail-spec-dot ' + dotClass + '"></span>' : '') + _esc(specName) + '</span></div></div></div>';
   }
   // Ціна
   var price = _lookupPrice(a.service);
   if (price) {
-    rows += '<div class="appt-detail-row"><span class="appt-detail-icon">💰</span><div><div class="appt-detail-label">Вартість</div><div class="appt-detail-val" style="color:var(--gold)">' + _esc(price) + '</div></div></div>';
+    rows += '<div class="appt-detail-row"><span class="appt-detail-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div><div class="appt-detail-label">Вартість</div><div class="appt-detail-val" style="color:var(--gold)">' + _esc(price) + '</div></div></div>';
   }
   // Тривалість
   if (a.duration_min && a.duration_min !== 60) {
     var durText = a.duration_min < 60 ? a.duration_min + ' хв' : Math.floor(a.duration_min/60) + ' год' + (a.duration_min%60 ? ' ' + a.duration_min%60 + ' хв' : '');
-    rows += '<div class="appt-detail-row"><span class="appt-detail-icon">⏱</span><div><div class="appt-detail-label">Тривалість</div><div class="appt-detail-val">' + _esc(durText) + '</div></div></div>';
+    rows += '<div class="appt-detail-row"><span class="appt-detail-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><line x1="12" y1="1" x2="12" y2="3"/></svg></span><div><div class="appt-detail-label">Тривалість</div><div class="appt-detail-val">' + _esc(durText) + '</div></div></div>';
   }
 
   document.getElementById('appt-detail-rows').innerHTML = rows;

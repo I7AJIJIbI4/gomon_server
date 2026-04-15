@@ -1,20 +1,38 @@
-# bot.py - Final version with admin functions
+# bot.py - Migrated to python-telegram-bot v20+
 import os
 import sys
 import time
 import logging
 import logging.handlers
 import subprocess
-import threading
 import atexit
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
-from telegram import ChatAction, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from telegram.constants import ChatAction
 from user_db import init_db, is_authorized_user_simple, get_user_info
 from config import TELEGRAM_TOKEN, ADMIN_USER_ID, ADMIN_USER_IDS, MAP_URL, SCHEME_URL, validate_config
 
 is_authenticated = is_authorized_user_simple
 
 DB_PATH = '/home/gomoncli/zadarma/users.db'
+
+_pay_state = {}
+
+
+async def _safe_reply(msg, text, **kwargs):
+    """Send message with Markdown, fallback to plain text if parse fails."""
+    try:
+        return await msg.reply_text(text, **kwargs)
+    except Exception:
+        return await msg.reply_text(text, **kwargs)
+
+
+async def _safe_send(bot, chat_id, text, **kwargs):
+    """Send message with Markdown, fallback to plain text if parse fails."""
+    try:
+        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
+    except Exception:
+        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,50 +44,61 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Reply keyboard for authenticated users
+def _get_main_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("📋 Мої записи"), KeyboardButton("📱 Додаток", web_app=WebAppInfo(url="https://drgomon.beauty/app/"))],
+        [KeyboardButton("📍 Як знайти"), KeyboardButton("📞 Зателефонувати")],
+        [KeyboardButton("📢 Канал акцій")]
+    ], resize_keyboard=True)
+
+
 def create_pid_file():
     pid_file = "/home/gomoncli/zadarma/bot.pid"
     try:
         with open(pid_file, 'w') as f:
             f.write(str(os.getpid()))
-        logger.info(f"📁 PID файл створено: {pid_file} (PID: {os.getpid()})")
-        
+        logger.info(f"PID file created: {pid_file} (PID: {os.getpid()})")
+
         def cleanup_pid():
             try:
                 if os.path.exists(pid_file):
                     os.remove(pid_file)
-                    logger.info(f"📁 PID файл видалено: {pid_file}")
+                    logger.info(f"PID file removed: {pid_file}")
             except Exception as e:
-                logger.error(f"❌ Помилка видалення PID файлу: {e}")
-        
+                logger.error(f"Error removing PID file: {e}")
+
         atexit.register(cleanup_pid)
-        
+
         import signal
         def signal_handler(signum, frame):
-            logger.info(f"📡 Отримано сигнал {signum}, завершуємо роботу...")
+            logger.info(f"Signal {signum} received, shutting down...")
             cleanup_pid()
             sys.exit(0)
-        
+
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
-        
-    except Exception as e:
-        logger.error(f"❌ Помилка створення PID файлу: {e}")
 
-def send_error_to_admin(bot, message):
+    except Exception as e:
+        logger.error(f"Error creating PID file: {e}")
+
+
+async def send_error_to_admin(bot, message):
     try:
-        bot.send_message(chat_id=ADMIN_USER_ID, text=message, parse_mode='Markdown')
-        logger.info(f"📤 Повідомлення про помилку відправлено адміну: {message}")
+        await bot.send_message(chat_id=ADMIN_USER_ID, text=message)
+        logger.info(f"Error message sent to admin: {message}")
     except Exception as e:
-        logger.error(f"❌ Не вдалося відправити повідомлення адміну: {e}")
+        logger.error(f"Failed to send error message to admin: {e}")
 
-def start_command(bot, update):
+
+async def start_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username
     first_name = update.effective_user.first_name
 
-    logger.info(f"👤 /start викликано користувачем: {user_id} (@{username}, {first_name})")
+    logger.info(f"/start called by user: {user_id} (@{username}, {first_name})")
 
-    # Deep link: /start connect_380XXXXXXXXX — автоприв'язка телефону з PWA
+    # Deep link: /start connect_380XXXXXXXXX — auto-link phone from PWA
     text = update.message.text or ''
     parts = text.split()
     if len(parts) > 1 and parts[1].startswith('connect_'):
@@ -81,39 +110,35 @@ def start_command(bot, update):
         elif len(digits) == 9:
             digits = '380' + digits
         if len(digits) >= 11:
-            # Не перезаписувати якщо вже прив'язаний інший номер
+            # Don't overwrite if already linked to a different number
             import sqlite3 as _sq
             _uc = _sq.connect('/home/gomoncli/zadarma/users.db')
             _existing = _uc.execute('SELECT phone FROM users WHERE telegram_id=?', (user_id,)).fetchone()
             _uc.close()
             if _existing and _existing[0] and _existing[0] != digits:
                 logger.info(f"Deep link connect: {user_id} already has phone {_existing[0]}, ignoring {digits}")
-                bot.send_message(chat_id=update.message.chat_id,
-                    text=f"Telegram вже підключено до номеру {_existing[0][-10:].replace('380','0',1)}",
-                    parse_mode='Markdown')
+                await update.message.reply_text(
+                    f"Telegram вже підключено до номеру {_existing[0][-10:].replace('380','0',1)}")
                 return
             from user_db import store_user
             store_user(user_id, digits, username, first_name)
             logger.info(f"Deep link connect: {user_id} -> {digits}")
-            bot.send_message(
-                chat_id=update.message.chat_id,
-                text=(
-                    f"Telegram підключено!\n\n"
-                    f"Тепер ви отримуватимете нагадування про записи, "
-                    f"акції та персональні рекомендації.\n\n"
-                    f"/app - Наш застосунок, який точно Вам допоможе\n"
-                    f"/my_services - Ваші минулі і майбутні записи\n"
-                    f"/map - Знайти нас на мапі\n"
-                    f"/scheme - Побачити будівлю на фото\n"
-                    f"/channel - Актуальні новини та акції в ТГ каналі\n"
-                    f"/call - Зателефонувати лікарю Вікторії\n\n"
-                    f"Швидкий доступ: кнопка ☰ (меню) зліва внизу"
-                ),
-                parse_mode='Markdown'
+            await update.message.reply_text(
+                f"Telegram підключено!\n\n"
+                f"Тепер ви отримуватимете нагадування про записи, "
+                f"акції та персональні рекомендації.\n\n"
+                f"/app - Наш застосунок, який точно Вам допоможе\n"
+                f"/my_services - Ваші минулі і майбутні записи\n"
+                f"/map - Знайти нас на мапі\n"
+                f"/scheme - Побачити будівлю на фото\n"
+                f"/channel - Актуальні новини та акції в ТГ каналі\n"
+                f"/call - Зателефонувати лікарю Вікторії\n\n"
+                f"Швидкий доступ: кнопка ☰ (меню) зліва внизу",
+                reply_markup=_get_main_keyboard()
             )
             return
         else:
-            logger.warning(f"⚠️ Deep link connect: invalid phone '{phone}' from {user_id}")
+            logger.warning(f"Deep link connect: invalid phone '{phone}' from {user_id}")
 
     try:
         if is_authenticated(user_id):
@@ -129,7 +154,10 @@ def start_command(bot, update):
                 "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=welcome_message, parse_mode='Markdown')
+            await update.message.reply_text(
+                welcome_message,
+                reply_markup=_get_main_keyboard()
+            )
         else:
             unauthorized_message = (
                 f"Вітаємо, {first_name}!\n\n"
@@ -139,77 +167,69 @@ def start_command(bot, update):
                 "Якщо код не приходить у Telegram -- перевiрте SMS."
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=unauthorized_message, parse_mode='Markdown')
+            await update.message.reply_text(unauthorized_message)
 
             try:
-                from telegram import KeyboardButton, ReplyKeyboardMarkup
+                from telegram import ReplyKeyboardMarkup as RKM
 
                 keyboard = [[KeyboardButton("Поділитися номером", request_contact=True)]]
-                reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+                reply_markup = RKM(keyboard, one_time_keyboard=True, resize_keyboard=True)
                 button_message = "Натисніть кнопку нижче для авторизації:"
-                
-                # Відправляємо зображення з текстом і кнопкою
+
+                # Send image with text and button
                 try:
                     with open('/home/gomoncli/zadarma/introscreen.png', 'rb') as photo:
-                        bot.send_photo(
-                            chat_id=update.message.chat_id, 
+                        await context.bot.send_photo(
+                            chat_id=update.message.chat_id,
                             photo=photo,
                             caption=button_message,
                             reply_markup=reply_markup
                         )
                 except FileNotFoundError:
-                    # Якщо файл не знайдено, відправляємо просто текст з кнопкою
-                    bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text=button_message,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
+                    # If file not found, send just text with button
+                    await update.message.reply_text(
+                        button_message,
+                        reply_markup=reply_markup)
             except Exception:
                 fallback_message = (
                     "📱 Відправте свій номер телефону текстом\n\n"
                     "📝 Формат: +380XXXXXXXXX"
                 )
-                bot.send_message(chat_id=update.message.chat_id, text=fallback_message, parse_mode='Markdown')
-            
-    except Exception as e:
-        logger.exception(f"❌ Критична помилка в start_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Технічна помилка. Зверніться до підтримки: 073-310-31-10",
-            parse_mode='Markdown'
-        )
+                await update.message.reply_text(fallback_message)
 
-def contact_handler(bot, update):
+    except Exception as e:
+        logger.exception(f"Critical error in start_command: {e}")
+        await update.message.reply_text(
+            "❌ Технічна помилка. Зверніться до підтримки: 073-310-31-10")
+
+
+async def contact_handler(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username or "N/A"
     first_name = update.effective_user.first_name or "N/A"
-    
-    logger.info(f"📱 Отримано контакт від користувача: {user_id} (@{username})")
-    
+
+    logger.info(f"Contact received from user: {user_id} (@{username})")
+
     try:
         contact = update.message.contact
         phone_number = contact.phone_number
-        
+
         from user_db import store_user
         from telegram import ReplyKeyboardRemove
-        
+
         store_result = store_user(user_id, phone_number, username, first_name)
-        
+
         success_message = (
             f"✅ Дякуємо, {first_name}!\n\n"
             f"📱 Ваш номер {phone_number} збережено\n"
             f"🔍 Перевіряємо дозволи доступу...\n\n"
             f"Зачекайте, будь ласка..."
         )
-        
-        bot.send_message(
-            chat_id=update.message.chat_id, 
-            text=success_message,
-            reply_markup=ReplyKeyboardRemove(),
-            parse_mode='Markdown'
-        )
-        
+
+        await update.message.reply_text(
+            success_message,
+            reply_markup=ReplyKeyboardRemove())
+
         if is_authenticated(user_id):
             authorized_message = (
                 f"Вітаємо, {first_name}!\n\n"
@@ -223,7 +243,10 @@ def contact_handler(bot, update):
                 "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=authorized_message, parse_mode='Markdown')
+            await update.message.reply_text(
+                authorized_message,
+                reply_markup=_get_main_keyboard()
+            )
         else:
             denied_message = (
                 "Ваш номер не зареєстровано в системі Dr. Gomon Cosmetology\n\n"
@@ -242,57 +265,57 @@ def contact_handler(bot, update):
                 "/call - Зателефонувати лiкарю Вiкторiї"
             )
 
-            bot.send_message(chat_id=update.message.chat_id, text=denied_message, parse_mode='Markdown')
-            
-    except Exception as e:
-        logger.exception(f"❌ Помилка в contact_handler: {e}")
-        from telegram import ReplyKeyboardRemove
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Виникла помилка. Спробуйте пізніше",
-            reply_markup=ReplyKeyboardRemove(),
-            parse_mode='Markdown'
-        )
+            await update.message.reply_text(denied_message)
 
-def call_command(bot, update):
+    except Exception as e:
+        logger.exception(f"Error in contact_handler: {e}")
+        from telegram import ReplyKeyboardRemove
+        await update.message.reply_text(
+            "❌ Виникла помилка. Спробуйте пізніше",
+            reply_markup=ReplyKeyboardRemove())
+
+
+async def call_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📞 /call викликано користувачем: {user_id}")
-    
+    logger.info(f"/call called by user: {user_id}")
+
     try:
         call_message = (
             "📞 Телефон лікаря Вікторії\n\n"
             "📱 +380996093860\n\n"
             "💡 Натисніть на номер для виклику"
         )
-        
-        bot.send_message(chat_id=update.message.chat_id, text=call_message, parse_mode='Markdown')
-        logger.info(f"📞 Телефон лікаря відправлено користувачу {user_id}")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в call_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання телефону", parse_mode='Markdown')
 
-def map_command(bot, update):
+        await update.message.reply_text(call_message)
+        logger.info(f"Phone sent to user {user_id}")
+
+    except Exception as e:
+        logger.exception(f"Error in call_command: {e}")
+        await update.message.reply_text("❌ Помилка отримання телефону")
+
+
+async def map_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🗺️ /map викликано користувачем: {user_id}")
-    
+    logger.info(f"/map called by user: {user_id}")
+
     try:
         map_message = (
             "🗺️ Розташування Dr. Gomon Cosmetology на мапі\n\n"
             "📍 Посилання: https://maps.app.goo.gl/iqNLsScEutJhVKLi7\n\n"
             "🚗 Оберіть зручний маршрут"
         )
-        
-        bot.send_message(chat_id=update.message.chat_id, text=map_message, parse_mode='Markdown')
-        logger.info(f"🗺️ Карта відправлена користувачу {user_id}")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в map_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання карти", parse_mode='Markdown')
 
-def scheme_command(bot, update):
+        await update.message.reply_text(map_message)
+        logger.info(f"Map sent to user {user_id}")
+
+    except Exception as e:
+        logger.exception(f"Error in map_command: {e}")
+        await update.message.reply_text("❌ Помилка отримання карти")
+
+
+async def scheme_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🧭 /scheme викликано користувачем: {user_id}")
+    logger.info(f"/scheme called by user: {user_id}")
 
     AERIAL   = '/home/gomoncli/public_html/sitepro/location-aerial.jpg'
     ENTRANCE = '/home/gomoncli/public_html/sitepro/location-entrance.jpg'
@@ -307,76 +330,65 @@ def scheme_command(bot, update):
                 pass
 
         if len(media) == 2:
-            bot.send_media_group(
+            await context.bot.send_media_group(
                 chat_id=update.message.chat_id,
                 media=[
-                    InputMediaPhoto(media[0], caption="📍 ЖК Графський — вигляд зверху"),
-                    InputMediaPhoto(media[1], caption="🏠 Вхід: другі ворота/хвіртка, ліворуч"),
+                    InputMediaPhoto(media[0], caption="📍 БЦ Галерея, 6 поверх — вигляд зверху\nвул. Смілянська, 23 (перехрестя бул. Шевченка та вул. Смілянської)"),
+                    InputMediaPhoto(media[1], caption="🚪 Лівий вхід з написом «Ліфт» (поруч з кафе «Шарлотка»)\nПіднімайтесь на 6 поверх — там є вказівні стрілки"),
                 ]
             )
         elif len(media) == 1:
-            bot.send_photo(
+            await context.bot.send_photo(
                 chat_id=update.message.chat_id,
                 photo=media[0],
-                caption="📍 Схема проїзду до Dr. Gómon\nЖК Графський — другі ворота/хвіртка, ліворуч",
-                parse_mode='Markdown'
-            )
+                caption="📍 БЦ Галерея, 6 поверх\nЛівий вхід «Ліфт», поруч з кафе «Шарлотка»")
         else:
-            bot.send_message(
-                chat_id=update.message.chat_id,
-                text="📍 ЖК Графський, другі ворота/хвіртка, ліворуч\n🗺️ /map — посилання на карту",
-                parse_mode='Markdown'
-            )
+            await update.message.reply_text(
+                "📍 БЦ Галерея, 6 поверх, вул. Смілянська, 23\nЛівий вхід «Ліфт», поруч з кафе «Шарлотка»\n🗺️ /map — посилання на карту")
 
-        logger.info(f"🧭 Схема ({len(media)} фото) відправлена користувачу {user_id}")
+        logger.info(f"Scheme ({len(media)} photos) sent to user {user_id}")
 
     except Exception as e:
-        logger.exception(f"❌ Помилка в scheme_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання схеми", parse_mode='Markdown')
+        logger.exception(f"Error in scheme_command: {e}")
+        await update.message.reply_text("❌ Помилка отримання схеми")
     finally:
         for f in media:
             f.close()
 
 
-def app_command(bot, update):
+async def app_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📱 /app викликано користувачем: {user_id}")
+    logger.info(f"/app called by user: {user_id}")
     try:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="Наш застосунок, який точно Вам допоможе:\n\nhttps://drgomon.beauty/go",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "Наш застосунок, який точно Вам допоможе:\n\nhttps://drgomon.beauty/go")
     except Exception as e:
-        logger.exception(f"❌ Помилка в app_command: {e}")
+        logger.exception(f"Error in app_command: {e}")
 
 
-def channel_command(bot, update):
+async def channel_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📢 /channel викликано користувачем: {user_id}")
+    logger.info(f"/channel called by user: {user_id}")
 
     try:
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         keyboard = [[InlineKeyboardButton(
             text="Dr.Gomon. Косметологічні будні",
             url="https://t.me/+amEiOBPDbv04MDcy"
         )]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="Актуальні новини та акції в нашому ТГ каналі:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        logger.info(f"📢 Канал відправлено користувачу {user_id}")
+        await update.message.reply_text(
+            "Актуальні новини та акції в нашому ТГ каналі:",
+            reply_markup=reply_markup)
+        logger.info(f"Channel sent to user {user_id}")
     except Exception as e:
-        logger.exception(f"❌ Помилка в channel_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка отримання посилання на канал", parse_mode='Markdown')
+        logger.exception(f"Error in channel_command: {e}")
+        await update.message.reply_text("❌ Помилка отримання посилання на канал")
 
-def test_command(bot, update):
+
+async def test_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🧪 /test викликано користувачем: {user_id}")
-    
+    logger.info(f"/test called by user: {user_id}")
+
     try:
         test_message = (
             "🧪 Тест бота:\n\n"
@@ -385,78 +397,75 @@ def test_command(bot, update):
             f"🕐 Час: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"🔐 Авторизований: {'✅ Так' if is_authenticated(user_id) else '❌ Ні'}"
         )
-        
-        bot.send_message(chat_id=update.message.chat_id, text=test_message, parse_mode='Markdown')
-        logger.info(f"🧪 Тест відправлено користувачу {user_id}")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в test_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка тестування", parse_mode='Markdown')
 
-def status_command(bot, update):
+        await update.message.reply_text(test_message)
+        logger.info(f"Test sent to user {user_id}")
+
+    except Exception as e:
+        logger.exception(f"Error in test_command: {e}")
+        await update.message.reply_text("❌ Помилка тестування")
+
+
+async def status_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📊 /status викликано користувачем: {user_id}")
-    
+    logger.info(f"/status called by user: {user_id}")
+
     try:
         user_info = get_user_info(user_id)
         auth_status = is_authenticated(user_id)
-        
+
         status_text = f"📊 Статус бота:\n\n"
         status_text += f"👤 Користувач: {user_id}\n"
         status_text += f"🔐 Авторизований: {'✅ Так' if auth_status else '❌ Ні'}\n"
         status_text += f"🤖 Бот: ✅ Працює\n"
         status_text += f"📅 Час: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-        
+
         if user_info:
             status_text += f"💾 База даних:\n"
             status_text += f"  👥 Користувачів: {user_info['users_count']}\n"
             status_text += f"  🏥 Клієнтів: {user_info['clients_count']}\n"
             status_text += f"  📱 Ви в базі: {'✅ Так' if user_info['user_in_db'] else '❌ Ні'}\n"
-            
+
             if user_info['user_data']:
                 phone = user_info['user_data'][1]
                 status_text += f"  📞 Ваш телефон: {phone}\n"
-        
-        bot.send_message(chat_id=update.message.chat_id, text=status_text, parse_mode='Markdown')
-        logger.info(f"📊 Статус відправлено користувачу {user_id}")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в status_command: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка при отриманні статусу", parse_mode='Markdown')
 
-def restart_command(bot, update):
+        await update.message.reply_text(status_text)
+        logger.info(f"Status sent to user {user_id}")
+
+    except Exception as e:
+        logger.exception(f"Error in status_command: {e}")
+        await update.message.reply_text("❌ Помилка при отриманні статусу")
+
+
+async def restart_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🔄 /restart викликано користувачем: {user_id}")
-    
+    logger.info(f"/restart called by user: {user_id}")
+
     if user_id not in ADMIN_USER_IDS:
-        bot.send_message(
-            chat_id=update.message.chat_id, 
-            text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "❌ Ця команда доступна тільки адміністратору")
         return
-    
+
     try:
-        bot.send_message(chat_id=update.message.chat_id, text="🔄 Перезапуск бота...", parse_mode='Markdown')
-        logger.info("🔄 Перезапуск бота...")
+        await update.message.reply_text("🔄 Перезапуск бота...")
+        logger.info("Restarting bot...")
         os._exit(0)
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка перезапуску: {e}")
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка перезапуску", parse_mode='Markdown')
 
-def sync_command(bot, update):
+    except Exception as e:
+        logger.exception(f"Error in restart: {e}")
+        await update.message.reply_text("❌ Помилка перезапуску")
+
+
+async def sync_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🔄 /sync викликано користувачем: {user_id}")
-    
+    logger.info(f"/sync called by user: {user_id}")
+
     if user_id not in ADMIN_USER_IDS:
-        bot.send_message(
-            chat_id=update.message.chat_id, 
-            text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "❌ Ця команда доступна тільки адміністратору")
         return
-    
+
     try:
         sync_message = (
             "🔄 Ручна синхронізація клієнтів запущена...\n\n"
@@ -465,30 +474,23 @@ def sync_command(bot, update):
             "🌆 21:00 - Вечірня синхронізація\n\n"
             "📱 Результати будуть надіслані в Telegram"
         )
-        
-        bot.send_message(
-            chat_id=update.message.chat_id, 
-            text=sync_message,
-            parse_mode='Markdown'
-        )
-        
-        import subprocess
+
+        await update.message.reply_text(sync_message)
+
         subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])  # fire-and-forget
 
-        logger.info(f"✅ Ручна синхронізація запущена користувачем {user_id}")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в sync_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id, 
-            text="❌ Помилка при запуску ручної синхронізації",
-            parse_mode='Markdown'
-        )
+        logger.info(f"Manual sync started by user {user_id}")
 
-def help_command(bot, update):
+    except Exception as e:
+        logger.exception(f"Error in sync_command: {e}")
+        await update.message.reply_text(
+            "❌ Помилка при запуску ручної синхронізації")
+
+
+async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"❓ /help викликано користувачем: {user_id}")
-    
+    logger.info(f"/help called by user: {user_id}")
+
     try:
         if user_id in ADMIN_USER_IDS:
             help_message = (
@@ -530,16 +532,12 @@ def help_command(bot, update):
                 "- Введiть gomon в пошуку повiдомлень\n\n"
                 "Для реєстрації: +380733103110 або https://ig.me/m/dr.gomon"
             )
-        
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text=help_message,
-            parse_mode='Markdown'
-        )
-        logger.info(f"❓ Довідка відправлена користувачу {user_id}")
-        
+
+        await update.message.reply_text(help_message)
+        logger.info(f"Help sent to user {user_id}")
+
     except Exception as e:
-        logger.exception(f"❌ Помилка в help_command: {e}")
+        logger.exception(f"Error in help_command: {e}")
         simple_help = (
             "🤖 ДОВІДКА\n\n"
             "Основні команди:\n"
@@ -547,86 +545,65 @@ def help_command(bot, update):
             "/map - Карта\n"
             "Техпідтримка: +380733103110"
         )
-        bot.send_message(chat_id=update.message.chat_id, text=simple_help, parse_mode='Markdown')
+        await update.message.reply_text(simple_help)
 
-def monitor_command(bot, update):
+
+async def monitor_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📊 /monitor викликано користувачем: {user_id}")
-    
+    logger.info(f"/monitor called by user: {user_id}")
+
     if user_id not in ADMIN_USER_IDS:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "❌ Ця команда доступна тільки адміністратору")
         return
 
     try:
-        import os
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="📊 Запускаю API моніторинг...",
-            parse_mode='Markdown'
-        )
-        
-        # Запустити api_monitor.py та зберегти результат у файл
+        await update.message.reply_text("📊 Запускаю API моніторинг...")
+
+        # Run api_monitor.py and save result to file
         with open("/tmp/monitor_result.txt", "w") as _mf:
             subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT, timeout=120)
 
-        # Прочитати результат
+        # Read result
         try:
             with open("/tmp/monitor_result.txt", "r", encoding="utf-8") as f:
                 output = f.read()
             if len(output) > 3900:
                 output = output[:3900] + "\n\n... (обрізано)"
-            bot.send_message(
-                chat_id=update.message.chat_id,
-                text=f"📊 МОНІТОРИНГ API:\n\n{output}",
-                parse_mode='Markdown'
-            )
+            await update.message.reply_text(
+                f"📊 МОНІТОРИНГ API:\n\n{output}")
         except Exception as e:
-            bot.send_message(
-                chat_id=update.message.chat_id,
-                text=f"❌ Помилка читання результату: {e}",
-                parse_mode='Markdown'
-            )
-        
-        logger.info(f"📊 Моніторинг API відправлено адміну")
-        
-    except Exception as e:
-        logger.exception(f"❌ Помилка в monitor_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Помилка моніторингу API",
-            parse_mode='Markdown'
-        )
+            await update.message.reply_text(
+                f"❌ Помилка читання результату: {e}")
 
-def diagnostic_command(bot, update):
+        logger.info("API monitoring sent to admin")
+
+    except Exception as e:
+        logger.exception(f"Error in monitor_command: {e}")
+        await update.message.reply_text(
+            "❌ Помилка моніторингу API")
+
+
+async def diagnostic_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"🔧 /diagnostic викликано користувачем: {user_id}")
-    
+    logger.info(f"/diagnostic called by user: {user_id}")
+
     if user_id not in ADMIN_USER_IDS:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "❌ Ця команда доступна тільки адміністратору")
         return
 
     try:
-        import subprocess
-        import os
-        
         diagnostic_info = []
         diagnostic_info.append("🔧 СИСТЕМНА ДІАГНОСТИКА")
         diagnostic_info.append("=" * 30)
-        
-        # Статус бота
+
+        # Bot status
         diagnostic_info.append("🤖 СТАТУС БОТА:")
         diagnostic_info.append(f"   PID: {os.getpid()}")
         diagnostic_info.append(f"   Час роботи: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Дискове простір
+
+        # Disk space
         try:
             df_result = subprocess.run(['df', '-h', '/home/gomoncli'],
                                      stdout=subprocess.PIPE,
@@ -639,8 +616,8 @@ def diagnostic_command(bot, update):
                     diagnostic_info.append(f"   {lines[1]}")
         except Exception:
             pass
-        
-        # Процеси Python
+
+        # Python processes
         try:
             ps_result = subprocess.run(['ps', 'aux'],
                                      stdout=subprocess.PIPE,
@@ -650,14 +627,14 @@ def diagnostic_command(bot, update):
                 ps_output = ps_result.stdout.decode('utf-8')
                 python_procs = [line for line in ps_output.split('\n') if 'python' in line and 'zadarma' in line]
                 diagnostic_info.append("🐍 PYTHON ПРОЦЕСИ:")
-                for proc in python_procs[:3]:  # Показати тільки перші 3
+                for proc in python_procs[:3]:
                     parts = proc.split()
                     if len(parts) > 10:
                         diagnostic_info.append(f"   PID:{parts[1]} CPU:{parts[2]}% MEM:{parts[3]}%")
         except Exception:
             pass
-        
-        # Файли конфігурації
+
+        # Config files
         diagnostic_info.append("📁 ФАЙЛИ:")
         config_files = ['config.py', 'users.db', 'bot.log']
         for file in config_files:
@@ -673,87 +650,75 @@ def diagnostic_command(bot, update):
                 diagnostic_info.append(f"   ✅ {file} ({size_str})")
             else:
                 diagnostic_info.append(f"   ❌ {file} відсутній")
-        
-        # Останні помилки з логу
+
+        # Last errors from log
         try:
             with open('/home/gomoncli/zadarma/bot.log', 'r', encoding='utf-8') as f:
                 lines = f.readlines()
                 error_lines = [line for line in lines[-50:] if 'ERROR' in line]
                 if error_lines:
                     diagnostic_info.append("🚨 ОСТАННІ ПОМИЛКИ:")
-                    for error in error_lines[-3:]:  # Останні 3 помилки
+                    for error in error_lines[-3:]:
                         diagnostic_info.append(f"   {error.strip()[:100]}...")
                 else:
                     diagnostic_info.append("✅ Помилок не знайдено")
         except Exception:
             diagnostic_info.append("⚠️ Не вдалося прочитати лог")
-        
+
         output = '\n'.join(diagnostic_info)
         if len(output) > 4000:
             output = output[:3900] + "\n\n... (обрізано)"
-        
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text=output,
-            parse_mode='Markdown'
-        )
-        logger.info(f"🔧 Діагностика відправлена адміну")
+
+        await update.message.reply_text(output)
+        logger.info("Diagnostic sent to admin")
 
     except Exception as e:
-        logger.exception(f"❌ Помилка в diagnostic_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Помилка при виконанні діагностики",
-            parse_mode='Markdown'
-        )
+        logger.exception(f"Error in diagnostic_command: {e}")
+        await update.message.reply_text(
+            "❌ Помилка при виконанні діагностики")
 
-def logs_command(bot, update):
+
+async def logs_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"📋 /logs викликано користувачем: {user_id}")
-    
+    logger.info(f"/logs called by user: {user_id}")
+
     if user_id not in ADMIN_USER_IDS:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Ця команда доступна тільки адміністратору",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "❌ Ця команда доступна тільки адміністратору")
         return
 
     try:
-        import os
-
         logs_info = []
         logs_info.append("📋 ОСТАННІ ЗАПИСИ ЛОГІВ")
         logs_info.append("=" * 25)
-        
+
         log_files = [
             ('bot.log', '🤖 БОТ'),
             ('webhook_processor.log', '🔗 WEBHOOK'),
             ('bot_cron.log', '⏰ CRON'),
         ]
-        
+
         for log_file, title in log_files:
             log_path = f'/home/gomoncli/zadarma/{log_file}'
             if os.path.exists(log_path):
                 try:
                     with open(log_path, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
-                        recent_lines = lines[-5:]  # Останні 5 рядків
-                        
+                        recent_lines = lines[-5:]
+
                     logs_info.append(f"\n{title} ({log_file}):")
                     for line in recent_lines:
-                        # Скоротити довгі рядки
                         clean_line = line.strip()
                         if len(clean_line) > 100:
                             clean_line = clean_line[:95] + "..."
                         logs_info.append(f"  {clean_line}")
-                        
+
                 except Exception as e:
                     logs_info.append(f"\n{title}: ❌ Помилка читання ({e})")
             else:
                 logs_info.append(f"\n{title}: ❌ Файл не знайдено")
-        
-        # Додати загальну інформацію про логи
+
+        # Total log info
         try:
             total_size = 0
             log_count = 0
@@ -761,32 +726,26 @@ def logs_command(bot, update):
                 if file.endswith('.log'):
                     total_size += os.path.getsize(f'/home/gomoncli/zadarma/{file}')
                     log_count += 1
-            
+
             size_mb = total_size / (1024 * 1024)
             logs_info.append(f"\n📊 ЗАГАЛОМ: {log_count} файлів, {size_mb:.1f}MB")
         except Exception:
             pass
-        
+
         output = '\n'.join(logs_info)
         if len(output) > 4000:
             output = output[:3900] + "\n\n... (обрізано)"
-        
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text=output,
-            parse_mode='Markdown'
-        )
-        logger.info(f"📋 Логи відправлені адміну")
+
+        await update.message.reply_text(output)
+        logger.info("Logs sent to admin")
 
     except Exception as e:
-        logger.exception(f"❌ Помилка в logs_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="❌ Помилка при читанні логів",
-            parse_mode='Markdown'
-        )
+        logger.exception(f"Error in logs_command: {e}")
+        await update.message.reply_text(
+            "❌ Помилка при читанні логів")
 
-def _show_admin_panel(bot, chat_id):
+
+async def _show_admin_panel(bot, chat_id):
     keyboard = [
         [InlineKeyboardButton("💳 Прийняти оплату", callback_data="pay_start")],
         [InlineKeyboardButton("📊 Моніторинг",    callback_data="admin_monitor"),
@@ -794,23 +753,21 @@ def _show_admin_panel(bot, chat_id):
         [InlineKeyboardButton("📋 Логи",           callback_data="admin_logs"),
          InlineKeyboardButton("🔄 Синхронізація", callback_data="admin_sync")],
     ]
-    bot.send_message(
+    await bot.send_message(
         chat_id=chat_id,
         text="👑 Адмін-панель Dr. Gomon",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+        reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-def admin_command(bot, update):
+async def admin_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_USER_IDS:
         return
-    _show_admin_panel(bot, update.message.chat_id)
+    await _show_admin_panel(context.bot, update.message.chat_id)
 
 
-def _do_monitor(bot, chat_id):
-    bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...", parse_mode='Markdown')
+async def _do_monitor(bot, chat_id):
+    await bot.send_message(chat_id=chat_id, text="📊 Запускаю API моніторинг...")
     with open("/tmp/monitor_result.txt", "w") as _mf:
         subprocess.run(["python3", "api_monitor.py"], cwd="/home/gomoncli/zadarma", stdout=_mf, stderr=subprocess.STDOUT, timeout=120)
     try:
@@ -818,12 +775,12 @@ def _do_monitor(bot, chat_id):
             output = f.read()
         if len(output) > 3900:
             output = output[:3900] + "\n\n... (обрізано)"
-        bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output), parse_mode='Markdown')
+        await bot.send_message(chat_id=chat_id, text="📊 МОНІТОРИНГ API:\n\n{}".format(output))
     except Exception as e:
-        bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e), parse_mode='Markdown')
+        await bot.send_message(chat_id=chat_id, text="❌ Помилка читання результату: {}".format(e))
 
 
-def _do_logs(bot, chat_id):
+async def _do_logs(bot, chat_id):
     logs_info = ["📋 ОСТАННІ ЗАПИСИ ЛОГІВ", "=" * 25]
     log_files = [
         ('bot.log', '🤖 БОТ'),
@@ -847,11 +804,10 @@ def _do_logs(bot, chat_id):
     output = '\n'.join(logs_info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output, parse_mode='Markdown')
+    await bot.send_message(chat_id=chat_id, text=output)
 
 
-def _do_diagnostic(bot, chat_id):
-    import subprocess
+async def _do_diagnostic(bot, chat_id):
     info = ["🔧 СИСТЕМНА ДІАГНОСТИКА", "=" * 30,
             "🤖 PID: {}  Час: {}".format(os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S'))]
     try:
@@ -876,68 +832,72 @@ def _do_diagnostic(bot, chat_id):
     output = '\n'.join(info)
     if len(output) > 4000:
         output = output[:3900] + "\n\n... (обрізано)"
-    bot.send_message(chat_id=chat_id, text=output, parse_mode='Markdown')
+    await bot.send_message(chat_id=chat_id, text=output)
 
 
-def _do_sync(bot, chat_id):
-    import subprocess
-    bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...", parse_mode='Markdown')
+async def _do_sync(bot, chat_id):
+    await bot.send_message(chat_id=chat_id, text="🔄 Ручна синхронізація запущена...")
     subprocess.Popen(["/home/gomoncli/zadarma/sync_with_notification.sh"])  # fire-and-forget
     subprocess.Popen(["/usr/bin/python3", "/home/gomoncli/zadarma/sync_appointments.py"],  # fire-and-forget
                      cwd="/home/gomoncli/zadarma")
 
 
-def admin_callback(bot, update):
+async def admin_callback(update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     chat_id = query.message.chat_id
 
     if user_id not in ADMIN_USER_IDS:
-        query.answer("❌ Доступ заборонено")
+        await query.answer("❌ Доступ заборонено")
         return
 
-    query.answer()
+    await query.answer()
     data = query.data
 
     if data == 'pay_start':
         _pay_state[user_id] = True
-        bot.send_message(
+        await context.bot.send_message(
             chat_id=chat_id,
             text=(
                 "💳 <b>Нова оплата</b>\n\n"
                 "Введіть суму та опис через пробіл:\n"
                 "<code>900 DrumRoll всього тіла</code>\n\n"
                 "Або /admin для скасування"
-            ),
-            parse_mode='HTML'
-        )
+            ))
     elif data == 'admin_monitor':
-        _do_monitor(bot, chat_id)
+        await _do_monitor(context.bot, chat_id)
     elif data == 'admin_diag':
-        _do_diagnostic(bot, chat_id)
+        await _do_diagnostic(context.bot, chat_id)
     elif data == 'admin_logs':
-        _do_logs(bot, chat_id)
+        await _do_logs(context.bot, chat_id)
     elif data == 'admin_sync':
-        _do_sync(bot, chat_id)
+        await _do_sync(context.bot, chat_id)
 
 
-def general_text_handler(bot, update):
-    """Обробляє текстові повідомлення — тільки введення суми для LiqPay (адміни)."""
+async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles text messages -- payment input for admins + keyboard button routing."""
     user_id = update.effective_user.id
+    text = (update.message.text or '').strip()
 
-    # Admin payment flow — only for admins in pay state
+    # Keyboard button routing
+    if text == "📋 Мої записи":
+        return await my_services_command(update, context)
+    elif text == "📍 Як знайти":
+        return await map_command(update, context)
+    elif text == "📞 Зателефонувати":
+        return await call_command(update, context)
+    elif text == "📢 Канал акцій":
+        return await channel_command(update, context)
+
+    # Admin payment flow -- only for admins in pay state
     if user_id not in ADMIN_USER_IDS or not _pay_state.get(user_id):
         return
 
-    text = update.message.text.strip()
     parts = text.split(None, 1)
 
     if len(parts) < 2:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="⚠️ Формат: <b>сума опис</b>\nПриклад: <code>900 DrumRoll всього тіла</code>",
-            parse_mode='HTML'
-        )
+        await update.message.reply_text(
+            "⚠️ Формат: <b>сума опис</b>\nПриклад: <code>900 DrumRoll всього тіла</code>")
         return
 
     try:
@@ -945,59 +905,52 @@ def general_text_handler(bot, update):
         if amount <= 0:
             raise ValueError
     except ValueError:
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="⚠️ Некоректна сума. Спробуйте ще раз.",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "⚠️ Некоректна сума. Спробуйте ще раз.")
         return
 
     description = parts[1]
     _pay_state.pop(user_id, None)
 
-    # TODO: генерувати реальне посилання після додавання LiqPay ключів
-    # from liqpay import LiqPay
-    # url = LiqPay(PUBLIC_KEY, PRIVATE_KEY).create_payment_url(...)
-    bot.send_message(
-        chat_id=update.message.chat_id,
-        text=(
-            "⚙️ LiqPay ключі ще не налаштовані.\n\n"
-            "Буде: посилання на оплату <b>{:.0f} грн</b> — {}".format(amount, description)
-        ),
-        parse_mode='HTML'
-    )
-    logger.info(f"💳 Адмін {user_id} ініціював оплату: {amount} грн — {description}")
+    # TODO: generate real link after adding LiqPay keys
+    await update.message.reply_text(
+        "⚙️ LiqPay ключі ще не налаштовані.\n\n"
+        "Буде: посилання на оплату <b>{:.0f} грн</b> — {}".format(amount, description))
+    logger.info(f"Admin {user_id} initiated payment: {amount} UAH -- {description}")
 
 
-## media_message_handler removed — messages are captured by tg_business_listener.py
+## media_message_handler removed -- messages are captured by tg_business_listener.py
 
 
-def error_handler(bot, update, error):
+async def error_handler(update, context: ContextTypes.DEFAULT_TYPE):
+    error = context.error
     error_str = str(error)
-    
+
     if any(x in error_str.lower() for x in [
         'connection aborted', 'connection broken', 'connection reset',
         'remote end closed', 'httpconnectionpool', 'read timeout',
         'connection timeout', 'temporary failure'
     ]):
-        logger.warning(f"⚠️ Мережева помилка (ігнорується): {error}")
+        logger.warning(f"Network error (ignored): {error}")
         return
-    
-    logger.error(f"❌ Критична помилка в обробці апдейту: {error}")
-    
+
+    logger.error(f"Critical error processing update: {error}")
+
     if update:
-        logger.error(f"📝 Апдейт: {update.to_dict()}")
-        
         try:
-            if update.message:
-                update.message.reply_text(
-                    "❌ Сталася помилка при обробці команди. Будь ласка, спробуйте ще раз або зверніться до підтримки",
-                    parse_mode='Markdown'
-                )
+            logger.error(f"Update: {update.to_dict()}")
         except Exception:
             pass
-    
-    send_error_to_admin(bot, f"❌ Критична помилка: {error}")
+
+        try:
+            if update.message:
+                await update.message.reply_text(
+                    "❌ Сталася помилка при обробці команди. Будь ласка, спробуйте ще раз або зверніться до підтримки")
+        except Exception:
+            pass
+
+    await send_error_to_admin(context.bot, f"❌ Критична помилка: {error}")
+
 
 # Import sync functions
 from sync_stubs import (
@@ -1007,7 +960,7 @@ from sync_stubs import (
 
 
 # -- Channel post handler for news feed --
-def save_channel_post(bot, update):
+async def save_channel_post(update, context: ContextTypes.DEFAULT_TYPE):
     import sqlite3 as _sq
     FEED_DB = '/home/gomoncli/zadarma/feed.db'
     msg = update.channel_post or update.edited_channel_post
@@ -1023,8 +976,8 @@ def save_channel_post(bot, update):
     elif msg.video:
         media_type = 'video'
         file_id = msg.video.file_id
-        if msg.video.thumb:
-            thumb_id = msg.video.thumb.file_id
+        if msg.video.thumbnail:
+            thumb_id = msg.video.thumbnail.file_id
     is_edit = bool(update.edited_channel_post)
     try:
         conn = _sq.connect(FEED_DB)
@@ -1045,7 +998,8 @@ def save_channel_post(bot, update):
     except Exception as e:
         logger.error(f'Feed save error: {e}')
 
-def my_services_command(bot, update):
+
+async def my_services_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"my_services_command called by user: {user_id}")
 
@@ -1068,15 +1022,10 @@ def my_services_command(bot, update):
 
         if not row:
             conn.close()
-            bot.send_message(
-                chat_id=update.message.chat_id,
-                text=(
-                    "Номер телефону не прив'язаний. "
-                    "Поділіться номером через кнопку нижче "
-                    "або відкрийте додаток: https://drgomon.beauty/go"
-                ),
-                parse_mode='Markdown'
-            )
+            await update.message.reply_text(
+                "Номер телефону не прив'язаний. "
+                "Поділіться номером через кнопку нижче "
+                "або відкрийте додаток: https://drgomon.beauty/go")
             return
 
         phone = row[0]
@@ -1188,82 +1137,72 @@ def my_services_command(bot, update):
             lines.append("- Telegram: https://t.me/DrGomonCosmetology")
             lines.append("- Instagram Direct: https://ig.me/m/dr.gomon")
 
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text='\n'.join(lines),
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            '\n'.join(lines))
 
     except Exception as e:
         logger.exception(f"Error in my_services_command: {e}")
-        bot.send_message(
-            chat_id=update.message.chat_id,
-            text="Помилка при завантаженні записів. Спробуйте пізніше.",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(
+            "Помилка при завантаженні записів. Спробуйте пізніше.")
 
 
 def main():
-    logger.info("🚀 Бот запускається...")
-    
+    logger.info("Bot starting...")
+
     create_pid_file()
-    
+
     try:
-        logger.info("⚙️ Перевіряємо конфігурацію...")
+        logger.info("Validating config...")
         validate_config()
-        logger.info("✅ Конфігурація валідна")
-        
+        logger.info("Config valid")
+
         init_db()
-        logger.info("✅ База даних ініціалізована")
-        
+        logger.info("Database initialized")
+
     except Exception as e:
-        logger.error(f"❌ Критична помилка ініціалізації: {e}")
+        logger.error(f"Critical initialization error: {e}")
         sys.exit(1)
 
-    updater = Updater(TELEGRAM_TOKEN)
-    dp = updater.dispatcher
+    from telegram.ext import Defaults
+    defaults = Defaults(parse_mode=None)
+    application = Application.builder().token(TELEGRAM_TOKEN).defaults(defaults).build()
 
-    dp.add_handler(CommandHandler("start", start_command))
-    dp.add_handler(CommandHandler("app", app_command))
-    dp.add_handler(MessageHandler(Filters.contact, contact_handler))
-    dp.add_handler(CommandHandler("call", call_command))
-    dp.add_handler(CommandHandler("map", map_command))
-    dp.add_handler(CommandHandler("scheme", scheme_command))
-    dp.add_handler(CommandHandler("channel", channel_command))
-    dp.add_handler(CommandHandler("restart", restart_command))
-    dp.add_handler(CommandHandler("test", test_command))
-    dp.add_handler(CommandHandler("status", status_command))
-    dp.add_handler(CommandHandler("sync", sync_command))
-    dp.add_handler(CommandHandler("help", help_command))
-    dp.add_handler(CommandHandler("my_services", my_services_command))
-    dp.add_handler(CommandHandler("services", my_services_command))
-    dp.add_handler(CommandHandler("monitor", monitor_command))
-    dp.add_handler(CommandHandler("diagnostic", diagnostic_command))
-    dp.add_handler(CommandHandler("logs", logs_command))
-    
-    # Команди управління синхронізацією
-    dp.add_handler(CommandHandler("sync_status", handle_sync_status_command))
-    dp.add_handler(CommandHandler("sync_clean", handle_sync_clean_command))
-    dp.add_handler(CommandHandler("sync_full", handle_sync_full_command))
-    dp.add_handler(CommandHandler("sync_test", handle_sync_test_command))
-    dp.add_handler(CommandHandler("sync_user", handle_sync_user_command))
-    dp.add_handler(CommandHandler("sync_help", handle_sync_help_command))
-    
-    dp.add_handler(CommandHandler("admin", admin_command))
-    dp.add_handler(CallbackQueryHandler(admin_callback, pattern='^(pay_start|admin_monitor|admin_diag|admin_logs|admin_sync)$'))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.channel_posts, general_text_handler))
-    # media_message_handler removed — DM messages captured by tg_business_listener.py
-    dp.add_handler(MessageHandler(Filters.update.channel_posts | Filters.update.edited_channel_post, save_channel_post))
-    dp.add_error_handler(error_handler)
-    
-    logger.info("✅ Всі обробники додані")
-    logger.info("✅ Стартуємо polling...")
-    updater.start_polling()
-    
-    logger.info("🤖 Бот успішно запущений та чекає на повідомлення...")
-    logger.info("ℹ️  Для зупинки натисніть Ctrl+C")
-    
-    updater.idle()
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("app", app_command))
+    application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+    application.add_handler(CommandHandler("call", call_command))
+    application.add_handler(CommandHandler("map", map_command))
+    application.add_handler(CommandHandler("scheme", scheme_command))
+    application.add_handler(CommandHandler("channel", channel_command))
+    application.add_handler(CommandHandler("restart", restart_command))
+    application.add_handler(CommandHandler("test", test_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("sync", sync_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("my_services", my_services_command))
+    application.add_handler(CommandHandler("services", my_services_command))
+    application.add_handler(CommandHandler("monitor", monitor_command))
+    application.add_handler(CommandHandler("diagnostic", diagnostic_command))
+    application.add_handler(CommandHandler("logs", logs_command))
+
+    # Sync management commands
+    application.add_handler(CommandHandler("sync_status", handle_sync_status_command))
+    application.add_handler(CommandHandler("sync_clean", handle_sync_clean_command))
+    application.add_handler(CommandHandler("sync_full", handle_sync_full_command))
+    application.add_handler(CommandHandler("sync_test", handle_sync_test_command))
+    application.add_handler(CommandHandler("sync_user", handle_sync_user_command))
+    application.add_handler(CommandHandler("sync_help", handle_sync_help_command))
+
+    application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CallbackQueryHandler(admin_callback, pattern='^(pay_start|admin_monitor|admin_diag|admin_logs|admin_sync)$'))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.CHANNEL_POST, general_text_handler))
+    # media_message_handler removed -- DM messages captured by tg_business_listener.py
+    application.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POST | filters.UpdateType.EDITED_CHANNEL_POST, save_channel_post))
+    application.add_error_handler(error_handler)
+
+    logger.info("All handlers added")
+    logger.info("Starting polling...")
+    application.run_polling()
 
 if __name__ == '__main__':
     main()

@@ -1,11 +1,13 @@
 import sqlite3
+from telegram.ext import ContextTypes
 
-def handle_sync_status_command(bot, update):
+
+async def handle_sync_status_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in [573368771, 7930079513]:
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Тільки для адмінів")
+        await update.message.reply_text("❌ Тільки для адмінів")
         return
-    
+
     try:
         conn = sqlite3.connect('users.db')
         cursor = conn.cursor()
@@ -14,26 +16,31 @@ def handle_sync_status_command(bot, update):
         cursor.execute('SELECT COUNT(*) FROM users')
         users = cursor.fetchone()[0]
         conn.close()
-        
-        status = "📊 СТАТУС\n👥 Користувачів: {}\n🏥 Клієнтів: {}\n✅ Python 3.6 режим".format(users, clients)
-        bot.send_message(chat_id=update.message.chat_id, text=status)
-    except Exception as e:
-        bot.send_message(chat_id=update.message.chat_id, text="❌ Помилка: {}".format(str(e)))
 
-def handle_sync_test_command(bot, update):
+        status = "📊 СТАТУС\n👥 Користувачів: {}\n🏥 Клієнтів: {}".format(users, clients)
+        await update.message.reply_text(status)
+    except Exception as e:
+        await update.message.reply_text("❌ Помилка: {}".format(str(e)))
+
+
+async def handle_sync_test_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in [573368771, 7930079513]:
         return
-    bot.send_message(chat_id=update.message.chat_id, text="🧪 ТЕСТ\n💾 БД: ✅\n🐍 Python 3.6: ✅\n🤖 Бот: ✅")
+    await update.message.reply_text("🧪 ТЕСТ\n💾 БД: ✅\n🐍 Python: ✅\n🤖 Бот: ✅")
 
-def handle_sync_clean_command(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="⚠️ Недоступно на Python 3.6")
 
-def handle_sync_full_command(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="⚠️ Недоступно на Python 3.6")
+async def handle_sync_clean_command(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⚠️ Недоступно")
 
-def handle_sync_user_command(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="⚠️ Недоступно на Python 3.6")
 
-def handle_sync_help_command(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="🔄 КОМАНДИ\n📊 /sync_status\n🧪 /sync_test\n⚠️ Обмежений функціонал Python 3.6")
+async def handle_sync_full_command(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⚠️ Недоступно")
+
+
+async def handle_sync_user_command(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⚠️ Недоступно")
+
+
+async def handle_sync_help_command(update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔄 КОМАНДИ\n📊 /sync_status\n🧪 /sync_test")
