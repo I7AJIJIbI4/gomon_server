@@ -1,16 +1,16 @@
 #!/bin/bash
 # Скрипт синхронізації з Telegram повідомленням
 
-LOG_FILE="/home/gomoncli/zadarma/sync_notification.log"
+LOG_FILE="/var/log/gomon/sync.log"
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 
 echo "[$DATE] 🔄 Запуск синхронізації з повідомленням..." >> $LOG_FILE
 
-cd /home/gomoncli/zadarma/
+cd /opt/gomon/app/zadarma/
 
-python3 -c "
+/opt/gomon/venv/bin/python3 -c "
 import sys
-sys.path.append('/home/gomoncli/zadarma')
+sys.path.append('/opt/gomon/app/zadarma')
 
 from sync_clients import sync_clients
 from config import TELEGRAM_TOKEN, ADMIN_USER_ID

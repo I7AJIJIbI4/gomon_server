@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed']);
     exit;
@@ -105,7 +105,53 @@ function format_tg_link(?array $tg_user): string {
 //  ВХІДНІ ДАНІ
 // ═══════════════════════════════════════════════════════════════
 
-$body = json_decode(file_get_contents('php://input'), true);
+// GET — return chat history from DB
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['history'])) {
+    $hist_phone = normalize_phone(trim($_GET['phone'] ?? ''));
+    $hist_token = trim($_GET['token'] ?? '');
+    if (!$hist_phone || !$hist_token) {
+        echo json_encode(['messages' => []]);
+        exit;
+    }
+    // Verify session token matches phone
+    try {
+        $sess_db = new SQLite3('/home/gomoncli/zadarma/otp_sessions.db');
+        $sess_st = $sess_db->prepare('SELECT phone FROM sessions WHERE token=:t AND expires_at > :now LIMIT 1');
+        $sess_st->bindValue(':t', $hist_token);
+        $sess_st->bindValue(':now', time());
+        $sess_row = $sess_st->execute()->fetchArray(SQLITE3_ASSOC);
+        $sess_db->close();
+        if (!$sess_row || substr(preg_replace('/\D/', '', $sess_row['phone']), -9) !== substr(preg_replace('/\D/', '', $hist_phone), -9)) {
+            echo json_encode(['messages' => []]);
+            exit;
+        }
+    } catch (Exception $e) {
+        echo json_encode(['messages' => []]);
+        exit;
+    }
+    $sess_key = 'phone_' . substr(preg_replace('/[^\d]/', '', $hist_phone), -9);
+    try {
+        $ai_db = new SQLite3('/home/gomoncli/zadarma/ai_chat.db');
+        $ai_db->exec('PRAGMA journal_mode=WAL');
+        $st = $ai_db->prepare('SELECT role, content FROM ai_messages WHERE session_key=:sk ORDER BY id DESC LIMIT 20');
+        $st->bindValue(':sk', $sess_key);
+        $res = $st->execute();
+        $msgs = [];
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $msgs[] = ['role' => $row['role'], 'content' => $row['content']];
+        }
+        $ai_db->close();
+        $msgs = array_reverse($msgs);
+        echo json_encode(['messages' => $msgs], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        echo json_encode(['messages' => []]);
+    }
+    exit;
+}
+
+$raw_input = file_get_contents('php://input');
+error_log('chat.php: input_len=' . strlen($raw_input) . ' has_image=' . (strpos($raw_input, '"image"') !== false ? 'YES' : 'NO'));
+$body = json_decode($raw_input, true);
 
 if (!$body) {
     http_response_code(400);
@@ -118,6 +164,25 @@ $user_name  = trim($body['user']['name']  ?? '');
 $user_phone = normalize_phone(trim($body['user']['phone'] ?? ''));
 $source     = $body['source'] ?? 'app';
 $messages   = $body['messages'] ?? [];
+$image_b64  = $body['image'] ?? null;  // base64 encoded image
+$image_type = $body['image_type'] ?? 'image/jpeg';  // media type
+
+// Validate image if provided
+if ($image_b64) {
+    // Size check: ~5MB file = ~6.7MB base64
+    if (strlen($image_b64) > 7 * 1024 * 1024) {
+        http_response_code(413);
+        echo json_encode(['error' => 'Image too large (max 5MB)']);
+        exit;
+    }
+    // Type whitelist
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!in_array($image_type, $allowed_types, true)) {
+        $image_type = 'image/jpeg';
+    }
+    // Strip whitespace from base64 and basic sanity check
+    $image_b64 = preg_replace('/\s/', '', $image_b64);
+}
 $client_ip  = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 $client_ip  = trim(explode(',', $client_ip)[0]);
 
@@ -131,7 +196,10 @@ foreach ($messages as $msg) {
     }
 }
 
-if (empty($clean_messages)) {
+// If image present but no text — add default question
+if (empty($clean_messages) && $image_b64) {
+    $clean_messages[] = ['role' => 'user', 'content' => 'Що ви бачите на цьому фото?'];
+} elseif (empty($clean_messages)) {
     http_response_code(400);
     echo json_encode(['error' => 'No valid messages']);
     exit;
@@ -419,11 +487,34 @@ $models_to_try = array_unique(array_merge(
 $raw = false; $code = 0; $used_model = null;
 
 foreach ($models_to_try as $idx => $model) {
+    // Inject image into last user message if provided
+    $api_messages = $clean_messages;
+    if ($image_b64 && count($api_messages) > 0) {
+        // Find last user message (may not be the very last if assistant replied)
+        $user_idx = null;
+        for ($i = count($api_messages) - 1; $i >= 0; $i--) {
+            if ($api_messages[$i]['role'] === 'user') { $user_idx = $i; break; }
+        }
+        if ($user_idx !== null) {
+            $text = $api_messages[$user_idx]['content'] ?: 'Що ви бачите на цьому фото?';
+            $api_messages[$user_idx]['content'] = [
+                ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $image_type, 'data' => $image_b64]],
+                ['type' => 'text', 'text' => $text],
+            ];
+        } else {
+            // No user message — append one with the image
+            $api_messages[] = ['role' => 'user', 'content' => [
+                ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $image_type, 'data' => $image_b64]],
+                ['type' => 'text', 'text' => 'Що ви бачите на цьому фото?'],
+            ]];
+        }
+    }
+
     $payload = json_encode([
         'model'      => $model,
         'max_tokens' => 1024,
         'system'     => $system_prompt,
-        'messages'   => $clean_messages,
+        'messages'   => $api_messages,
     ], JSON_UNESCAPED_UNICODE);
 
     $ch = curl_init('https://api.anthropic.com/v1/messages');

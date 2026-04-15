@@ -148,3 +148,11 @@ google-play/gradlew.bat
 google-play/*.apk
 google-play/*.apk.idsig
 google-play/gomon-release-OLD.keystore
+google-play/build/
+google-play/manifest-checksum.txt
+google-play/settings.gradle
+google-play/store_icon.png
+merge_descriptions.py
+prices_*.json
+procedure_descriptions.json
+google-play/gomon-release-new.keystore

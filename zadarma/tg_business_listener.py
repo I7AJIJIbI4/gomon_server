@@ -376,6 +376,38 @@ def _check_ai_should_reply(conv_id, chat_id):
         conn.close()
 
 
+def _download_tg_photo(file_id):
+    """Download photo from TG and return (base64_data, media_type) or (None, None)."""
+    try:
+        # Get file path
+        r = requests.get('https://api.telegram.org/bot{}/getFile'.format(BOT_TOKEN),
+                         params={'file_id': file_id}, timeout=10)
+        file_path = r.json().get('result', {}).get('file_path')
+        if not file_path:
+            return None, None
+        # Download
+        r2 = requests.get('https://api.telegram.org/file/bot{}/{}'.format(BOT_TOKEN, file_path), timeout=15)
+        if r2.status_code != 200 or len(r2.content) > 5 * 1024 * 1024:
+            return None, None
+        import base64
+        b64 = base64.standard_b64encode(r2.content).decode('ascii')
+        # Detect media type
+        ct = r2.headers.get('content-type', 'image/jpeg')
+        if 'png' in ct:
+            mt = 'image/png'
+        elif 'webp' in ct:
+            mt = 'image/webp'
+        elif 'gif' in ct:
+            mt = 'image/gif'
+        else:
+            mt = 'image/jpeg'
+        logger.info('Downloaded TG photo: {} bytes, {}'.format(len(r2.content), mt))
+        return b64, mt
+    except Exception as e:
+        logger.error('_download_tg_photo error: {}'.format(e))
+        return None, None
+
+
 def _call_anthropic(system_prompt, messages):
     """Call Anthropic API and return reply text."""
     payload = json.dumps({
@@ -631,7 +663,7 @@ def _cancel_client_appointment(client_phone, target_date=None):
         return False, 'Помилка при скасуванні: {}'.format(e)
 
 
-def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None):
+def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, image_b64=None, image_media_type=None):
     """Process AI auto-reply in a separate thread."""
     conv_id = 'tg_{}'.format(chat_id)
 
@@ -651,6 +683,16 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None):
         history = _get_conversation_history(conv_id)
         if not history:
             return
+
+        # Inject image into last user message if provided
+        if image_b64 and image_media_type and history:
+            last = history[-1]
+            if last.get('role') == 'user':
+                text_content = last.get('content', '')
+                last['content'] = [
+                    {'type': 'image', 'source': {'type': 'base64', 'media_type': image_media_type, 'data': image_b64}},
+                    {'type': 'text', 'text': text_content or 'Що ви бачите на цьому фото?'},
+                ]
 
         # Call AI
         reply = _call_anthropic(prompt, history)
@@ -752,9 +794,35 @@ def process_update(update, bot_id):
 
             # AI auto-reply for client messages (not admin)
             if not is_admin:
-                if media_type != 'text' and media_type != 'sticker':
-                    # Media — quick text-only notice with dedup (no AI call)
-                    _media_notice = 'Дякую! На жаль, я поки працюю лише з текстовими повідомленнями. Напишіть ваше питання текстом, і я з радістю допоможу 🌸'
+                if media_type == 'photo' and file_id:
+                    # Photo — download and send to AI for analysis
+                    _img_b64, _img_mt = _download_tg_photo(file_id)
+                    if _img_b64:
+                        client_phone = None
+                        try:
+                            _conn = sqlite3.connect(DB_PATH, timeout=5)
+                            try:
+                                _row = _conn.execute("SELECT phone FROM users WHERE telegram_id=?", (chat_id,)).fetchone()
+                                client_phone = _row[0] if _row else None
+                            finally:
+                                _conn.close()
+                        except Exception:
+                            pass
+                        if _ai_sem.acquire(blocking=False):
+                            t = threading.Thread(
+                                target=handle_ai_reply,
+                                args=(chat_id, biz_conn_id, client_phone, sender_name, _img_b64, _img_mt),
+                                daemon=True)
+                            t.start()
+                    else:
+                        if _ai_sem.acquire(blocking=False):
+                            t = threading.Thread(target=_send_media_notice,
+                                args=(chat_id, biz_conn_id, 'Не вдалося завантажити фото. Спробуйте ще раз або напишіть текстом 🌸'),
+                                daemon=True)
+                            t.start()
+                elif media_type != 'text' and media_type != 'sticker':
+                    # Other media (video/voice/doc) — text-only notice
+                    _media_notice = 'Дякую! На жаль, я працюю лише з текстом та фото. Напишіть ваше питання текстом, і я з радістю допоможу 🌸'
                     if _ai_sem.acquire(blocking=False):
                         t = threading.Thread(
                             target=_send_media_notice,

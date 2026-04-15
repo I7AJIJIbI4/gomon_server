@@ -1,5 +1,5 @@
 <?php
-$allowed = ['gomonclinic.com', 'www.gomonclinic.com'];
+$allowed = ['gomonclinic.com', 'www.gomonclinic.com', 'drgomon.beauty', 'www.drgomon.beauty'];
 $origin  = $_SERVER['HTTP_ORIGIN']  ?? '';
 $referer = $_SERVER['HTTP_REFERER'] ?? '';
 

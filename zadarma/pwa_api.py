@@ -2713,6 +2713,16 @@ def admin_ai_intent():
         for k in ('client_name', 'client_phone', 'procedure', 'date', 'time', 'specialist', 'notes'):
             if intent.get(k) == 'null':
                 intent[k] = None
+    except (json.JSONDecodeError, ValueError):
+        # AI returned plain text instead of JSON — treat as clarification
+        logger.warning('ai_intent: non-JSON response, returning as reply: {}...'.format(ai_text[:100]))
+        return jsonify({
+            'action': 'unknown',
+            'reply': ai_text,
+            'client_name': None, 'client_phone': None,
+            'procedure': None, 'date': None, 'time': None,
+            'specialist': None, 'notes': None
+        })
     except Exception as e:
         logger.error('ai_intent error: {}'.format(e))
         return jsonify({'error': 'ai_error'}), 500
@@ -3226,11 +3236,28 @@ def cancel_my_appointment():
                 _specialist = _it.get('specialist')
                 break
 
-    # Знаходимо WLaunch ID якщо не переданий
-    if not appt_id:
-        appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
+    # Знаходимо WLaunch ID якщо не переданий або manual_
+    if appt_id and appt_id.startswith('manual_'):
+        # Manual appointment — look up real WLaunch ID
+        _manual_id = appt_id.replace('manual_', '')
+        _ma_conn = sqlite3.connect(DB_PATH, timeout=5)
+        _ma_row = _ma_conn.execute('SELECT wlaunch_id, notes FROM manual_appointments WHERE id=?', (_manual_id,)).fetchone()
+        _ma_conn.close()
+        if _ma_row and _ma_row[0]:
+            appt_id = _ma_row[0]
+        elif _ma_row and _ma_row[1]:
+            import re as _re2
+            _wl_m = _re2.search(r'wl:([a-f0-9-]+)', _ma_row[1] or '', _re2.IGNORECASE)
+            appt_id = _wl_m.group(1) if _wl_m else None
+        else:
+            appt_id = None
         if not appt_id:
-            return jsonify({'error': 'appointment_not_found'}), 404
+            appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
+    elif not appt_id:
+        appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
+
+    if not appt_id:
+        return jsonify({'error': 'appointment_not_found'}), 404
 
     # Скасовуємо в WLaunch
     ok, err = _cancel_wlaunch_appt(appt_id, branch_id=_branch_id)

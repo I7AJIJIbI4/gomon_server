@@ -2,7 +2,7 @@
 // Transforms prices.json [{cat, items:[{name,price}]}] into modal format
 // Returns: {1: [{title, rows:[[name,sub,price],...], note?}], 2: [...], ...}
 
-$allowed = ['gomonclinic.com', 'www.gomonclinic.com'];
+$allowed = ['gomonclinic.com', 'www.gomonclinic.com', 'drgomon.beauty', 'www.drgomon.beauty'];
 $origin  = $_SERVER['HTTP_ORIGIN']  ?? '';
 $referer = $_SERVER['HTTP_REFERER'] ?? '';
 

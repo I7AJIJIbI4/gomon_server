@@ -508,7 +508,7 @@ def create_wlaunch_appointment(client_phone, client_name, procedure_name,
             "client": {"id": wl_client_id},
             "start_time": start_time_utc,
             "duration": duration_min * 60,  # WLaunch uses seconds
-            "status": "CONFIRMED",
+            "status": "CONFIRMED_BY_CLIENT",
             "source": "BO",
             "service_resource_settings": srs,
         }

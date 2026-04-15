@@ -59,17 +59,23 @@
   let _pendingProc    = null;  // процедура, по якій ще не зроблено дію
   let _reminderTimer  = null;  // 10-хв таймер нагадування
 
-  // Зберігаємо історію для контексту Claude (persistent in localStorage)
-  const _histKey = CONFIG.userPhone ? ('gc_hist_' + CONFIG.userPhone) : 'gc_hist_guest';
+  // Історія чату — завантажується з сервера (ai_chat.db)
   let history = [];
-  try {
-    var _saved = localStorage.getItem(_histKey);
-    if (_saved) history = JSON.parse(_saved);
-    if (!Array.isArray(history)) history = [];
-  } catch(e) { history = []; }
-  function _saveHistory() {
-    try { localStorage.setItem(_histKey, JSON.stringify(history.slice(-20))); } catch(e) {}
+  let _historyLoaded = false;
+  async function _loadHistoryFromServer() {
+    if (!CONFIG.userPhone || _historyLoaded) return;
+    try {
+      var r = await fetch(CONFIG.apiUrl + '?history=1&phone=' + encodeURIComponent(CONFIG.userPhone) + '&token=' + encodeURIComponent(CONFIG.token || ''));
+      var data = await r.json();
+      if (data.messages && data.messages.length) {
+        history = data.messages;
+        // Render saved messages
+        history.forEach(function(m) { addMessage(m.role, m.content); });
+      }
+    } catch(e) {}
+    _historyLoaded = true;
   }
+  function _saveHistory() { /* no-op: server saves in chat.php */ }
 
   // ── RATE LIMIT ────────────────────────────────────────────────────────────
   // Гість: 10 запитів/день; авторизований: 20 запитів/день
@@ -450,6 +456,11 @@
     #gc-send:hover  { opacity: 0.85; }
     #gc-send:active { transform: scale(0.93); }
     #gc-send:disabled { opacity: 0.3; cursor: default; }
+    #gc-photo-btn { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--gc-border); background: transparent; cursor: pointer; color: var(--gc-text2); display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+    #gc-photo-preview { display: none; padding: 8px 12px; background: var(--gc-bg2); border-top: 1px solid var(--gc-border); }
+    #gc-photo-preview img { max-height: 80px; border-radius: 8px; }
+    #gc-photo-preview .gc-photo-remove { background: none; border: none; color: var(--gc-text3); cursor: pointer; font-size: 18px; margin-left: 8px; vertical-align: top; }
+    .gc-msg-img { max-width: 100%; border-radius: 8px; margin-bottom: 4px; }
 
     #gc-mic {
       width: 42px; height: 42px;
@@ -560,7 +571,10 @@
 
       <!-- Footer / Input -->
       <div id="gc-footer">
+        <div id="gc-photo-preview"><img id="gc-photo-thumb"><button class="gc-photo-remove" onclick="gcClearPhoto()">✕</button></div>
         <div id="gc-input-row">
+          <input type="file" id="gc-photo-input" accept="image/*" style="display:none">
+          <button id="gc-photo-btn" aria-label="Додати фото" title="Додати фото"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8.5 5L7 3h10l-1.5 2"/></svg></button>
           <textarea id="gc-input" placeholder="Напишіть ваш запит…" rows="1"></textarea>
           <button id="gc-mic" aria-label="Голосовий ввід" title="Голосовий ввід"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
           <button id="gc-send" aria-label="Надіслати">➤</button>
@@ -579,6 +593,43 @@
   const elTypingText  = document.getElementById('gc-typing-text');
   const elInput       = document.getElementById('gc-input');
   const elSend        = document.getElementById('gc-send');
+  const elPhotoBtn    = document.getElementById('gc-photo-btn');
+  const elPhotoInput  = document.getElementById('gc-photo-input');
+  const elPhotoPreview = document.getElementById('gc-photo-preview');
+  const elPhotoThumb  = document.getElementById('gc-photo-thumb');
+  let _pendingImage = null;  // {b64, type}
+
+  if (elPhotoBtn) {
+    elPhotoBtn.addEventListener('click', () => elPhotoInput.click());
+  }
+  if (elPhotoInput) {
+    elPhotoInput.addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file || !file.type.startsWith('image/')) return;
+      if (file.size > 5 * 1024 * 1024) {
+        addMessage('assistant', 'Фото завелике (макс. 5 МБ). Спробуйте менше.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const b64 = dataUrl.split(',')[1];
+        const mtype = file.type || 'image/jpeg';
+        _pendingImage = {b64: b64, type: mtype};
+        elPhotoThumb.src = dataUrl;
+        elPhotoPreview.style.display = 'flex';
+        elPhotoPreview.style.alignItems = 'center';
+        elPhotoPreview.style.gap = '8px';
+      };
+      reader.readAsDataURL(file);
+      this.value = '';
+    });
+  }
+  window.gcClearPhoto = function() {
+    _pendingImage = null;
+    elPhotoPreview.style.display = 'none';
+    elPhotoThumb.src = '';
+  };
   const elMic         = document.getElementById('gc-mic');
   const elClose       = document.getElementById('gc-close-btn');
 
@@ -795,12 +846,13 @@
     document.body.style.overflow = 'hidden';
     if (!_welcomeShown) {
       _welcomeShown = true;
-      // Restore previous conversation from localStorage
-      if (history.length > 0) {
-        history.forEach(function(m) { addMessage(m.role, m.content); });
-      } else {
-        addMessage('assistant', WELCOME_MESSAGE);
-      }
+      // Load history from server, then show welcome if empty
+      _loadHistoryFromServer().then(function() {
+        if (history.length === 0) {
+          addMessage('assistant', WELCOME_MESSAGE);
+        }
+        scrollBottom();
+      });
     }
     setTimeout(() => elInput.focus(), 350);
     scrollBottom();
@@ -886,7 +938,7 @@
 
   async function sendMessage() {
     const text = elInput.value.trim();
-    if (!text || isLoading) return;
+    if (!text && !_pendingImage || isLoading) return;
 
     // Команда виходу з акаунту
     if (/^\/(logout|вийти|exit)$/i.test(text) || text.toLowerCase() === 'вийти з акаунту') {
@@ -901,8 +953,18 @@
     isLoading = true;
     elSend.disabled = true;
 
-    addMessage('user', text);
-    history.push({ role: 'user', content: text });
+    if (_pendingImage) {
+      addMessage('user', text || '📷 Фото');
+      // Replace last bubble content with image + text
+      var _bubbles = document.querySelectorAll('#gc-messages .gc-bubble-wrap');
+      var _lastBubble = _bubbles.length ? _bubbles[_bubbles.length - 1].querySelector('.gc-bubble') : null;
+      if (_lastBubble) {
+        _lastBubble.innerHTML = '<img class="gc-msg-img" src="' + elPhotoThumb.src + '" alt="фото">' + (text ? '<br>' + escapeHtml(text) : '');
+      }
+    } else {
+      addMessage('user', text);
+    }
+    history.push({ role: 'user', content: text || (_pendingImage ? 'Що ви бачите на цьому фото?' : '') });
     while (history.length > 20) history.shift();
     _saveHistory();
 
@@ -925,21 +987,22 @@
 
     try {
       const _ac = new AbortController();
-      const _to = setTimeout(function() { _ac.abort(); }, 25000);
+      const _to = setTimeout(function() { _ac.abort(); }, _pendingImage ? 40000 : 25000);
 
       const res = await fetch(CONFIG.apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({
           user: {
             name:  CONFIG.userName,
             phone: CONFIG.userPhone,
           },
           messages: history,
-        }),
+        }, _pendingImage ? {image: _pendingImage.b64, image_type: _pendingImage.type} : {})),
         signal: _ac.signal,
       });
       clearTimeout(_to);
+      gcClearPhoto();
 
       const data = await res.json();
 

@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-if (isset($_GET['zd_echo'])) exit($_GET['zd_echo']);
+if (isset($_GET['zd_echo'])) exit(preg_replace('/[^a-zA-Z0-9]/','',$_GET['zd_echo']));
 
 // Отримання даних
 $input = file_get_contents('php://input');
@@ -18,15 +18,26 @@ if (empty($data) && !empty($_POST)) {
 
 error_log("Zadarma webhook: " . json_encode($data));
 
+require_once __DIR__ . '/app/config.php';
 $config = [
-    'zadarma_key'    => '322168f1b94be856f0de',
-    'zadarma_secret' => 'ae4b189367a9f6de88b3',
-    'main_phone'     => '0733103110',
+    'zadarma_key'    => ZADARMA_KEY,
+    'zadarma_secret' => ZADARMA_SECRET,
+    'main_phone'     => ZADARMA_PHONE,
 ];
+
+// Signature verification — reject unsigned/forged requests
+$zd_signature = $_SERVER['HTTP_SIGNATURE'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $zd_signature) {
+    $expected = base64_encode(hash_hmac('sha1', $input, $config['zadarma_secret']));
+    if (!hash_equals($expected, $zd_signature)) {
+        http_response_code(403);
+        exit(json_encode(['error' => 'Invalid signature']));
+    }
+}
 
 // Логування у файл
 function writeLog($message) {
-    $logFile = '/home/gomoncli/public_html/logs/webhook.log';
+    $logFile = '/var/log/gomon/webhook.log';
     $timestamp = date('Y-m-d H:i:s');
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
 }
