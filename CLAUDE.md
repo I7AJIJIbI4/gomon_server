@@ -454,14 +454,24 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ---
 
-## Сервер (міграція виконана 2026-04)
+## Сервер (міграція НЕ завершена — 2026-04-15)
 
-### Поточний сервер
+> **⚠️ СТАТУС:** Домен gomonclinic.com вже вказує на новий VPS (45.94.157.127), але застосунок там **НЕ розгорнуто**. Webuzo default page. Для доступу до сервера — KVM-консоль через my.hostiq.ua (провайдер HostIQ) або відкрити порт 2005 у firewall провайдера. SSH key-only — пароль не підходить; SSH ключ ще не додано до authorized_keys на VPS.
+
+> **Старий сервер (31.131.18.79):** shared hosting twinservers. check_flask.sh є, але перейменований у `.disabled`. Cron від user-сесії не видно (pidgrep -x cron нічого не повертає). Gunicorn може впасти і не підніметись без ручного старту. Потребує налаштування systemd або повної міграції на VPS.
+
+### Цільова конфігурація нового VPS
 - **IP:** 45.94.157.127, root SSH (key-only)
 - **OS:** Ubuntu 24.04, Python 3.12
 - **Web:** nginx, certbot SSL (auto-renew), HSTS
 - **Security:** UFW (22, 80, 443), fail2ban
 - **Domain:** drgomon.beauty (primary), redirect від gomonclinic.com та drgomon.com
+
+### Як отримати SSH-доступ до VPS (HostIQ)
+1. my.hostiq.ua → VPS → **KVM-консоль** (або Termius SSH з консолі)
+2. В консолі: `mkdir -p ~/.ssh && echo "ВАШ_ПУБЛІЧНИЙ_КЛЮЧ" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`
+3. Або тимчасово увімкнути пароль: `sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && systemctl restart sshd`
+4. Після цього: `ssh root@45.94.157.127` (ключ `~/.ssh/id_rsa_termius`)
 
 ### Структура
 | Шлях | Призначення |
@@ -982,3 +992,30 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 2. Та ж `_build_system_prompt()` + `_call_anthropic()` логіка з контекстом "Instagram"
 3. Відповідь через Graph API v25.0 `/me/messages`
 4. Ескалація аналогічна TG
+
+---
+
+## Інцидент 2026-04-15 — діагностика "пусто в застосунку + OTP не працює"
+
+### Що перевірялось
+- `gomonclinic.com` вже вказує на новий VPS (45.94.157.127) — на ньому **нічого не розгорнуто**, лише Webuzo default page
+- Старий сервер (31.131.18.79, shared hosting twinservers) — gunicorn (`pwa_api.py`) **впав 14 квітня ~13:00** (отримав SIGTERM) і не піднявся
+- Watchdog `check_flask.sh` був перейменований у `check_flask.sh.disabled` → не виконувався
+- У crontab залишився лише `pgrep -f gunicorn` — не помічає "мертвий" процес (zombie/stale match)
+- OTP не надсилався бо Flask повертав 404 (процес не запущений)
+
+### Тимчасові зміни (зроблені і ВІДКОЧЕНІ у тій самій сесії)
+1. Gunicorn запущено вручну → `{"clients":594,"db":true,"ok":true}` ✅
+2. `check_flask.sh.disabled` → `check_flask.sh` + додано в crontab `*/2 * * * *`
+3. **Всі зміни відкочено** за запитом: crontab відновлено до оригіналу, файл перейменовано назад у `.disabled`
+
+### Поточний стан після сесії
+- Старий сервер: gunicorn запущений (PID існує), але **без надійного watchdog** — впаде знову
+- Новий VPS: нічого не розгорнуто, SSH key-only (ключ не додано до authorized_keys)
+- Провайдер VPS: **HostIQ** (my.hostiq.ua), Webuzo panel на порту 2005 (заблокований firewall провайдера)
+
+### Що треба зробити для завершення міграції
+1. Через KVM-консоль HostIQ додати SSH публічний ключ (`~/.ssh/id_rsa_termius.pub`) до `/root/.ssh/authorized_keys` на VPS
+2. Розгорнути застосунок: `git clone`, nginx, systemd services, config.py, БД з бекапу
+3. Перевірити `curl https://drgomon.beauty/api/health`
+4. Після успішної міграції — зупинити gunicorn на старому сервері
