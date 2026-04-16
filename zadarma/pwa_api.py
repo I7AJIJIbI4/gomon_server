@@ -446,10 +446,15 @@ def parse_services(client: dict) -> list:
     today_str = kyiv_now().strftime('%Y-%m-%d')
     result = []
     for item in items:
-        if item.get('status') == 'CANCELLED':
-            continue
+        is_cancelled = (item.get('status') or '').upper() == 'CANCELLED'
         date_str = item.get('date', '')
         hour     = item.get('hour')
+        if is_cancelled:
+            appt_status = 'cancelled'
+        elif date_str >= today_str:
+            appt_status = 'upcoming'
+        else:
+            appt_status = 'done'
         result.append({
             'service': item.get('service', ''),
             'date':    date_str,
@@ -457,8 +462,7 @@ def parse_services(client: dict) -> list:
             'time':    '{:02d}:{:02d}'.format(hour, item.get('minute', 0) or 0) if hour is not None else '',
             'specialist': item.get('specialist', ''),
             'duration_min': item.get('duration_min', 60),
-            # Якщо дата сьогодні або в майбутньому — "upcoming", інакше — "done"
-            'status':  'upcoming' if date_str >= today_str else 'done',
+            'status':  appt_status,
         })
 
     # Сортуємо: upcoming вперед, потім по даті спадання
@@ -799,7 +803,7 @@ def get_my_appointments():
         rows = conn.execute(
             '''SELECT procedure_name, date, time, status, id, specialist, duration, wlaunch_id
                FROM manual_appointments
-               WHERE client_phone=? AND status != 'CANCELLED'
+               WHERE client_phone=?
                ORDER BY date DESC''',
             (normalized,)
         ).fetchall()
@@ -811,7 +815,13 @@ def get_my_appointments():
             wl_id = r['wlaunch_id'] if 'wlaunch_id' in r.keys() else None
             if wl_id and wl_id in existing_wl_ids:
                 continue
-            appt_status = 'upcoming' if r['date'] >= today_str else 'done'
+            is_manual_cancelled = (r['status'] or '').upper() == 'CANCELLED'
+            if is_manual_cancelled:
+                appt_status = 'cancelled'
+            elif r['date'] >= today_str:
+                appt_status = 'upcoming'
+            else:
+                appt_status = 'done'
             appointments.append({
                 'service': r['procedure_name'],
                 'date':    r['date'],
@@ -824,12 +834,14 @@ def get_my_appointments():
     except Exception as e:
         logger.warning('manual_appointments merge error: {}'.format(e))
 
-    # Пересортовуємо: upcoming вперед
-    upcoming = [x for x in appointments if x.get('status') == 'upcoming']
-    done     = [x for x in appointments if x.get('status') != 'upcoming']
+    # Пересортовуємо: upcoming → cancelled → done
+    upcoming  = [x for x in appointments if x.get('status') == 'upcoming']
+    cancelled = [x for x in appointments if x.get('status') == 'cancelled']
+    done      = [x for x in appointments if x.get('status') == 'done']
     upcoming.sort(key=lambda x: x['date'])
+    cancelled.sort(key=lambda x: x['date'], reverse=True)
     done.sort(key=lambda x: x['date'], reverse=True)
-    return jsonify({'appointments': upcoming + done})
+    return jsonify({'appointments': upcoming + cancelled + done})
 
 # ── PRICES ──
 

@@ -48,7 +48,8 @@ logger = logging.getLogger(__name__)
 def _get_main_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("📋 Мої записи"), KeyboardButton("📱 Додаток", web_app=WebAppInfo(url="https://drgomon.beauty/app/"))],
-        [KeyboardButton("📍 Як знайти"), KeyboardButton("📞 Зателефонувати")],
+        [KeyboardButton("📍 Як знайти"), KeyboardButton("💬 Контакти")],
+        [KeyboardButton("🤖 ШІ асистент")],
         [KeyboardButton("📢 Канал акцій")]
     ], resize_keyboard=True)
 
@@ -127,13 +128,11 @@ async def start_command(update, context: ContextTypes.DEFAULT_TYPE):
                 f"Telegram підключено!\n\n"
                 f"Тепер ви отримуватимете нагадування про записи, "
                 f"акції та персональні рекомендації.\n\n"
-                f"/app - Наш застосунок, який точно Вам допоможе\n"
-                f"/my_services - Ваші минулі і майбутні записи\n"
-                f"/map - Знайти нас на мапі\n"
-                f"/scheme - Побачити будівлю на фото\n"
-                f"/channel - Актуальні новини та акції в ТГ каналі\n"
-                f"/call - Зателефонувати лікарю Вікторії\n\n"
-                f"Швидкий доступ: кнопка ☰ (меню) зліва внизу",
+                f"Оберіть потрібне з меню нижче або скористайтесь командами:\n\n"
+                f"/my_services - Мої записи\n"
+                f"/contact - Контакти лікаря\n"
+                f"/map - Як нас знайти\n"
+                f"/channel - Канал акцій та новин",
                 reply_markup=_get_main_keyboard()
             )
             return
@@ -143,15 +142,14 @@ async def start_command(update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if is_authenticated(user_id):
             welcome_message = (
-                f"Вітаємо, {first_name}!\n\n"
-                "Ви авторизовані в системі Dr. Gomon Cosmetology\n\n"
-                "/app - Наш застосунок, який точно Вам допоможе\n"
-                "/my_services - Ваші минулі і майбутні записи\n"
-                "/map - Знайти нас на мапі\n"
-                "/scheme - Побачити будівлю на фото\n"
-                "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії\n\n"
-                "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
+                f"Вітаємо, {first_name}! \n\n"
+                "Раді бачити вас у Dr. Gomon Cosmetology\n\n"
+                "Оберіть потрібне з меню нижче або скористайтесь командами:\n\n"
+                "/my_services - Мої записи\n"
+                "/contact - Контакти лікаря\n"
+                "/map - Як нас знайти\n"
+                "/scheme - Фото локації\n"
+                "/channel - Канал акцій та новин"
             )
 
             await update.message.reply_text(
@@ -239,7 +237,7 @@ async def contact_handler(update, context: ContextTypes.DEFAULT_TYPE):
                 "/map - Знайти нас на мапі\n"
                 "/scheme - Побачити будівлю на фото\n"
                 "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "/call - Зателефонувати лікарю Вікторії\n/contact - Написати лікарю (Instagram/Telegram)\n\n"
                 "Швидкий доступ: кнопка ☰ (меню) зліва внизу"
             )
 
@@ -262,7 +260,7 @@ async def contact_handler(update, context: ContextTypes.DEFAULT_TYPE):
                 "/map - Знайти нас на мапi\n"
                 "/scheme - Побачити будiвлю на фото\n"
                 "/channel - Актуальнi новини та акцiї в ТГ каналi\n"
-                "/call - Зателефонувати лiкарю Вiкторiї"
+                "/call - Зателефонувати лiкарю Вiкторiї\n/contact - Написати лiкарю"
             )
 
             await update.message.reply_text(denied_message)
@@ -282,7 +280,7 @@ async def call_command(update, context: ContextTypes.DEFAULT_TYPE):
     try:
         call_message = (
             "📞 Телефон лікаря Вікторії\n\n"
-            "📱 +380996093860\n\n"
+            "📱 +380733103110\n\n"
             "💡 Натисніть на номер для виклику"
         )
 
@@ -294,23 +292,66 @@ async def call_command(update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Помилка отримання телефону")
 
 
+async def contact_command(update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    logger.info(f"/contact called by user: {user_id}")
+
+    try:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Instagram Direct", url="https://ig.me/m/dr.gomon")],
+            [InlineKeyboardButton("Telegram", url="https://t.me/DrGomonCosmetology")],
+            [InlineKeyboardButton("Зателефонувати 073-310-31-10", url="tel:+380733103110")],
+        ])
+        await update.message.reply_text(
+            "💬 Зв'язатись з лікарем Вікторією\n\n"
+            "Оберіть зручний спосіб:",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.exception(f"Error in contact_command: {e}")
+        await update.message.reply_text("❌ Помилка")
+
+
 async def map_command(update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"/map called by user: {user_id}")
 
-    try:
-        map_message = (
-            "🗺️ Розташування Dr. Gomon Cosmetology на мапі\n\n"
-            "📍 Посилання: https://maps.app.goo.gl/iqNLsScEutJhVKLi7\n\n"
-            "🚗 Оберіть зручний маршрут"
-        )
+    AERIAL   = '/home/gomoncli/public_html/sitepro/location-aerial.jpg'
+    ENTRANCE = '/home/gomoncli/public_html/sitepro/location-entrance.jpg'
 
-        await update.message.reply_text(map_message)
+    try:
+        from telegram import InputMediaPhoto
+        media = []
+        for path in (AERIAL, ENTRANCE):
+            try:
+                media.append(open(path, 'rb'))
+            except FileNotFoundError:
+                pass
+
+        if media:
+            captions = [
+                "📍 БЦ Галерея, 6 поверх\nвул. Смілянська, 23, Черкаси\n\n🚪 Лівий вхід «Ліфт» (поруч з кафе «Шарлотка»)\n\n🗺 Google Maps: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8",
+                ""
+            ]
+            media_group = []
+            for i, f in enumerate(media):
+                media_group.append(InputMediaPhoto(f, caption=captions[i] if i < len(captions) else ""))
+            await context.bot.send_media_group(chat_id=update.message.chat_id, media=media_group)
+        else:
+            await update.message.reply_text(
+                "📍 БЦ Галерея, 6 поверх\nвул. Смілянська, 23, Черкаси\n\n"
+                "🗺 Google Maps: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8"
+            )
         logger.info(f"Map sent to user {user_id}")
 
     except Exception as e:
         logger.exception(f"Error in map_command: {e}")
         await update.message.reply_text("❌ Помилка отримання карти")
+    finally:
+        for f in media:
+            if hasattr(f, 'close'):
+                f.close()
 
 
 async def scheme_command(update, context: ContextTypes.DEFAULT_TYPE):
@@ -500,7 +541,7 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
                 "/map - Знайти нас на мапі\n"
                 "/scheme - Побачити будівлю на фото\n"
                 "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "/call - Зателефонувати лікарю Вікторії\n/contact - Написати лікарю (Instagram/Telegram)\n\n"
                 "Адмін:\n"
                 "/monitor - Моніторинг API\n"
                 "/diagnostic - Системна діагностика\n"
@@ -526,7 +567,7 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
                 "/map - Знайти нас на мапі\n"
                 "/scheme - Побачити будівлю на фото\n"
                 "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії\n\n"
+                "/call - Зателефонувати лікарю Вікторії\n/contact - Написати лікарю (Instagram/Telegram)\n\n"
                 "Якщо код для входу не приходить:\n"
                 "- Перевiрте папку Спам в SMS\n"
                 "- Введiть gomon в пошуку повiдомлень\n\n"
@@ -886,6 +927,20 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
         return await map_command(update, context)
     elif text == "📞 Зателефонувати":
         return await call_command(update, context)
+    elif text == "💬 Контакти":
+        return await contact_command(update, context)
+    elif text == "🤖 ШІ асистент":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 Написати GomonAI", url="https://t.me/DrGomonCosmetology")],
+        ])
+        return await update.message.reply_text(
+            "🤖 GomonAI — ваш AI-асистент\n\n"
+            "Підбере процедуру, розповість про ціни, "
+            "проаналізує фото шкіри та допоможе скасувати запис.\n\n"
+            "Натисніть кнопку нижче — ШІ відповість миттєво!",
+            reply_markup=kb
+        )
     elif text == "📢 Канал акцій":
         return await channel_command(update, context)
 
@@ -1171,6 +1226,7 @@ def main():
     application.add_handler(CommandHandler("app", app_command))
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
     application.add_handler(CommandHandler("call", call_command))
+    application.add_handler(CommandHandler("contact", contact_command))
     application.add_handler(CommandHandler("map", map_command))
     application.add_handler(CommandHandler("scheme", scheme_command))
     application.add_handler(CommandHandler("channel", channel_command))
