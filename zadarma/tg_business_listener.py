@@ -189,6 +189,7 @@ def _build_system_prompt(client_phone=None):
                 if row[1]: name_parts.append(row[1])
                 if name_parts:
                     prompt += "\n\n---\nДані поточного клієнта:\nІм'я: {}".format(' '.join(name_parts))
+                    prompt += "\nТелефон: {}".format(client_phone)
                 services = json.loads(row[2] or '[]')
                 visits = row[3] or 0
                 if services:
@@ -692,6 +693,63 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
         should, reason = _check_ai_should_reply(conv_id, chat_id)
         if not should:
             logger.debug('AI skip for {}: {}'.format(conv_id, reason))
+            if reason == 'rate_limited':
+                # Try to create deposit and get payment URL
+                pay_url = None
+                try:
+                    _cp = client_phone
+                    if _cp:
+                        import hmac as _hmac, hashlib as _hashlib
+                        from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
+                        _oid = 'dep_{}_{}'.format(_cp, int(time.time()))
+                        _odate = int(time.time())
+                        _sign_str = ';'.join(str(x) for x in [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, _oid, _odate, 5.0, 'EUR', 'Оплата консультаційних послуг', 1, 5.0])
+                        _sig = _hmac.new(WFP_MERCHANT_SECRET.encode(), _sign_str.encode(), _hashlib.md5).hexdigest()
+                        _resp = requests.post('https://secure.wayforpay.com/pay?behavior=offline', data={
+                            'merchantAccount': WFP_MERCHANT_ACCOUNT, 'merchantDomainName': WFP_MERCHANT_DOMAIN,
+                            'merchantSignature': _sig, 'merchantTransactionType': 'SALE',
+                            'merchantTransactionSecureType': 'AUTO', 'orderReference': _oid,
+                            'orderDate': _odate, 'amount': 5.0, 'currency': 'EUR',
+                            'productName[]': 'Оплата консультаційних послуг', 'productPrice[]': 5.0,
+                            'productCount[]': 1, 'clientPhone': _cp,
+                            'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
+                            'paymentSystems': 'card;googlePay;applePay', 'language': 'UA',
+                        }, timeout=10)
+                        _url_data = _resp.json()
+                        pay_url = _url_data.get('url', '')
+                        if pay_url:
+                            import sqlite3 as _sq2
+                            _c2 = _sq2.connect(DB_PATH, timeout=5)
+                            _c2.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
+                                        (_cp, 5.0, 0, _oid, 'pending'))
+                            _c2.commit()
+                            _c2.close()
+                except Exception as _e:
+                    logger.warning('Deposit create in rate_limit: {}'.format(_e))
+
+                if pay_url:
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton('Внести депозит 5 EUR', url=pay_url)]])
+                    limit_msg = (
+                        'Ви використали всі безкоштовні запити на сьогодні.\n\n'
+                        'Внесіть депозит 5 EUR — ліміт знімається на день, '
+                        'а гроші залишаються на вашому рахунку для оплати будь-якої процедури або косметики.'
+                    )
+                    try:
+                        payload = {'chat_id': int(chat_id), 'text': limit_msg, 'reply_markup': kb.to_dict()}
+                        if biz_conn_id:
+                            payload['business_connection_id'] = biz_conn_id
+                        requests.post('https://api.telegram.org/bot{}/sendMessage'.format(BOT_TOKEN), json=payload, timeout=10)
+                    except Exception:
+                        _send_ai_reply(chat_id, limit_msg + '\n\nОплатити: ' + pay_url, biz_conn_id)
+                else:
+                    limit_msg = (
+                        'Ви використали всі безкоштовні запити на сьогодні.\n\n'
+                        'Внесіть депозит 5 EUR — ліміт знімається на день. '
+                        'Зв\'яжіться з лікарем для деталей: https://t.me/DrGomonCosmetology'
+                    )
+                    _send_ai_reply(chat_id, limit_msg, biz_conn_id)
+                _save_ai_message(conv_id, chat_id, limit_msg)
             return
 
         # Build prompt
@@ -735,6 +793,10 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
                 _save_ai_message(conv_id, chat_id, reply)
             logger.info("AI cancel for {}: ok={}".format(conv_id, ok))
             return
+
+        # Strip PROCEDURE tag (invisible to client, used in chat.php only)
+        import re as _re2
+        reply = _re2.sub(r'<PROCEDURE>.*?</PROCEDURE>', '', reply, flags=_re2.DOTALL).strip()
 
         # Check for escalation tag
         if '<ESCALATE>' in reply:

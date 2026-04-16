@@ -255,8 +255,31 @@ try {
 
         if ($count >= $rl_limit) {
             $rl_db->close();
+            // Try to create deposit payment URL for authed users
+            $deposit_url = null;
+            if ($phone_norm) {
+                try {
+                    $ch_dep = curl_init('http://127.0.0.1:5001/api/deposit/create-internal');
+                    curl_setopt_array($ch_dep, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POST => true,
+                        CURLOPT_TIMEOUT => 10,
+                        CURLOPT_HTTPHEADER => [
+                            'Content-Type: application/json',
+                            'X-Internal-Phone: ' . $phone_norm,
+                        ],
+                        CURLOPT_POSTFIELDS => json_encode(['phone' => $phone_norm]),
+                    ]);
+                    $dep_resp = curl_exec($ch_dep);
+                    curl_close($ch_dep);
+                    $dep_data = json_decode($dep_resp, true);
+                    if (!empty($dep_data['pay_url'])) {
+                        $deposit_url = $dep_data['pay_url'];
+                    }
+                } catch (Exception $e) {}
+            }
             http_response_code(429);
-            echo json_encode(['error' => 'rate_limit']);
+            echo json_encode(['error' => 'rate_limit', 'deposit_url' => $deposit_url]);
             exit;
         }
     }

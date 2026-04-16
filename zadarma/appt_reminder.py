@@ -164,9 +164,9 @@ def run_reminder(dry_run=False):
     Запускати о 10:00 та 18:00.
     """
     tomorrow = (kyiv_now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
-    logger.info('=== REMINDER 24h: перевіряємо записи на {} ==='.format(tomorrow))
+    logger.info('=== REMINDER 24h: перевіряємо manual записи на {} ==='.format(tomorrow))
 
-    appts = _collect_appts(tomorrow)
+    appts = _get_manual_appts(tomorrow)  # тільки наші записи, WLaunch сам шле SMS
     logger.info('Знайдено {} записів'.format(len(appts)))
 
     sent = skipped = failed = 0
@@ -218,9 +218,9 @@ def run_feedback(dry_run=False):
     Запускати о 20:00.
     """
     today = kyiv_now().date().strftime('%Y-%m-%d')
-    logger.info('=== FEEDBACK: перевіряємо записи на {} ==='.format(today))
+    logger.info('=== FEEDBACK: перевіряємо manual записи на {} ==='.format(today))
 
-    appts = _collect_appts(today)
+    appts = _get_manual_appts(today)  # тільки наші записи
     logger.info('Знайдено {} записів'.format(len(appts)))
 
     sent = skipped = failed = 0

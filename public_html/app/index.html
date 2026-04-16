@@ -1450,6 +1450,11 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
           <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg>
           <p>Написати нам</p>
         </div>
+        <div class="quick-tile" id="deposit-balance-tile" onclick="openDepositBalance()">
+          <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="5" width="18" height="13" rx="2"/><path d="M2 9h18"/><path d="M6 14h3" stroke-linecap="round"/></svg>
+          <p>Мій баланс</p>
+          <span id="deposit-balance-val" style="font-size:13px;color:var(--gold);font-weight:500;margin-top:2px">—</span>
+        </div>
         <div class="quick-tile" id="tg-connect-tile" style="display:none" onclick="openTgConnect()">
           <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M20 3L1 10l6 2.5m13-9.5l-13 9.5m13-9.5l-5 16-8-6.5" stroke-linejoin="round"/></svg>
           <p>Telegram-бот</p>
@@ -2040,7 +2045,9 @@ async function loadAdminStats() {
         const d = _fmtDateStr(r.date);
         const h = r.hour != null ? String(r.hour).padStart(2,'0') + ':00' : '';
         const isToday = r.date === _fmtDate(new Date());
-        return `<div class="admin-visit-row${isToday?' today':''}">
+        var _rPhone = (r.phone||'').replace(/'/g,"\\'");
+        var _rSvc = (r.service||'').replace(/'/g,"\\'");
+        return `<div class="admin-visit-row${isToday?' today':''}" style="cursor:pointer" onclick="_openRecentAppt('${_esc(r.date)}','${_esc(_rPhone)}','${_esc(_rSvc)}')">
           <span class="admin-visit-date">${_esc(d)}${h ? '<br><span style="font-size:12px;color:var(--gold-pale)">' + _esc(h) + '</span>' : ''}</span>
           <div class="admin-visit-info">
             <div class="admin-visit-name">${_esc(r.first_name)} ${_esc(r.last_name)}</div>
@@ -2591,6 +2598,24 @@ function renderCalMonth() {
   document.getElementById('adm-cal-container').innerHTML = html;
 }
 
+function _openRecentAppt(date, phone, service) {
+  adminGo('admin-appts');
+  setTimeout(function() {
+    calDate = new Date(date + 'T00:00:00');
+    calView = 'day';
+    renderCalendar();
+    // Find the appointment by phone+service and open action sheet
+    setTimeout(function() {
+      var found = calAppointments.find(function(a) {
+        var aPhone = (a.client_phone || '').replace(/\D/g, '');
+        var pPhone = phone.replace(/\D/g, '');
+        return aPhone.slice(-9) === pPhone.slice(-9) && a.date === date;
+      });
+      if (found) openApptAction(String(found.id));
+    }, 500);
+  }, 400);
+}
+
 /* ─────────────────────────────────── APPT ACTION SHEET ── */
 let _actionApptId = null;
 function openApptAction(id) {
@@ -2696,12 +2721,67 @@ function closeApptAction() {
   document.getElementById('adm-appt-action').classList.remove('show');
 }
 
+async function _showAdminDepositHistory(phone) {
+  try {
+    var r = await api('/deposit/balance?phone=' + encodeURIComponent(phone));
+    var balance = r.balance || 0;
+    var txs = r.transactions || [];
+    var html = '<div style="padding:20px">';
+    html += '<div style="text-align:center;margin-bottom:16px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Баланс клієнта</span></div>';
+    if (txs.length) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
+      txs.forEach(function(tx) {
+        var d = tx.date ? tx.date.slice(0,10) : '';
+        var sign = tx.amount >= 0 ? '+' : '';
+        var color = tx.amount >= 0 ? 'var(--gold)' : 'var(--cancel-fg)';
+        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '') : (tx.reason || 'Списання');
+        html += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">';
+        html += '<div><div style="font-size:15px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
+        html += '<div style="font-size:16px;font-weight:500;color:' + color + '">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<p style="text-align:center;color:var(--text3);margin-top:12px">Транзакцій немає</p>';
+    }
+    html += '</div>';
+    document.getElementById('confirm-modal-title').textContent = 'Баланс клієнта';
+    document.getElementById('confirm-modal-text').innerHTML = html;
+    document.getElementById('confirm-modal-ok').style.display = 'none';
+    document.getElementById('confirm-modal-cancel').textContent = 'Закрити';
+    document.getElementById('confirm-modal').classList.add('show');
+    document.getElementById('confirm-modal-cancel').onclick = function() {
+      document.getElementById('confirm-modal').classList.remove('show');
+      document.getElementById('confirm-modal-ok').style.display = '';
+      document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+      document.getElementById('confirm-modal-cancel').onclick = null;
+    };
+  } catch(e) {
+    showToast('Помилка завантаження');
+  }
+}
+
 async function openClientCard(phone, name) {
   var modal = document.getElementById('client-card-modal');
   if (!modal) return;
   modal.querySelector('.client-card-name').textContent = name || phone || '—';
   modal.querySelector('.client-card-phone').innerHTML = '<a href="tel:+' + _esc(phone) + '" style="color:var(--gold);text-decoration:none">' + _esc((phone||'').replace(/^380/,'0')) + '</a>';
   modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Завантаження...</div>';
+  // Load deposit balance
+  var balEl = modal.querySelector('.client-card-balance');
+  if (!balEl) {
+    balEl = document.createElement('div');
+    balEl.className = 'client-card-balance';
+    balEl.style.cssText = 'margin:8px 0 12px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;justify-content:space-between;align-items:center';
+    modal.querySelector('.client-card-phone').insertAdjacentElement('afterend', balEl);
+  }
+  balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Баланс</span><span style="font-size:14px;color:var(--text3)">...</span>';
+  fetch('/api/deposit/balance?phone=' + encodeURIComponent(phone), {headers: {Authorization: 'Bearer ' + token}})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var bal = d.balance || 0;
+      balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Депозит</span><span style="font-size:16px;font-weight:500;color:' + (bal > 0 ? 'var(--gold)' : 'var(--text3)') + ';cursor:pointer" onclick="event.stopPropagation();_showAdminDepositHistory(\'' + _esc(phone) + '\')">' + bal.toFixed(0) + ' грн ›</span>';
+    }).catch(function() { balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Депозит</span><span style="color:var(--text3)">—</span>'; });
   modal.classList.add('show');
 
   try {
@@ -4465,6 +4545,7 @@ async function afterLogin() {
   // Звичайний клієнт
   document.getElementById('home-name').textContent = user.name || 'Вітаємо';
   renderHomeAppt();
+  loadDepositBalance();
   loadPromos();
   loadNews();
   renderAppointments();
@@ -4528,6 +4609,62 @@ function fmtDateShort(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     return d.toLocaleDateString('uk-UA', {day:'numeric', month:'short'});
   } catch(e) { return dateStr; }
+}
+
+async function loadDepositBalance() {
+  var el = document.getElementById('deposit-balance-val');
+  if (!el || !token) return;
+  try {
+    var r = await api('/deposit/balance');
+    var balance = r.balance || 0;
+    el.textContent = balance > 0 ? balance.toFixed(0) + ' грн' : '0 грн';
+    if (balance > 0) el.style.color = 'var(--gold)';
+    else el.style.color = 'var(--text3)';
+  } catch(e) {
+    el.textContent = '—';
+  }
+}
+
+async function openDepositBalance() {
+  try {
+    var r = await api('/deposit/balance');
+    var balance = r.balance || 0;
+    var txs = r.transactions || [];
+    var html = '<div style="padding:20px">';
+    html += '<div style="text-align:center;margin-bottom:16px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Доступний баланс</span></div>';
+    if (txs.length) {
+      html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
+      txs.forEach(function(tx) {
+        var d = tx.date ? tx.date.slice(0,10) : '';
+        var sign = tx.amount >= 0 ? '+' : '';
+        var color = tx.amount >= 0 ? 'var(--gold)' : 'var(--cancel-fg)';
+        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '') : (tx.reason || 'Списання');
+        html += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">';
+        html += '<div><div style="font-size:15px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
+        html += '<div style="font-size:16px;font-weight:500;color:' + color + '">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<p style="text-align:center;color:var(--text3);margin-top:12px">Транзакцій поки немає</p>';
+    }
+    html += '</div>';
+    // Show in confirm modal (reuse)
+    document.getElementById('confirm-modal-title').textContent = 'Мій баланс';
+    document.getElementById('confirm-modal-text').innerHTML = html;
+    document.getElementById('confirm-modal-ok').style.display = 'none';
+    document.getElementById('confirm-modal-cancel').textContent = 'Закрити';
+    document.getElementById('confirm-modal').classList.add('show');
+    // Restore on close
+    document.getElementById('confirm-modal-cancel').onclick = function() {
+      document.getElementById('confirm-modal').classList.remove('show');
+      document.getElementById('confirm-modal-ok').style.display = '';
+      document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+      document.getElementById('confirm-modal-cancel').onclick = null;
+    };
+  } catch(e) {
+    showToast('Помилка завантаження балансу');
+  }
 }
 
 function renderHomeAppt() {

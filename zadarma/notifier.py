@@ -336,17 +336,20 @@ def fmt_appt_confirm(appt):
     """Підтвердження створення запису клієнту. Повертає (tg, sms, push_title, push_body)."""
     v = _appt_vars(appt)
     tg = (
-        'Ваш запис підтверджено ✅\n\n'
-        '📅 {date}, {time}\n'
-        '💆 {service}\n'
-        '👩‍⚕️ {spec_name}\n'
-        '📍 БЦ Галерея, 6 поверх (поруч з ТЦ Будинок Торгівлі, через дорогу від McDonald\'s)\n\n'
-        'Переглянути або скасувати: drgomon.beauty/app/'
+        '{first_name}, Ви записані на процедуру "{service}" '
+        'Dr. Gomon Cosmetology на {date} о {time}. '
+        'Орієнтовна тривалість процедури {duration}. '
+        'Ваш спеціаліст {spec_name} (тел. 073-310-31-10) '
+        'чекатиме Вас за адресою в БЦ Галерея (чорна скляна будівля поруч з ТЦ Будинок Торгівлі), '
+        'вхід через двері з надписом "ЛІФТ", 6 поверх\n\n'
+        '📍 Карта: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n'
+        '📱 Додаток: https://drgomon.beauty/app/'
     ).format(**v)
     sms = (
-        'Dr.Gomon: запис {date_short} о {time}, {service}. '
-        'Адреса: БЦ Галерея, "ЛІФТ", 6 пов. '
-        'Скасувати: drgomon.beauty/app/'
+        '{first_name}, Ви записані на "{service}" Dr.Gomon на {date_short} о {time}. '
+        'Спеціаліст {spec_name} (073-310-31-10). '
+        'БЦ Галерея, "ЛІФТ", 6 пов. '
+        'Карта: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8'
     ).format(**v)
     push_title = 'Запис підтверджено ✅'
     push_body  = '{service}, {date_short} о {time}'.format(**v)
@@ -357,16 +360,19 @@ def fmt_reminder_24h(appt):
     """Нагадування клієнту за 24 години. Повертає (tg, sms, push_title, push_body)."""
     v = _appt_vars(appt)
     tg = (
-        'Нагадуємо про ваш запис завтра 🌸\n\n'
-        '📅 {date_short}, {time}\n'
+        '{first_name}, нагадуємо про ваш запис завтра!\n\n'
+        '📅 {date}, {time}\n'
         '💆 {service}\n'
-        '👩‍⚕️ {spec_name}\n\n'
-        'Чекаємо вас! Dr. Gómon Cosmetology\n'
-        'drgomon.beauty/app/'
+        '👩‍⚕️ {spec_name} (тел. 073-310-31-10)\n\n'
+        '📍 БЦ Галерея (чорна скляна будівля поруч з ТЦ Будинок Торгівлі), '
+        'вхід через двері з надписом "ЛІФТ", 6 поверх\n'
+        '🗺 https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n'
+        '📱 Додаток: https://drgomon.beauty/app/'
     ).format(**v)
     sms = (
-        'Dr.Gomon: нагадуємо — завтра {date_short} о {time} {service}. '
-        'Скасувати: drgomon.beauty/app/'
+        '{first_name}, нагадуємо — завтра {date_short} о {time} "{service}". '
+        'Спеціаліст {spec_name} (073-310-31-10). '
+        'БЦ Галерея, "ЛІФТ", 6 пов.'
     ).format(**v)
     push_title = 'Запис завтра 🌸'
     push_body  = '{service}, {time}'.format(**v)
@@ -374,15 +380,20 @@ def fmt_reminder_24h(appt):
 
 
 def fmt_post_visit(appt):
-    """Подяка + прохання залишити відгук о 20:00 в день процедури.
-    Push відкриває Google-відгуки напряму (не застосунок)."""
+    """Подяка + відгук через 2 години після візиту."""
     v = _appt_vars(appt)
     tg = (
         '{first_name}, Dr. Gomon Cosmetology дякує за довіру! '
-        'Будемо вдячні за ваш відгук:\n'
-        'https://flyl.link/google'
+        'Будемо вдячні і за Ваш відгук:\n'
+        'https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n\n'
+        'А ще в нас є додаток для зручного відстеження записів, новин і акцій:\n'
+        'https://drgomon.beauty/app/'
     ).format(**v)
-    sms = 'Dr.Gomon дякує за візит! Відгук: https://flyl.link/google'
+    sms = (
+        '{first_name}, Dr.Gomon дякує за довіру! '
+        'Відгук: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8 '
+        'Додаток: https://drgomon.beauty/app/'
+    ).format(**v)
     push_title = 'Дякуємо за візит!'
     push_body  = 'Залиште відгук — нам важлива ваша думка'
     return tg, sms, push_title, push_body
@@ -392,15 +403,13 @@ def fmt_cancel_client(appt):
     """Підтвердження скасування для клієнта. Повертає (tg, sms, push_title, push_body)."""
     v = _appt_vars(appt)
     tg = (
-        'Ваш запис скасовано\n\n'
-        '📅 {date}\n'
-        '💆 {service}\n\n'
-        'Записатись знову: drgomon.beauty/app/\n'
-        'або ig.me/m/dr.gomon'
+        '{first_name}, Ваш запис на {date} о {time} скасовано. '
+        'Якщо виникнуть питання, спеціаліст {spec_name} з радістю відповість '
+        'за тел. {spec_phone} або в Instagram {spec_insta}'
     ).format(**v)
     sms = (
-        'Dr.Gomon: запис {date_short} скасовано. '
-        'Записатись: drgomon.beauty/app/ або ig.me/m/dr.gomon'
+        '{first_name}, запис на {date_short} о {time} скасовано. '
+        'Питання: {spec_name} {spec_phone}'
     ).format(**v)
     push_title = 'Запис скасовано'
     push_body  = '{service}, {date_short}'.format(**v)
@@ -618,7 +627,7 @@ def send_cancellation(appt):
 
     if phone:
         tg, sms, push_title, push_body = fmt_cancel_client(appt)
-        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel', push_url='/app/#appointments', push_only=True)
+        results['client'] = notify_client(phone, tg, sms, push_title, push_body, push_tag='cancel', push_url='/app/#appointments')
         for ch, ok in results['client'].items():
             if ok is not None:
                 _log(phone, 'cancel', ref, ch, 'sent' if ok else 'failed', tg)
@@ -657,7 +666,7 @@ def send_appt_confirm(appt):
         return {'skipped': True}
 
     tg, sms, push_title, push_body = fmt_appt_confirm(appt)
-    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='confirm', push_url='/app/#appointments', push_only=True)
+    results = notify_client(phone, tg, sms, push_title, push_body, push_tag='confirm', push_url='/app/#appointments')
 
     for ch, ok in results.items():
         if ok is not None:

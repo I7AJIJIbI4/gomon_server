@@ -751,23 +751,14 @@ def wlaunch_webhook():
     phone = norm_phone(client_phone)
 
     # Determine action based on status
-    if status in ('CONFIRMED', 'CONFIRMED_BY_CLIENT'):
-        try:
-            from notifier import send_appt_confirm
-            send_appt_confirm({
-                'id': appt_id,
-                'client_phone': phone,
-                'client_name': client_name,
-                'procedure_name': services,
-                'specialist': specialist.lower().split()[0] if specialist else '',
-                'date': start_time[:10] if start_time else '',
-                'time': start_time[11:16] if len(start_time) > 16 else '',
-                'duration_min': 60,
-            })
-        except Exception as e:
-            logger.error('webhook confirm error: {}'.format(e))
+    # DISABLED: appt_confirm notification (WLaunch sends its own)
+    # if status in ('CONFIRMED', 'CONFIRMED_BY_CLIENT'):
+    #     try:
+    #         from notifier import send_appt_confirm
+    #         send_appt_confirm({...})
+    #     except: pass
 
-    elif status == 'CANCELLED':
+    if status == 'CANCELLED':
         try:
             from notifier import send_cancellation
             send_cancellation({
@@ -2386,22 +2377,10 @@ def admin_cal_create():
         return jsonify({'error': 'db_error'}), 500
     conn.close()
 
-    # Push підтвердження клієнту (тільки push, TG/SMS — WLaunch)
-    if client_phone:
-        try:
-            from notifier import send_appt_confirm
-            send_appt_confirm({
-                'id':             new_id,
-                'client_phone':   client_phone,
-                'client_name':    client_name,
-                'procedure_name': procedure_name,
-                'specialist':     specialist,
-                'date':           date,
-                'time':           appt_time,
-                'duration_min':   duration,
-            })
-        except Exception as _e:
-            logger.error('notifier confirm error: {}'.format(_e))
+    # DISABLED: appt_confirm (поки не потрібно, WLaunch сам шле)
+    # if client_phone:
+    #     from notifier import send_appt_confirm
+    #     send_appt_confirm({...})
 
     resp = {'ok': True, 'id': new_id, 'wlaunch_id': wl_id}
     if wl_warning:
@@ -3855,6 +3834,18 @@ def deposit_rates():
     amount_uah = round(5.0 * eur_rate, 2) if eur_rate else 0
     return jsonify({'eur_rate': eur_rate, 'amount_eur': 5.0, 'amount_uah': amount_uah})
 
+@app.route('/api/deposit/create-internal', methods=['POST'])
+def deposit_create_internal():
+    """Internal endpoint for chat.php to create deposit (no auth, localhost only)."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json() or {}
+    phone = norm_phone(data.get('phone', ''))
+    if not phone:
+        return jsonify({'error': 'missing phone'}), 400
+    request.user_phone = phone  # fake for reuse
+    return deposit_create()
+
 @app.route('/api/deposit/create', methods=['POST'])
 @require_auth
 def deposit_create():
@@ -3893,7 +3884,7 @@ def deposit_create():
         'clientPhone': phone,
         'clientFirstName': client_name.split()[0] if client_name else '',
         'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
-        'returnUrl': 'https://drgomon.beauty/app/',
+        'returnUrl': 'https://drgomon.beauty/app/index.html',
         'paymentSystems': 'card;googlePay;applePay',
         'language': 'UA',
     }
@@ -3959,8 +3950,30 @@ def deposit_callback():
 @app.route('/api/deposit/balance', methods=['GET'])
 @require_auth
 def deposit_balance():
-    """Get client's deposit balance."""
-    return jsonify({'balance': _get_deposit_balance(request.user_phone)})
+    """Get client's deposit balance + transaction history."""
+    # Admin can query any phone via ?phone=
+    query_phone = request.args.get('phone', '').strip()
+    if query_phone and hasattr(request, 'admin_role') and request.admin_role:
+        phone = norm_phone(query_phone)
+    else:
+        phone = norm_phone(request.user_phone)
+    balance = _get_deposit_balance(phone)
+    conn = sqlite3.connect(DB_PATH)
+    deposits = conn.execute(
+        "SELECT amount_eur, amount_uah, status, created_at FROM deposits WHERE phone=? ORDER BY created_at DESC LIMIT 20",
+        (phone,)).fetchall()
+    deductions = conn.execute(
+        "SELECT amount, reason, created_at FROM deposit_deductions WHERE phone=? ORDER BY created_at DESC LIMIT 20",
+        (phone,)).fetchall()
+    conn.close()
+    transactions = []
+    for d in deposits:
+        if d[2] == 'Approved':
+            transactions.append({'type': 'deposit', 'amount': d[1], 'amount_eur': d[0], 'date': d[3], 'status': d[2]})
+    for d in deductions:
+        transactions.append({'type': 'deduction', 'amount': -d[0], 'reason': d[1] or '', 'date': d[2]})
+    transactions.sort(key=lambda x: x.get('date', ''), reverse=True)
+    return jsonify({'balance': balance, 'transactions': transactions})
 
 @app.route('/api/admin/deposit/deduct', methods=['POST'])
 @require_admin
@@ -3981,6 +3994,43 @@ def admin_deposit_deduct():
     conn.commit()
     conn.close()
     return jsonify({'ok': True, 'new_balance': round(balance - amount, 2)})
+
+@app.route('/api/deposit/reconcile', methods=['POST'])
+def deposit_reconcile():
+    """Check all pending deposits via WFP CHECK_STATUS and update local DB. Called by cron or manually."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET
+    conn = sqlite3.connect(DB_PATH)
+    pending = conn.execute(
+        "SELECT order_id, phone FROM deposits WHERE status='pending' AND created_at > datetime('now', '-1 day')"
+    ).fetchall()
+    updated = 0
+    for order_id, phone in pending:
+        try:
+            sign_params = [WFP_MERCHANT_ACCOUNT, order_id]
+            signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
+            resp = _req.post('https://api.wayforpay.com/api', json={
+                'transactionType': 'CHECK_STATUS',
+                'merchantAccount': WFP_MERCHANT_ACCOUNT,
+                'orderReference': order_id,
+                'merchantSignature': signature,
+                'apiVersion': 1,
+            }, timeout=10)
+            data = resp.json()
+            tx_status = data.get('transactionStatus', '')
+            if tx_status in ('Approved', 'Declined', 'Expired', 'Refunded', 'Voided'):
+                amount = float(data.get('amount', 0))
+                conn.execute("UPDATE deposits SET status=?, amount_uah=?, wfp_transaction_status=? WHERE order_id=?",
+                             (tx_status, amount, tx_status, order_id))
+                updated += 1
+                if tx_status == 'Approved':
+                    logger.info('Reconcile: deposit {} Approved, {} UAH'.format(order_id, amount))
+        except Exception as e:
+            logger.warning('Reconcile error for {}: {}'.format(order_id, e))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'checked': len(pending), 'updated': updated})
 
 @app.route('/api/deposit/check', methods=['POST'])
 @require_auth
