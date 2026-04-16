@@ -727,6 +727,61 @@ def get_me():
         return jsonify({'error': 'not_found'}), 404
     return jsonify(_client_payload(client, request.user_phone))
 
+@app.route('/api/webhook/wlaunch', methods=['POST'])
+def wlaunch_webhook():
+    """Handle WLaunch webhook — send notification to client on appointment events."""
+    data = request.get_json() or {}
+    status = data.get('status', '')
+    client_phone = data.get('client_phone', '')
+    client_name = data.get('client_name', '')
+    services = data.get('services', '')
+    specialist = data.get('specialist', '')
+    start_time = data.get('start_time', '')
+    appt_id = data.get('appt_id', '')
+
+    logger.info('WLaunch webhook: status={} phone={} service={}'.format(status, client_phone, services))
+
+    if not client_phone:
+        return jsonify({'ok': False, 'error': 'no phone'}), 400
+
+    phone = norm_phone(client_phone)
+
+    # Determine action based on status
+    if status in ('CONFIRMED', 'CONFIRMED_BY_CLIENT'):
+        try:
+            from notifier import send_appt_confirm
+            send_appt_confirm({
+                'id': appt_id,
+                'client_phone': phone,
+                'client_name': client_name,
+                'procedure_name': services,
+                'specialist': specialist.lower().split()[0] if specialist else '',
+                'date': start_time[:10] if start_time else '',
+                'time': start_time[11:16] if len(start_time) > 16 else '',
+                'duration_min': 60,
+            })
+        except Exception as e:
+            logger.error('webhook confirm error: {}'.format(e))
+
+    elif status == 'CANCELLED':
+        try:
+            from notifier import send_cancellation
+            send_cancellation({
+                'appt_id': appt_id,
+                'client_phone': phone,
+                'client_name': client_name,
+                'procedure_name': services,
+                'specialist': specialist.lower().split()[0] if specialist else '',
+                'date': start_time[:10] if start_time else '',
+                'time': start_time[11:16] if len(start_time) > 16 else '',
+                'duration_min': 60,
+            })
+        except Exception as e:
+            logger.error('webhook cancel error: {}'.format(e))
+
+    return jsonify({'ok': True})
+
+
 @app.route('/api/me/appointments', methods=['GET'])
 @require_auth
 def get_my_appointments():
@@ -735,13 +790,14 @@ def get_my_appointments():
     client = get_client(phone)
     appointments = parse_services(client) if client else []
 
-    # Додаємо manual appointments
+    # Додаємо manual appointments (dedup by wlaunch_id)
+    existing_wl_ids = {a.get('appt_id', '') for a in appointments}
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         normalized = norm_phone(phone)
         rows = conn.execute(
-            '''SELECT procedure_name, date, time, status, id, specialist, duration
+            '''SELECT procedure_name, date, time, status, id, specialist, duration, wlaunch_id
                FROM manual_appointments
                WHERE client_phone=? AND status != 'CANCELLED'
                ORDER BY date DESC''',
@@ -751,6 +807,10 @@ def get_my_appointments():
         # NOTE: Server timezone is Europe/Kyiv; manual_appointments dates are also Kyiv.
         today_str = kyiv_now().strftime('%Y-%m-%d')
         for r in rows:
+            # Skip if WLaunch copy already in services_json
+            wl_id = r['wlaunch_id'] if 'wlaunch_id' in r.keys() else None
+            if wl_id and wl_id in existing_wl_ids:
+                continue
             appt_status = 'upcoming' if r['date'] >= today_str else 'done'
             appointments.append({
                 'service': r['procedure_name'],

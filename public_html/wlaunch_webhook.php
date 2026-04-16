@@ -1,58 +1,55 @@
 <?php
-/**
- * Wlaunch Webhook Proxy
- * Проксує запити від Wlaunch до локального webhook сервера
- */
+date_default_timezone_set('Europe/Kyiv');
+header('Content-Type: application/json; charset=utf-8');
 
-header('Content-Type: application/json');
+// Log all incoming webhooks
+$raw = file_get_contents('php://input');
+$log = date('Y-m-d H:i:s') . ' ' . $raw . "
+";
+file_put_contents('/var/log/gomon/wlaunch_webhook.log', $log, FILE_APPEND);
 
-// Логування
-$log_file = '/home/gomoncli/zadarma/wlaunch_webhook_proxy.log';
-$timestamp = date('Y-m-d H:i:s');
-
-// Отримуємо дані від Wlaunch
-$method = $_SERVER['REQUEST_METHOD'];
-$input = file_get_contents('php://input');
-
-file_put_contents($log_file, "[{$timestamp}] {$method} request received\n", FILE_APPEND);
-file_put_contents($log_file, "[{$timestamp}] Data: {$input}\n", FILE_APPEND);
-
-if ($method === 'GET') {
-    // Health check
-    echo json_encode(['status' => 'ok', 'service' => 'wlaunch_webhook_proxy']);
+$data = json_decode($raw, true);
+if (!$data || empty($data['appointment'])) {
+    echo json_encode(['ok' => false, 'error' => 'no data']);
     exit;
 }
 
-if ($method !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
-    exit;
-}
+$appt = $data['appointment'] ?? [];
+$client = $data['client'] ?? [];
+$services = $data['services'] ?? [];
+$resources = $data['resources'] ?? [];
 
-// Проксуємо запит до локального сервера
-$ch = curl_init('http://localhost:5003/webhook/wlaunch');
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $input);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'Content-Length: ' . strlen($input)
+$status = $appt['status'] ?? '';
+$appt_id = $appt['id'] ?? '';
+$start_time = $appt['start_time'] ?? '';
+$duration = $appt['duration'] ?? '';
+$price = $appt['price'] ?? '';
+$client_name = $client['full_name'] ?? '';
+$client_phone = $client['phone'] ?? '';
+$service_names = implode(', ', array_map(function($s) { return $s['name'] ?? ''; }, $services));
+$specialist_names = implode(', ', array_map(function($r) { return $r['full_name'] ?? ''; }, $resources));
+
+// Forward to Flask API for notification handling
+$ch = curl_init('http://127.0.0.1:5001/api/webhook/wlaunch');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_TIMEOUT => 10,
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+    CURLOPT_POSTFIELDS => json_encode([
+        'appt_id' => $appt_id,
+        'status' => $status,
+        'start_time' => $start_time,
+        'duration' => $duration,
+        'price' => $price,
+        'client_name' => $client_name,
+        'client_phone' => $client_phone,
+        'services' => $service_names,
+        'specialist' => $specialist_names,
+    ]),
 ]);
-curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-$response = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$error = curl_error($ch);
+$result = curl_exec($ch);
+$code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-if ($error) {
-    file_put_contents($log_file, "[{$timestamp}] Error: {$error}\n", FILE_APPEND);
-    http_response_code(500);
-    echo json_encode(['error' => 'Proxy error', 'details' => $error]);
-    exit;
-}
-
-file_put_contents($log_file, "[{$timestamp}] Response: {$response}\n", FILE_APPEND);
-
-http_response_code($http_code);
-echo $response;
+echo json_encode(['ok' => true, 'forwarded' => $code]);

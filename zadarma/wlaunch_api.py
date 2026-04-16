@@ -470,7 +470,7 @@ def create_wlaunch_appointment(client_phone, client_name, procedure_name,
                 'моделювання окремої': 'drumroll окремої зони', 'моделювання всього': 'drumroll всього тіла',
                 'релакс-масаж': 'drumroll всього тіла', 'пресотерапія': 'пресотерапія',
                 'кисневий': 'киснева мезотерапія', 'glow skin': 'киснева мезотерапія',
-                'підліткова': 'комбінована чистка обличчя',
+                'підліткова': 'wow-чистка обличчя',
                 'wow-чистка «сяяння': 'wow-чистка обличчя "сяяння"',
                 'neauvia intense': 'контурна пластика губ',
                 'neauvia stimulate': 'контурна пластика обличчя',
@@ -503,24 +503,42 @@ def create_wlaunch_appointment(client_phone, client_name, procedure_name,
         logger.warning("WLaunch: no matching service for '{}', skipping WLaunch".format(procedure_name))
         return None, "service_not_found"
 
-    appt_data = {
-        "appointment": {
-            "client": {"id": wl_client_id},
-            "start_time": start_time_utc,
-            "duration": duration_min * 60,  # WLaunch uses seconds
-            "status": "CONFIRMED_BY_CLIENT",
-            "source": "BO",
-            "service_resource_settings": srs,
-        }
+    appt_body = {
+        "client": {"id": wl_client_id},
+        "start_time": start_time_utc,
+        "duration": duration_min * 60,
+        "status": "CONFIRMED_BY_CLIENT",
+        "source": "BO",
+        "branch_id": branch_id,
+        "company_id": COMPANY_ID,
+        "service_resource_settings": srs,
     }
 
-    # 6. POST to WLaunch
-    url = "{}/company/{}/branch/{}/appointment".format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
     post_headers = dict(HEADERS)
     post_headers["Content-Type"] = "application/json"
 
+    # 6a. Calculate price (same as WLaunch dashboard does)
     try:
-        resp = requests.post(url, headers=post_headers, json=appt_data, timeout=15)
+        price_url = "{}/client/appointment/calculate/price".format(WLAUNCH_API_URL)
+        price_resp = requests.post(price_url, headers=post_headers,
+                                   json={"appointment": appt_body}, timeout=10)
+        if price_resp.status_code == 200:
+            price_data = price_resp.json()
+            appt_body["price"] = price_data.get("price", 0)
+            logger.info("WLaunch price calculated: {}".format(appt_body.get("price")))
+    except Exception as e:
+        logger.warning("WLaunch price calc skipped: {}".format(e))
+
+    # 6b. Create appointment
+    url = "{}/company/{}/branch/{}/appointment".format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
+    appt_data = {"appointment": appt_body}
+
+    try:
+        resp = requests.post(url, headers=post_headers, json=appt_data,
+                             params={"withDetails": "true", "withOrder": "true",
+                                     "withMembership": "true", "withClientTags": "true",
+                                     "skipClientBlockCheck": "false"},
+                             timeout=15)
         if resp.status_code in (200, 201):
             result = resp.json()
             wl_id = result.get("id") or result.get("appointment", {}).get("id")
