@@ -215,7 +215,7 @@ $rl_db_path = '/home/gomoncli/zadarma/chat_rl.db';
 $today      = date('Y-m-d');
 $phone_norm = preg_replace('/[^\d]/', '', $user_phone);
 $rl_key     = $phone_norm ? substr($phone_norm, -9) : 'ip:' . $client_ip;
-$rl_limit   = $phone_norm ? 20 : 10;
+$rl_limit   = $phone_norm ? 10 : 5;
 
 try {
     $rl_db = new SQLite3($rl_db_path);
@@ -239,27 +239,26 @@ try {
     $count = $row ? (int)$row['count'] : 0;
 
     if ($count >= $rl_limit) {
-        // ═══════════════════════════════════════════════════════════════
-        // DEPOSIT RATE LIMIT BYPASS — UNCOMMENT TO ACTIVATE
-        // ═══════════════════════════════════════════════════════════════
-        // if ($phone_norm) {
-        //     // Check if user has deposit today
-        //     try {
-        //         $dep_db = new SQLite3('/home/gomoncli/zadarma/users.db');
-        //         $dep_st = $dep_db->prepare("SELECT 1 FROM deposits WHERE phone=:p AND status='success' AND date(created_at)=date('now') LIMIT 1");
-        //         $dep_st->bindValue(':p', $phone_norm);
-        //         $has_deposit = $dep_st->execute()->fetchArray();
-        //         $dep_db->close();
-        //         if ($has_deposit) {
-        //             $count = 0;  // Reset limit for depositors
-        //         }
-        //     } catch (Exception $e) {}
-        // }
+        // Deposit rate limit bypass
+        if ($phone_norm) {
+            try {
+                $dep_db = new SQLite3('/home/gomoncli/zadarma/users.db');
+                $dep_st = $dep_db->prepare("SELECT 1 FROM deposits WHERE phone=:p AND status='Approved' AND date(created_at)=date('now') LIMIT 1");
+                $dep_st->bindValue(':p', $phone_norm);
+                $has_deposit = $dep_st->execute()->fetchArray();
+                $dep_db->close();
+                if ($has_deposit) {
+                    $count = 0;  // Reset limit for depositors
+                }
+            } catch (Exception $e) {}
+        }
 
-        $rl_db->close();
-        http_response_code(429);
-        echo json_encode(['error' => 'rate_limit']);
-        exit;
+        if ($count >= $rl_limit) {
+            $rl_db->close();
+            http_response_code(429);
+            echo json_encode(['error' => 'rate_limit']);
+            exit;
+        }
     }
     // Rate limit increment deferred — will be applied AFTER successful API call
 } catch (Exception $e) {

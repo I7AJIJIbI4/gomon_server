@@ -511,7 +511,7 @@
     messages.forEach(function (m) { renderBubble(m.role, m.content, messagesEl); });
   }
 
-  // ── RATE LIMIT (10 запитів/день, localStorage) ────────────────
+  // ── RATE LIMIT (5 запитів/день для гостей, localStorage) ────────────────
   function _gwRlData() {
     var today = new Date().toISOString().slice(0, 10);
     try {
@@ -520,7 +520,7 @@
       return d;
     } catch (e) { return { date: new Date().toISOString().slice(0, 10), count: 0 }; }
   }
-  function gwIsRateLimited() { return _gwRlData().count >= 10; }
+  function gwIsRateLimited() { return _gwRlData().count >= 5; }
   function gwRateLimitBump() {
     var d = _gwRlData(); d.count++;
     try { localStorage.setItem('gw_rl', JSON.stringify(d)); } catch (e) {}

@@ -78,7 +78,7 @@
   function _saveHistory() { /* no-op: server saves in chat.php */ }
 
   // ── RATE LIMIT ────────────────────────────────────────────────────────────
-  // Гість: 10 запитів/день; авторизований: 20 запитів/день
+  // Гість: 5 запитів/день; авторизований: 10 запитів/день
   function _gcRlKey() {
     return CONFIG.userPhone ? ('gc_rl_' + CONFIG.userPhone) : 'gc_rl_guest';
   }
@@ -91,7 +91,7 @@
     } catch (e) { return { date: new Date().toISOString().slice(0, 10), count: 0 }; }
   }
   function gcIsRateLimited() {
-    const limit = CONFIG.userPhone ? 20 : 10;
+    const limit = CONFIG.userPhone ? 10 : 5;
     return _gcRlData().count >= limit;
   }
   function gcRateLimitBump() {
