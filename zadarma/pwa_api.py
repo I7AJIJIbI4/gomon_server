@@ -3774,9 +3774,16 @@ def admin_messages_read():
 # ═══════════════════════════════════════════════════════════════
 #
 # Config needed in config.py:
-#   WFP_MERCHANT_ACCOUNT = 'your_merchant_account'
-#   WFP_MERCHANT_SECRET = 'your_secret_key'
+#   WFP_MERCHANT_ACCOUNT = 'gomonclinic_com'
+#   WFP_MERCHANT_SECRET = '6ab464c63093a95b5f6a04ceb2f9f118977749fe'
 #   WFP_MERCHANT_DOMAIN = 'drgomon.beauty'
+#
+# WayForPay URLs:
+#   Purchase: POST https://secure.wayforpay.com/pay (redirect) or https://secure.wayforpay.com/pay?behavior=offline (get URL)
+#   API: POST https://api.wayforpay.com/api (CHECK_STATUS, SETTLE, REFUND, CURRENCY_RATES)
+#   serviceUrl callback: server-to-server POST with JSON
+#
+# Payment systems: card;googlePay;applePay
 #
 # Tables needed (run once):
 #   CREATE TABLE IF NOT EXISTS deposits (
@@ -3829,17 +3836,39 @@ def admin_messages_read():
 #     finally:
 #         conn.close()
 #
+# @app.route('/api/deposit/rates', methods=['GET'])
+# def deposit_rates():
+#     """Get current EUR→UAH rate from WayForPay."""
+#     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET
+#     order_date = int(time.time())
+#     sign_params = [WFP_MERCHANT_ACCOUNT, order_date]
+#     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
+#     resp = _req.post('https://api.wayforpay.com/api', json={
+#         'transactionType': 'CURRENCY_RATES',
+#         'merchantAccount': WFP_MERCHANT_ACCOUNT,
+#         'orderDate': order_date,
+#         'currency': 'EUR',
+#         'merchantSignature': signature,
+#         'apiVersion': 1,
+#     }, timeout=10)
+#     data = resp.json()
+#     eur_rate = data.get('RATES', {}).get('EUR', 0)
+#     amount_uah = round(5.0 * eur_rate, 2) if eur_rate else 0
+#     return jsonify({'eur_rate': eur_rate, 'amount_eur': 5.0, 'amount_uah': amount_uah})
+#
 # @app.route('/api/deposit/create', methods=['POST'])
 # @require_auth
 # def deposit_create():
-#     """Generate WayForPay payment data for 5 EUR deposit (SALE one-step)."""
+#     """Generate WayForPay payment URL for 5 EUR deposit (SALE, offline mode for PWA)."""
 #     phone = request.user_phone
+#     client = get_client(phone)
+#     client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()) if client else ''
 #     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
 #     order_id = 'dep_{}_{}'.format(norm_phone(phone), int(time.time()))
 #     order_date = int(time.time())
 #     amount_eur = 5.0
 #     product_name = 'Депозит на процедури Dr. Gomon'
-#     # Signature: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
+#     # Signature: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName[0];productCount[0];productPrice[0]
 #     sign_params = [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, order_id, order_date, amount_eur, 'EUR', product_name, 1, amount_eur]
 #     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
 #     # Save pending
@@ -3848,22 +3877,39 @@ def admin_messages_read():
 #                  (norm_phone(phone), amount_eur, 0, order_id, 'pending'))
 #     conn.commit()
 #     conn.close()
-#     # Return params for WayForPay JS widget or redirect
-#     return jsonify({
+#     # POST to WayForPay offline mode → get payment URL
+#     pay_data = {
 #         'merchantAccount': WFP_MERCHANT_ACCOUNT,
 #         'merchantDomainName': WFP_MERCHANT_DOMAIN,
 #         'merchantSignature': signature,
+#         'merchantTransactionType': 'SALE',
 #         'merchantTransactionSecureType': 'AUTO',
 #         'orderReference': order_id,
 #         'orderDate': order_date,
 #         'amount': amount_eur,
 #         'currency': 'EUR',
-#         'productName': [product_name],
-#         'productPrice': [amount_eur],
-#         'productCount': [1],
+#         'productName[]': product_name,
+#         'productPrice[]': amount_eur,
+#         'productCount[]': 1,
+#         'clientPhone': phone,
+#         'clientFirstName': client_name.split()[0] if client_name else '',
 #         'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
 #         'returnUrl': 'https://drgomon.beauty/app/',
-#     })
+#         'paymentSystems': 'card;googlePay;applePay',
+#         'language': 'UA',
+#     }
+#     try:
+#         resp = _req.post('https://secure.wayforpay.com/pay?behavior=offline', data=pay_data, timeout=10)
+#         url_data = resp.json()
+#         pay_url = url_data.get('url', '')
+#         if pay_url:
+#             return jsonify({'ok': True, 'pay_url': pay_url, 'order_id': order_id})
+#         else:
+#             logger.error('WFP no URL: {}'.format(url_data))
+#             return jsonify({'error': 'payment_error', 'detail': url_data}), 502
+#     except Exception as e:
+#         logger.error('WFP create error: {}'.format(e))
+#         return jsonify({'error': 'payment_unavailable'}), 503
 #
 # @app.route('/api/deposit/callback', methods=['POST'])
 # def deposit_callback():
