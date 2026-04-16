@@ -369,6 +369,32 @@ def _check_ai_should_reply(conv_id, chat_id):
             "AND sender_id='ai_bot' AND created_at > date('now')",
             (conv_id,)).fetchone()
         if count_row and count_row[0] >= AI_RATE_LIMIT:
+            # ═══════════════════════════════════════════════════════════════
+            # DEPOSIT RATE LIMIT BYPASS — UNCOMMENT TO ACTIVATE
+            # ═══════════════════════════════════════════════════════════════
+            # def _has_deposit_today_check(phone):
+            #     if not phone: return False
+            #     try:
+            #         row = conn.execute(
+            #             "SELECT 1 FROM deposits WHERE phone=? AND status='success' AND date(created_at)=date('now') LIMIT 1",
+            #             (phone,)).fetchone()
+            #         return bool(row)
+            #     except: return False
+            #
+            # # Extract client phone from conversation_id (format: tg_CHATID)
+            # client_phone = None
+            # try:
+            #     phone_row = conn.execute(
+            #         "SELECT phone FROM users WHERE telegram_id=?",
+            #         (str(chat_id),)).fetchone()
+            #     if phone_row:
+            #         client_phone = phone_row[0]
+            # except: pass
+            #
+            # if client_phone and _has_deposit_today_check(client_phone):
+            #     pass  # Allow — depositor bypass
+            # else:
+            #     return False, 'rate_limited'
             return False, 'rate_limited'
 
         return True, 'ok'

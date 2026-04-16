@@ -3769,5 +3769,194 @@ def admin_messages_read():
     return jsonify({'ok': True, 'marked': updated})
 
 
+# ═══════════════════════════════════════════════════════════════
+# DEPOSIT SYSTEM (WayForPay) — SCAFFOLDING, UNCOMMENT TO ACTIVATE
+# ═══════════════════════════════════════════════════════════════
+#
+# Config needed in config.py:
+#   WFP_MERCHANT_ACCOUNT = 'your_merchant_account'
+#   WFP_MERCHANT_SECRET = 'your_secret_key'
+#   WFP_MERCHANT_DOMAIN = 'drgomon.beauty'
+#
+# Tables needed (run once):
+#   CREATE TABLE IF NOT EXISTS deposits (
+#       id INTEGER PRIMARY KEY AUTOINCREMENT,
+#       phone TEXT NOT NULL,
+#       amount_eur REAL NOT NULL DEFAULT 5.0,
+#       amount_uah REAL NOT NULL,
+#       order_id TEXT UNIQUE,
+#       status TEXT DEFAULT 'pending',  -- pending, Approved, Declined, Refunded
+#       wfp_transaction_status TEXT,
+#       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+#   );
+#   CREATE TABLE IF NOT EXISTS deposit_deductions (
+#       id INTEGER PRIMARY KEY AUTOINCREMENT,
+#       phone TEXT NOT NULL,
+#       amount REAL NOT NULL,
+#       reason TEXT,
+#       deducted_by TEXT,
+#       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+#   );
+#
+# def _wfp_sign(params_list, secret):
+#     """Generate WayForPay HMAC_MD5 signature."""
+#     import hmac, hashlib
+#     sign_string = ';'.join(str(p) for p in params_list)
+#     return hmac.new(secret.encode(), sign_string.encode(), hashlib.md5).hexdigest()
+#
+# def _get_deposit_balance(phone):
+#     """Get client deposit balance (deposits - deductions)."""
+#     conn = sqlite3.connect(DB_PATH)
+#     try:
+#         deposited = conn.execute(
+#             "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
+#             (norm_phone(phone),)).fetchone()[0]
+#         deducted = conn.execute(
+#             "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+#             (norm_phone(phone),)).fetchone()[0]
+#         return round(deposited - deducted, 2)
+#     finally:
+#         conn.close()
+#
+# def _has_deposit_today(phone):
+#     """Check if client made a deposit today (for rate limit bypass)."""
+#     conn = sqlite3.connect(DB_PATH)
+#     try:
+#         row = conn.execute(
+#             "SELECT 1 FROM deposits WHERE phone=? AND status='Approved' AND date(created_at)=date('now') LIMIT 1",
+#             (norm_phone(phone),)).fetchone()
+#         return bool(row)
+#     finally:
+#         conn.close()
+#
+# @app.route('/api/deposit/create', methods=['POST'])
+# @require_auth
+# def deposit_create():
+#     """Generate WayForPay payment data for 5 EUR deposit (SALE one-step)."""
+#     phone = request.user_phone
+#     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
+#     order_id = 'dep_{}_{}'.format(norm_phone(phone), int(time.time()))
+#     order_date = int(time.time())
+#     amount_eur = 5.0
+#     product_name = 'Депозит на процедури Dr. Gomon'
+#     # Signature: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName;productCount;productPrice
+#     sign_params = [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, order_id, order_date, amount_eur, 'EUR', product_name, 1, amount_eur]
+#     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
+#     # Save pending
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
+#                  (norm_phone(phone), amount_eur, 0, order_id, 'pending'))
+#     conn.commit()
+#     conn.close()
+#     # Return params for WayForPay JS widget or redirect
+#     return jsonify({
+#         'merchantAccount': WFP_MERCHANT_ACCOUNT,
+#         'merchantDomainName': WFP_MERCHANT_DOMAIN,
+#         'merchantSignature': signature,
+#         'merchantTransactionSecureType': 'AUTO',
+#         'orderReference': order_id,
+#         'orderDate': order_date,
+#         'amount': amount_eur,
+#         'currency': 'EUR',
+#         'productName': [product_name],
+#         'productPrice': [amount_eur],
+#         'productCount': [1],
+#         'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
+#         'returnUrl': 'https://drgomon.beauty/app/',
+#     })
+#
+# @app.route('/api/deposit/callback', methods=['POST'])
+# def deposit_callback():
+#     """WayForPay serviceUrl callback (server-to-server)."""
+#     from config import WFP_MERCHANT_SECRET
+#     data = request.get_json() or {}
+#     merchant_account = data.get('merchantAccount', '')
+#     order_ref = data.get('orderReference', '')
+#     amount = float(data.get('amount', 0))
+#     currency = data.get('currency', '')
+#     auth_code = data.get('authCode', '')
+#     tx_status = data.get('transactionStatus', '')
+#     reason_code = data.get('reasonCode', '')
+#     # Verify signature: merchantAccount;orderReference;amount;currency;authCode;cardPan;transactionStatus;reasonCode
+#     received_sign = data.get('merchantSignature', '')
+#     sign_params = [merchant_account, order_ref, amount, currency, auth_code,
+#                    data.get('cardPan', ''), tx_status, reason_code]
+#     expected_sign = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
+#     if received_sign != expected_sign:
+#         logger.warning('WFP callback invalid signature for order {}'.format(order_ref))
+#         return jsonify({'orderReference': order_ref, 'status': 'refuse', 'time': int(time.time())}), 403
+#     # Update deposit
+#     if tx_status == 'Approved':
+#         conn = sqlite3.connect(DB_PATH)
+#         conn.execute("UPDATE deposits SET status='Approved', amount_uah=?, wfp_transaction_status=? WHERE order_id=?",
+#                      (amount, tx_status, order_ref))
+#         conn.commit()
+#         conn.close()
+#         logger.info('WFP Deposit Approved: {} {}, order {}'.format(amount, currency, order_ref))
+#     else:
+#         conn = sqlite3.connect(DB_PATH)
+#         conn.execute("UPDATE deposits SET status=?, wfp_transaction_status=? WHERE order_id=?",
+#                      (tx_status, tx_status, order_ref))
+#         conn.commit()
+#         conn.close()
+#         logger.warning('WFP Deposit {}: order {}, reason {}'.format(tx_status, order_ref, reason_code))
+#     # WayForPay expects this response format
+#     import hmac, hashlib
+#     resp_sign_str = ';'.join([order_ref, 'accept', str(int(time.time()))])
+#     resp_sign = hmac.new(WFP_MERCHANT_SECRET.encode(), resp_sign_str.encode(), hashlib.md5).hexdigest()
+#     return jsonify({
+#         'orderReference': order_ref,
+#         'status': 'accept',
+#         'time': int(time.time()),
+#         'signature': resp_sign
+#     })
+#
+# @app.route('/api/deposit/balance', methods=['GET'])
+# @require_auth
+# def deposit_balance():
+#     """Get client's deposit balance."""
+#     return jsonify({'balance': _get_deposit_balance(request.user_phone)})
+#
+# @app.route('/api/admin/deposit/deduct', methods=['POST'])
+# @require_admin
+# def admin_deposit_deduct():
+#     """Deduct from client deposit (manual, by admin/doctor)."""
+#     d = request.get_json() or {}
+#     phone = norm_phone(d.get('phone', ''))
+#     amount = float(d.get('amount', 0))
+#     reason = d.get('reason', '')
+#     if not phone or amount <= 0:
+#         return jsonify({'error': 'invalid'}), 400
+#     balance = _get_deposit_balance(phone)
+#     if amount > balance:
+#         return jsonify({'error': 'insufficient', 'balance': balance}), 400
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.execute("INSERT INTO deposit_deductions (phone, amount, reason, deducted_by) VALUES (?,?,?,?)",
+#                  (phone, amount, reason, request.admin_phone))
+#     conn.commit()
+#     conn.close()
+#     return jsonify({'ok': True, 'new_balance': round(balance - amount, 2)})
+#
+# @app.route('/api/deposit/check', methods=['POST'])
+# @require_auth
+# def deposit_check_status():
+#     """Check payment status via WayForPay API."""
+#     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET
+#     d = request.get_json() or {}
+#     order_id = d.get('order_id', '')
+#     if not order_id:
+#         return jsonify({'error': 'missing order_id'}), 400
+#     sign_params = [WFP_MERCHANT_ACCOUNT, order_id]
+#     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
+#     resp = _req.post('https://api.wayforpay.com/api', json={
+#         'transactionType': 'CHECK_STATUS',
+#         'merchantAccount': WFP_MERCHANT_ACCOUNT,
+#         'orderReference': order_id,
+#         'merchantSignature': signature,
+#         'apiVersion': 1,
+#     }, timeout=10)
+#     return jsonify(resp.json())
+
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5001, debug=False)

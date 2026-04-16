@@ -239,6 +239,23 @@ try {
     $count = $row ? (int)$row['count'] : 0;
 
     if ($count >= $rl_limit) {
+        // ═══════════════════════════════════════════════════════════════
+        // DEPOSIT RATE LIMIT BYPASS — UNCOMMENT TO ACTIVATE
+        // ═══════════════════════════════════════════════════════════════
+        // if ($phone_norm) {
+        //     // Check if user has deposit today
+        //     try {
+        //         $dep_db = new SQLite3('/home/gomoncli/zadarma/users.db');
+        //         $dep_st = $dep_db->prepare("SELECT 1 FROM deposits WHERE phone=:p AND status='success' AND date(created_at)=date('now') LIMIT 1");
+        //         $dep_st->bindValue(':p', $phone_norm);
+        //         $has_deposit = $dep_st->execute()->fetchArray();
+        //         $dep_db->close();
+        //         if ($has_deposit) {
+        //             $count = 0;  // Reset limit for depositors
+        //         }
+        //     } catch (Exception $e) {}
+        // }
+
         $rl_db->close();
         http_response_code(429);
         echo json_encode(['error' => 'rate_limit']);
