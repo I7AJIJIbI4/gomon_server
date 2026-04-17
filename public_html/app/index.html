@@ -789,6 +789,16 @@ nav{
 .client-photo-item{flex-shrink:0;width:90px;cursor:pointer}
 .client-photo-item img{width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
 .client-photo-label{font-size:10px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.photo-gallery-overlay{position:fixed;inset:0;z-index:10600;background:rgba(0,0,0,.95);display:flex;flex-direction:column;align-items:center;padding:16px 0}
+.photo-gallery-close{position:absolute;top:12px;right:16px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;z-index:2;padding:4px 8px}
+.photo-gallery-counter{color:rgba(255,255,255,.6);font-size:14px;margin:8px 0 4px}
+.photo-gallery-label{color:rgba(255,255,255,.5);font-size:13px;margin-bottom:8px;text-align:center;padding:0 40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.photo-gallery-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;width:100%;min-height:0}
+.photo-gallery-img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.photo-gallery-thumbs{display:flex;gap:6px;overflow-x:auto;padding:10px 16px;scrollbar-width:none;flex-shrink:0}
+.photo-gallery-thumbs::-webkit-scrollbar{display:none}
+.photo-gallery-thumb{width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid transparent;opacity:.5;cursor:pointer;flex-shrink:0;transition:opacity .2s,border-color .2s}
+.photo-gallery-thumb.active{opacity:1;border-color:var(--gold)}
 .client-card-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer;padding:4px}
 #adm-appt-action.show{display:flex}
 .adm-action-sheet{background:var(--bg2);border-radius:20px 20px 0 0;border-top:1px solid var(--border-gold);width:100%;max-width:480px;padding:20px 20px 24px}
@@ -2820,6 +2830,19 @@ async function openClientCard(phone, name) {
       var label = parts.length ? parts.join(' · ') : 'Баланс';
       balEl.innerHTML = '<span style="font-size:13px;color:var(--text3)">' + _esc(label) + '</span><span style="font-size:16px;font-weight:500;color:' + (total > 0 ? 'var(--gold)' : 'var(--text3)') + '">' + total.toFixed(0) + ' грн ›</span>';
     }).catch(function() { balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Баланс</span><span style="color:var(--text3)">—</span>'; });
+
+  // Photos block (under balance)
+  var photoEl = modal.querySelector('.client-card-photo-btn');
+  if (!photoEl) {
+    photoEl = document.createElement('div');
+    photoEl.className = 'client-card-photo-btn';
+    balEl.insertAdjacentElement('afterend', photoEl);
+  }
+  photoEl.style.cssText = 'margin:0 0 12px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer';
+  photoEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Фото</span><span style="font-size:14px;color:var(--text3)">...</span>';
+  photoEl.onclick = null;
+  _loadClientPhotoCount(phone, photoEl);
+
   modal.classList.add('show');
 
   try {
@@ -2850,40 +2873,118 @@ async function openClientCard(phone, name) {
       '<button style="width:100%;padding:12px;background:var(--gold);color:var(--btn-text);border:none;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer" ' +
       'onclick="closeClientCard();adminGo(\'admin-appts\');showNewApptForm();selectClientAppt(\'' + _esc(phone) + '\',\'' + _esc((name||'').replace(/'/g,"\\'")) + '\')">+ Новий запис</button></div>';
     modal.querySelector('.client-card-visits').innerHTML = html;
-
-    // Load photos carousel
-    _loadClientPhotos(phone, modal);
   } catch(e) {
     if (e.name !== 'AbortError')
       modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Помилка завантаження</div>';
   }
 }
 
-async function _loadClientPhotos(phone, modal) {
-  var container = modal.querySelector('.client-card-photos');
-  if (!container) return;
-  container.innerHTML = '';
+async function _loadClientPhotoCount(phone, el) {
   try {
     var r = await fetch('/api/admin/client-photos/' + encodeURIComponent(phone), {headers:{Authorization:'Bearer '+token}});
-    if (!r.ok) return;
+    if (!r.ok) { el.innerHTML = '<span style="font-size:14px;color:var(--text3)">Фото</span><span style="color:var(--text3)">—</span>'; return; }
     var data = await r.json();
     var photos = data.photos || [];
     _visitPhotosCache[phone] = photos;
-    if (!photos.length) return;
+    if (!photos.length) {
+      el.innerHTML = '<span style="font-size:14px;color:var(--text3)">Фото</span><span style="font-size:14px;color:var(--text3)">0</span>';
+      el.style.opacity = '0.5';
+      el.style.cursor = 'default';
+      return;
+    }
+    el.innerHTML = '<span style="font-size:14px;color:var(--text3)">Фото</span><span style="font-size:16px;font-weight:500;color:var(--gold)">' + photos.length + ' ›</span>';
+    el.onclick = function() { _openPhotoGallery(phone); };
+  } catch(e) {
+    el.innerHTML = '<span style="font-size:14px;color:var(--text3)">Фото</span><span style="color:var(--text3)">—</span>';
+  }
+}
 
-    var html = '<div style="padding:8px 0 4px;color:var(--text3);font-size:13px;border-top:1px solid var(--border);margin-top:8px">Фото (' + photos.length + ')</div>';
-    html += '<div class="client-photos-carousel">';
-    photos.forEach(function(p, i) {
-      var label = p.subfolder ? p.subfolder + ' · ' : '';
-      label += p.visit || '';
-      html += '<div class="client-photo-item" onclick="_openVisitPhotos(\'' + _esc(p.visit) + '\',\'' + _esc(phone) + '\')">' +
-        '<img src="' + _esc(p.thumbnail) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
-        '<div class="client-photo-label">' + _esc(label) + '</div>' +
-      '</div>';
+function _openPhotoGallery(phone) {
+  var photos = _visitPhotosCache[phone] || [];
+  if (!photos.length) return;
+  var idx = 0;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'photo-gallery-overlay';
+  overlay.innerHTML =
+    '<button class="photo-gallery-close" onclick="this.parentElement.remove()">&times;</button>' +
+    '<div class="photo-gallery-counter"></div>' +
+    '<div class="photo-gallery-label"></div>' +
+    '<div class="photo-gallery-img-wrap"><img class="photo-gallery-img" src="" alt=""></div>' +
+    '<div class="photo-gallery-thumbs"></div>';
+  document.body.appendChild(overlay);
+
+  var imgEl = overlay.querySelector('.photo-gallery-img');
+  var counterEl = overlay.querySelector('.photo-gallery-counter');
+  var labelEl = overlay.querySelector('.photo-gallery-label');
+  var thumbsEl = overlay.querySelector('.photo-gallery-thumbs');
+
+  // Render thumbnails
+  photos.forEach(function(p, i) {
+    var th = document.createElement('img');
+    th.src = p.thumbnail;
+    th.className = 'photo-gallery-thumb';
+    th.dataset.idx = i;
+    th.onerror = function() { this.style.display = 'none'; };
+    th.onclick = function() { showPhoto(parseInt(this.dataset.idx)); };
+    thumbsEl.appendChild(th);
+  });
+
+  function showPhoto(i) {
+    idx = i;
+    var p = photos[i];
+    // Use larger image (w=800) instead of thumbnail
+    imgEl.src = p.thumbnail.replace(/=s\d+/, '=s800').replace(/=w\d+/, '=w800');
+    imgEl.onerror = function() { imgEl.src = p.thumbnail; };
+    counterEl.textContent = (i + 1) + ' / ' + photos.length;
+    var label = p.visit || '';
+    if (p.subfolder) label = p.subfolder + ' · ' + label;
+    labelEl.textContent = label;
+    // Highlight active thumb
+    thumbsEl.querySelectorAll('.photo-gallery-thumb').forEach(function(t, ti) {
+      t.classList.toggle('active', ti === i);
     });
-    html += '</div>';
-    container.innerHTML = html;
-  } catch(e) {}
+    // Scroll active thumb into view
+    var activeThumb = thumbsEl.children[i];
+    if (activeThumb) activeThumb.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+  }
+
+  showPhoto(0);
+
+  // Swipe support
+  var startX = 0, startY = 0, moved = false;
+  var imgWrap = overlay.querySelector('.photo-gallery-img-wrap');
+  imgWrap.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    moved = false;
+  }, {passive: true});
+  imgWrap.addEventListener('touchmove', function(e) {
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) moved = true;
+  }, {passive: true});
+  imgWrap.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - startX;
+    if (moved && Math.abs(dx) > 50) {
+      if (dx < 0 && idx < photos.length - 1) showPhoto(idx + 1);
+      else if (dx > 0 && idx > 0) showPhoto(idx - 1);
+    }
+  });
+
+  // Keyboard navigation
+  var _keyHandler = function(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _keyHandler); }
+    if (e.key === 'ArrowRight' && idx < photos.length - 1) showPhoto(idx + 1);
+    if (e.key === 'ArrowLeft' && idx > 0) showPhoto(idx - 1);
+  };
+  document.addEventListener('keydown', _keyHandler);
+
+  // Click on image → open in Drive
+  imgEl.onclick = function() {
+    var p = photos[idx];
+    if (p && p.id) window.open('https://drive.google.com/file/d/' + p.id + '/view', '_blank');
+  };
 }
 
 var _visitPhotosCache = {};
