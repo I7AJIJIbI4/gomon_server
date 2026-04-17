@@ -3935,8 +3935,8 @@ def deposit_create():
     }
     if installments:
         pay_data['orderTimeout'] = 86400
-        pay_data['regularMode'] = 'installment'
-        pay_data['regularCount'] = installments
+        pay_data['paymentSystems'] = 'card;googlePay;applePay;payParts'
+        pay_data['orderPayParts'] = installments
     try:
         resp = _req.post('https://secure.wayforpay.com/pay?behavior=offline', data=pay_data, timeout=10)
         url_data = resp.json()
