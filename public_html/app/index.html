@@ -4792,6 +4792,24 @@ async function openDepositBalance() {
     } else if (balance >= cbMin && cb > 0) {
       html += '<p style="text-align:center;font-size:12px;color:var(--gold);margin-bottom:12px">Кешбек доступний для списання — зверніться до лікаря</p>';
     }
+    // Deposit top-up
+    html += '<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">';
+    html += '<div style="font-size:14px;font-weight:500;margin-bottom:10px;text-align:center">Поповнити баланс</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px">';
+    [500,1000,2000,3000,5000].forEach(function(v) {
+      html += '<button onclick="_depositTopUp(' + v + ')" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans);cursor:pointer">' + v + ' грн</button>';
+    });
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;justify-content:center">';
+    html += '<input id="deposit-custom-amount" type="number" min="100" max="50000" placeholder="Інша сума" style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans);text-align:center">';
+    html += '<button onclick="_depositTopUp(parseInt(document.getElementById(\'deposit-custom-amount\').value)||0)" style="padding:8px 14px;background:var(--gold);color:var(--btn-text);border:none;border-radius:8px;font-size:14px;font-family:var(--sans);cursor:pointer">Поповнити</button>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px">';
+    [3000,5000,7000,10000].forEach(function(v) {
+      html += '<button onclick="_depositTopUp(' + v + ',true)" style="padding:8px 12px;border:1px solid var(--gold);border-radius:8px;background:transparent;color:var(--gold);font-size:13px;font-family:var(--sans);cursor:pointer">' + (v/1000) + ' тис · Оплата частинами</button>';
+    });
+    html += '</div>';
+    html += '</div>';
     if (txs.length) {
       html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
       txs.forEach(function(tx) {
@@ -4827,6 +4845,45 @@ async function openDepositBalance() {
   } catch(e) {
     showToast('Помилка завантаження балансу');
   }
+}
+
+async function _depositTopUp(amount, installments) {
+  if (!amount || amount < 100) { showToast('Мінімум 100 грн'); return; }
+  if (amount > 50000) { showToast('Максимум 50 000 грн'); return; }
+  var body = {amount: amount};
+  if (installments) body.installments = amount >= 10000 ? 10 : amount >= 7000 ? 6 : amount >= 5000 ? 4 : 3;
+  try {
+    var r = await api('/deposit/create', {method:'POST', body: JSON.stringify(body)});
+    if (r.pay_url) {
+      window.open(r.pay_url, '_blank');
+      // Start polling
+      var orderId = r.order_id;
+      var pollCount = 0;
+      var pollId = setInterval(async function() {
+        pollCount++;
+        if (pollCount > 60) { clearInterval(pollId); return; } // 5 min max
+        try {
+          var br = await api('/deposit/balance');
+          var newBal = br.balance || 0;
+          var el = document.getElementById('deposit-balance-val');
+          if (el) {
+            el.textContent = newBal > 0 ? newBal.toFixed(0) + ' грн' : '0 грн';
+            el.style.color = newBal > 0 ? 'var(--gold)' : 'var(--text3)';
+          }
+          // Check if deposit appeared
+          var txs = br.transactions || [];
+          if (txs.some(function(t) { return t.type === 'deposit' && t.amount >= amount * 0.9; })) {
+            clearInterval(pollId);
+            showToast('Баланс поповнено!');
+            document.getElementById('confirm-modal').classList.remove('show');
+            setTimeout(function() { openDepositBalance(); }, 500);
+          }
+        } catch(e) {}
+      }, 5000);
+    } else {
+      showToast(r.error === 'invalid_amount' ? 'Сума від 100 до 50 000 грн' : (r.error || 'Помилка'));
+    }
+  } catch(e) { showToast('Помилка створення платежу'); }
 }
 
 function renderHomeAppt() {

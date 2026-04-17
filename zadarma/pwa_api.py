@@ -3883,22 +3883,33 @@ def deposit_create_internal():
 @app.route('/api/deposit/create', methods=['POST'])
 @require_auth
 def deposit_create():
-    """Generate WayForPay payment URL for 5 EUR deposit (SALE, offline mode for PWA)."""
+    """Generate WayForPay payment URL for deposit (UAH, optional installments)."""
     phone = request.user_phone
+    data = request.get_json() or {}
+    amount_uah = float(data.get('amount', 0))
+    installments = int(data.get('installments', 0))  # 0 = regular payment, 2-12 = installment months
+
+    if amount_uah < 100 or amount_uah > 50000:
+        return jsonify({'error': 'invalid_amount', 'min': 100, 'max': 50000}), 400
+    if installments and (installments < 2 or installments > 12):
+        return jsonify({'error': 'invalid_installments'}), 400
+    # Installments only for amounts >= 1000
+    if installments and amount_uah < 1000:
+        return jsonify({'error': 'installments_min_1000'}), 400
+
     client = get_client(phone)
     client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()) if client else ''
     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
     order_id = 'dep_{}_{}'.format(norm_phone(phone), int(time.time()))
     order_date = int(time.time())
-    amount_eur = 5.0
-    product_name = 'Оплата консультаційних послуг'
+    product_name = 'Поповнення балансу Dr. Gomon Cosmetology'
     # Signature: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName[0];productCount[0];productPrice[0]
-    sign_params = [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, order_id, order_date, amount_eur, 'EUR', product_name, 1, amount_eur]
+    sign_params = [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, order_id, order_date, amount_uah, 'UAH', product_name, 1, amount_uah]
     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
     # Save pending
     conn = sqlite3.connect(DB_PATH)
     conn.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
-                 (norm_phone(phone), amount_eur, 0, order_id, 'pending'))
+                 (norm_phone(phone), 0, amount_uah, order_id, 'pending'))
     conn.commit()
     conn.close()
     # POST to WayForPay offline mode → get payment URL
@@ -3910,10 +3921,10 @@ def deposit_create():
         'merchantTransactionSecureType': 'AUTO',
         'orderReference': order_id,
         'orderDate': order_date,
-        'amount': amount_eur,
-        'currency': 'EUR',
+        'amount': amount_uah,
+        'currency': 'UAH',
         'productName[]': product_name,
-        'productPrice[]': amount_eur,
+        'productPrice[]': amount_uah,
         'productCount[]': 1,
         'clientPhone': phone,
         'clientFirstName': client_name.split()[0] if client_name else '',
@@ -3922,6 +3933,10 @@ def deposit_create():
         'paymentSystems': 'card;googlePay;applePay',
         'language': 'UA',
     }
+    if installments:
+        pay_data['orderTimeout'] = 86400
+        pay_data['regularMode'] = 'installment'
+        pay_data['regularCount'] = installments
     try:
         resp = _req.post('https://secure.wayforpay.com/pay?behavior=offline', data=pay_data, timeout=10)
         url_data = resp.json()
