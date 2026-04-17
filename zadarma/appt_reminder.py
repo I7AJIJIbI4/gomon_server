@@ -93,21 +93,65 @@ def _accrue_cashback(appt):
     if not _is_app_user(phone):
         logger.info('    cashback skip: {} not an app user'.format(phone))
         return
-    # Find price from prices.json
+    # Find price from prices.json (exact → substring → category match)
     price = 0
     try:
         with open(PRICES_PATH, 'r') as f:
             prices = json.load(f)
-        proc_lower = procedure.lower()
+        proc_lower = procedure.lower().replace('«', '"').replace('»', '"')
+
+        def _extract_price(item):
+            p_str = str(item.get('price', '')).replace(' ', '')
+            _m = re.search(r'\d+', p_str)
+            return float(_m.group()) if _m else 0
+
+        # 1. Exact match
         for cat in prices:
             for item in cat.get('items', []):
                 if item.get('name', '').lower() == proc_lower:
-                    p_str = str(item.get('price', '')).replace(' ', '')
-                    _m = re.search(r'\d+', p_str)
-                    price = float(_m.group()) if _m else 0
+                    price = _extract_price(item)
                     break
             if price:
                 break
+
+        # 2. Substring match (procedure contains item name or vice versa)
+        if not price:
+            best_len = 0
+            for cat in prices:
+                for item in cat.get('items', []):
+                    iname = item.get('name', '').lower().replace('«', '"').replace('»', '"')
+                    if len(iname) < 3:
+                        continue
+                    if iname in proc_lower or proc_lower in iname:
+                        p = _extract_price(item)
+                        if p and len(iname) > best_len:
+                            price = p
+                            best_len = len(iname)
+
+        # 3. Category keyword match (e.g. "Ботулінотерапія" → first priced item in that category)
+        if not price:
+            CATEGORY_KEYWORDS = {
+                'ботулін': 'Ботулінотерапія',
+                'botox': 'Ботулінотерапія',
+                'біорепар': 'Біорепарація',
+                'мезотерап': 'Мезотерапія',
+                'пілінг': 'Пілінги',
+                'масаж': 'Масаж',
+                'чистк': 'Апаратна косметологія',
+            }
+            for kw, cat_hint in CATEGORY_KEYWORDS.items():
+                if kw in proc_lower:
+                    for cat in prices:
+                        if cat_hint.lower() in cat.get('cat', '').lower():
+                            for item in cat.get('items', []):
+                                p = _extract_price(item)
+                                if p:
+                                    price = p
+                                    break
+                        if price:
+                            break
+                if price:
+                    break
     except Exception:
         pass
     if price <= 0:
