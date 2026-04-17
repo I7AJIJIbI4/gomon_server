@@ -1236,6 +1236,6 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<script src="/gomon-widget.js?v=20260402a"></script>
+<script src="/gomon-widget.js?v=20260417a"></script>
 </body>
 </html>

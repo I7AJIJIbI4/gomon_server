@@ -16,7 +16,7 @@ if (empty($data) && !empty($_POST)) {
     $data = $_POST;
 }
 
-error_log("Zadarma webhook: " . json_encode($data));
+if (getenv('GOMON_DEBUG')) error_log("Zadarma webhook: " . json_encode($data));
 
 require_once __DIR__ . '/app/config.php';
 $config = [
@@ -27,7 +27,11 @@ $config = [
 
 // Signature verification — reject unsigned/forged requests
 $zd_signature = $_SERVER['HTTP_SIGNATURE'] ?? '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $zd_signature) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$zd_signature) {
+        http_response_code(403);
+        exit(json_encode(['error' => 'Missing signature']));
+    }
     $expected = base64_encode(hash_hmac('sha1', $input, $config['zadarma_secret']));
     if (!hash_equals($expected, $zd_signature)) {
         http_response_code(403);

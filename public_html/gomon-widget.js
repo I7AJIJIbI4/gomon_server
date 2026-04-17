@@ -409,7 +409,7 @@
       '<div id="gw-panel" role="dialog" aria-label="GomonAI чат">' +
         '<div id="gw-header">' +
           '<div id="gw-header-dot"></div>' +
-          '<span id="gw-header-title">GomonAI \u00b7 \u0410\u0441\u0438\u0441\u0442\u0435\u043d\u0442 \u043a\u043b\u0456\u043d\u0456\u043a\u0438</span>' +
+          '<span id="gw-header-title">GomonAI \u00b7 \u0410\u0441\u0438\u0441\u0442\u0435\u043d\u0442 Dr. Gomon</span>' +
           '<button id="gw-close" aria-label="\u0417\u0430\u043a\u0440\u0438\u0442\u0438">' + closeSVG() + '</button>' +
         '</div>' +
         '<div id="gw-messages"></div>' +

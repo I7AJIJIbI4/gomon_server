@@ -351,12 +351,15 @@ def _check_ai_should_reply(conv_id, chat_id):
     try:
         # Check if REAL human admin replied recently (not ai_bot)
         # Exclude auto-greetings: admin messages that have a client message within 5s
+        from tz_utils import kyiv_now as _kyiv_now_pause
+        from datetime import timedelta as _td_pause
+        _pause_cutoff = (_kyiv_now_pause() - _td_pause(seconds=AI_ADMIN_PAUSE)).strftime('%Y-%m-%d %H:%M:%S')
         rows = conn.execute(
             "SELECT created_at FROM messages WHERE conversation_id=? AND is_from_admin=1 "
             "AND sender_id != 'ai_bot' "
-            "AND created_at > datetime('now', '-{} seconds') "
-            "ORDER BY id DESC LIMIT 5".format(AI_ADMIN_PAUSE),
-            (conv_id,)).fetchall()
+            "AND created_at > ? "
+            "ORDER BY id DESC LIMIT 5",
+            (conv_id, _pause_cutoff)).fetchall()
         for (admin_ts,) in rows:
             # Check if this admin message has a client message within 5 seconds (= auto-greeting)
             nearby = conn.execute(
@@ -367,11 +370,13 @@ def _check_ai_should_reply(conv_id, chat_id):
                 # Real admin message, not auto-greeting
                 return False, 'admin_active'
 
-        # Rate limit: count AI replies today
+        # Rate limit: count AI replies today (Kyiv time, not UTC)
+        from tz_utils import kyiv_now as _kyiv_now_rl
+        kyiv_today = _kyiv_now_rl().strftime('%Y-%m-%d')
         count_row = conn.execute(
             "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id='ai_bot' AND created_at > date('now')",
-            (conv_id,)).fetchone()
+            "AND sender_id='ai_bot' AND created_at > ?",
+            (conv_id, kyiv_today)).fetchone()
         if count_row and count_row[0] >= AI_RATE_LIMIT:
             # Deposit rate limit bypass
             client_phone_dep = None
@@ -387,8 +392,8 @@ def _check_ai_should_reply(conv_id, chat_id):
             if client_phone_dep:
                 try:
                     dep_row = conn.execute(
-                        "SELECT 1 FROM deposits WHERE phone=? AND status='Approved' AND date(created_at)=date('now') LIMIT 1",
-                        (client_phone_dep,)).fetchone()
+                        "SELECT 1 FROM deposits WHERE phone=? AND status='Approved' AND date(created_at)=? LIMIT 1",
+                        (client_phone_dep, kyiv_today)).fetchone()
                     has_deposit = bool(dep_row)
                 except Exception:
                     pass
@@ -616,7 +621,7 @@ def _cancel_client_appointment(client_phone, target_date=None):
 
         # Find WLaunch appointment ID if not in local data
         if not appt_id:
-            from datetime import timedelta as _td
+            from datetime import datetime as _dt, timedelta as _td
             d = _dt.strptime(date, '%Y-%m-%d')
             start_d = (d - _td(days=1)).strftime('%Y-%m-%d')
             end_d = (d + _td(days=1)).strftime('%Y-%m-%d')
@@ -723,10 +728,12 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
                         if pay_url:
                             import sqlite3 as _sq2
                             _c2 = _sq2.connect(DB_PATH, timeout=5)
-                            _c2.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
-                                        (_cp, 5.0, 0, _oid, 'pending'))
-                            _c2.commit()
-                            _c2.close()
+                            try:
+                                _c2.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
+                                            (_cp, 5.0, 0, _oid, 'pending'))
+                                _c2.commit()
+                            finally:
+                                _c2.close()
                 except Exception as _e:
                     logger.warning('Deposit create in rate_limit: {}'.format(_e))
 
@@ -819,12 +826,19 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
             import hashlib as _hl
             _cb_id = 'proc_' + _hl.md5('{}_{}'.format(chat_id, int(time.time())).encode()).hexdigest()[:8]
             # Store procedure data for callback
+            # Prune stale entries older than 30 minutes
+            _now_ts = time.time()
+            _pending_procedures_clean = {k: v for k, v in _pending_procedures.items()
+                                         if _now_ts - v.get('ts', 0) < 1800}
+            _pending_procedures.clear()
+            _pending_procedures.update(_pending_procedures_clean)
             _pending_procedures[_cb_id] = {
                 'chat_id': chat_id,
                 'biz_conn_id': biz_conn_id,
                 'procedure': _procedure_name,
                 'client_name': client_name,
                 'conv_id': conv_id,
+                'ts': _now_ts,
             }
             kb = InlineKeyboardMarkup([[InlineKeyboardButton('Записатись', callback_data=_cb_id)]])
             try:
@@ -1010,12 +1024,14 @@ def process_update(update, bot_id):
         if biz_id and user_id and enabled:
             try:
                 conn = sqlite3.connect(DB_PATH, timeout=10)
-                conn.execute(
-                    "INSERT OR REPLACE INTO biz_connections (chat_id, biz_conn_id) VALUES (?,?)",
-                    (str(user_id), biz_id))
-                conn.commit()
-                conn.close()
-                logger.info('Updated biz_connection for user {}: {}'.format(user_id, biz_id))
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO biz_connections (chat_id, biz_conn_id) VALUES (?,?)",
+                        (str(user_id), biz_id))
+                    conn.commit()
+                    logger.info('Updated biz_connection for user {}: {}'.format(user_id, biz_id))
+                finally:
+                    conn.close()
             except Exception as e:
                 logger.error('biz_connection update error: {}'.format(e))
         return

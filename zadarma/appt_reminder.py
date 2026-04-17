@@ -18,6 +18,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 
 import sys
+import re
 import json
 import logging
 import logging.handlers
@@ -70,13 +71,17 @@ CASHBACK_RATE = 0.03  # 3%
 
 def _is_app_user(phone):
     """Check if client has ever logged into the PWA (has session in otp_sessions.db)."""
+    conn = None
     try:
         conn = sqlite3.connect(OTP_DB_PATH, timeout=5)
         row = conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
-        conn.close()
         return row is not None
     except Exception:
         return False
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
 
 def _accrue_cashback(appt):
     """Auto-accrue 3% cashback for completed procedure. Only for app users."""
@@ -97,8 +102,9 @@ def _accrue_cashback(appt):
         for cat in prices:
             for item in cat.get('items', []):
                 if item.get('name', '').lower() == proc_lower:
-                    p = item.get('price', '')
-                    price = float(''.join(c for c in str(p) if c.isdigit() or c == '.') or '0')
+                    p_str = str(item.get('price', '')).replace(' ', '')
+                    _m = re.search(r'\d+', p_str)
+                    price = float(_m.group()) if _m else 0
                     break
             if price:
                 break
@@ -110,21 +116,18 @@ def _accrue_cashback(appt):
     cashback_amount = round(price * CASHBACK_RATE, 2)
     if cashback_amount < 1:
         return
-    # Check if already accrued for this phone+date+procedure
+    # Atomic insert — skip if already exists (UNIQUE constraint on phone+procedure_name+appt_date)
     conn = _db()
-    existing = conn.execute(
-        "SELECT 1 FROM cashback WHERE phone=? AND procedure_name=? AND appt_date=? LIMIT 1",
-        (phone, procedure, appt_date)).fetchone()
-    if existing:
-        conn.close()
-        logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
-        return
     conn.execute(
-        "INSERT INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
+        "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
         (phone, cashback_amount, procedure, price, appt_date))
     conn.commit()
+    changes = conn.total_changes
     conn.close()
-    logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
+    if changes == 0:
+        logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
+    else:
+        logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 

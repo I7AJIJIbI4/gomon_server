@@ -630,6 +630,10 @@ def verify_magic():
     # Видаляємо OTP (вже не потрібен)
     conn = sqlite3.connect(OTP_DB)
     conn.execute('DELETE FROM otp_codes WHERE phone=?', (phone,))
+    # Cap sessions per phone (keep latest 4)
+    conn.execute('DELETE FROM sessions WHERE phone=? AND token NOT IN '
+                 '(SELECT token FROM sessions WHERE phone=? ORDER BY created_at DESC LIMIT 4)',
+                 (phone, phone))
     # Створюємо сесію
     token = gen_token()
     now = int(time.time())
@@ -661,6 +665,10 @@ def verify_otp():
         token = gen_token()
         now   = int(time.time())
         conn  = sqlite3.connect(OTP_DB)
+        # Cap sessions per phone (keep latest 4)
+        conn.execute('DELETE FROM sessions WHERE phone=? AND token NOT IN '
+                     '(SELECT token FROM sessions WHERE phone=? ORDER BY created_at DESC LIMIT 4)',
+                     (phone, phone))
         conn.execute('INSERT INTO sessions VALUES (?,?,?,?)',
                      (token, phone, now, now + SESSION_TTL))
         conn.commit()
@@ -2418,7 +2426,11 @@ def admin_cal_update(appt_id):
         conn.close()
         return jsonify({'error': 'forbidden'}), 403
 
-    # Validate date/time/specialist if provided
+    # Validate status/date/time/specialist if provided
+    VALID_STATUSES = ('CONFIRMED', 'DONE', 'NO_SHOW', 'CANCELLED')
+    if 'status' in d and d['status'] not in VALID_STATUSES:
+        conn.close()
+        return jsonify({'error': 'invalid_status', 'valid': list(VALID_STATUSES)}), 400
 
     if 'date' in d and d['date']:
         if not re.match(r'^\d{4}-\d{2}-\d{2}$', d['date']):
@@ -3206,6 +3218,8 @@ def _tg_notify_cancel(name, phone, date_str, service):
 @app.route('/api/chat/cancel-appointment', methods=['POST'])
 def chat_cancel_appointment():
     """Cancel nearest upcoming appointment by phone (called from chat.php AI)."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
     data = request.get_json() or {}
     phone = data.get('phone', '').strip()
     if not phone:
@@ -3868,25 +3882,13 @@ def deposit_rates():
     amount_uah = round(5.0 * eur_rate, 2) if eur_rate else 0
     return jsonify({'eur_rate': eur_rate, 'amount_eur': 5.0, 'amount_uah': amount_uah})
 
-@app.route('/api/deposit/create-internal', methods=['POST'])
-def deposit_create_internal():
-    """Internal endpoint for chat.php to create deposit (no auth, localhost only)."""
-    if request.remote_addr not in ('127.0.0.1', '::1'):
-        return jsonify({'error': 'forbidden'}), 403
+def _do_deposit_create(phone):
+    """Shared logic for deposit creation (used by both public and internal endpoints)."""
     data = request.get_json() or {}
-    phone = norm_phone(data.get('phone', ''))
-    if not phone:
-        return jsonify({'error': 'missing phone'}), 400
-    request.user_phone = phone  # fake for reuse
-    return deposit_create()
-
-@app.route('/api/deposit/create', methods=['POST'])
-@require_auth
-def deposit_create():
-    """Generate WayForPay payment URL for deposit (UAH, optional installments)."""
-    phone = request.user_phone
-    data = request.get_json() or {}
-    amount_uah = float(data.get('amount', 0))
+    try:
+        amount_uah = float(data.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid_amount'}), 400
     installments = int(data.get('installments', 0))  # 0 = regular payment, 2-12 = installment months
 
     if amount_uah < 100 or amount_uah > 50000:
@@ -3941,6 +3943,23 @@ def deposit_create():
         widget_params['paymentSystems'] = 'card;googlePay;applePay;payPartsAbank:{p};payParts:{p};payPartsPrivat:{p};payPartsMono:{p};payPartsOtp:{p}'.format(p=parts_str)
     return jsonify({'ok': True, 'widget_params': widget_params, 'order_id': order_id})
 
+@app.route('/api/deposit/create-internal', methods=['POST'])
+def deposit_create_internal():
+    """Internal endpoint for chat.php to create deposit (no auth, localhost only)."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json() or {}
+    phone = norm_phone(data.get('phone', ''))
+    if not phone:
+        return jsonify({'error': 'missing phone'}), 400
+    return _do_deposit_create(phone)
+
+@app.route('/api/deposit/create', methods=['POST'])
+@require_auth
+def deposit_create():
+    """Generate WayForPay payment URL for deposit (UAH, optional installments)."""
+    return _do_deposit_create(request.user_phone)
+
 @app.route('/api/deposit/callback', methods=['POST'])
 def deposit_callback():
     """WayForPay serviceUrl callback (server-to-server)."""
@@ -3948,7 +3967,7 @@ def deposit_callback():
     data = request.get_json() or {}
     merchant_account = data.get('merchantAccount', '')
     order_ref = data.get('orderReference', '')
-    amount = float(data.get('amount', 0))
+    amount = data.get('amount', '0')  # keep as string for signature verification
     currency = data.get('currency', '')
     auth_code = data.get('authCode', '')
     tx_status = data.get('transactionStatus', '')
@@ -3960,12 +3979,12 @@ def deposit_callback():
     expected_sign = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
     if received_sign != expected_sign:
         logger.warning('WFP callback invalid signature for order {}'.format(order_ref))
-        return jsonify({'orderReference': order_ref, 'status': 'refuse', 'time': int(time.time())}), 403
+        return jsonify({'orderReference': order_ref, 'status': 'refuse', 'time': int(time.time())})
     # Update deposit
     if tx_status == 'Approved':
         conn = sqlite3.connect(DB_PATH)
         conn.execute("UPDATE deposits SET status='Approved', amount_uah=?, wfp_transaction_status=? WHERE order_id=?",
-                     (amount, tx_status, order_ref))
+                     (float(amount), tx_status, order_ref))
         conn.commit()
         conn.close()
         logger.info('WFP Deposit Approved: {} {}, order {}'.format(amount, currency, order_ref))
@@ -4036,14 +4055,27 @@ def admin_deposit_deduct():
     """Deduct from client deposit (manual, by admin/doctor)."""
     d = request.get_json() or {}
     phone = norm_phone(d.get('phone', ''))
-    amount = float(d.get('amount', 0))
+    try:
+        amount = float(d.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid_amount'}), 400
     reason = d.get('reason', '')
     if not phone or amount <= 0:
         return jsonify({'error': 'invalid'}), 400
-    balance = _get_deposit_balance(phone)
+    # Atomic balance check + deduction (TOCTOU prevention)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn.execute('BEGIN IMMEDIATE')
+    deposited = conn.execute(
+        "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
+        (norm_phone(phone),)).fetchone()[0]
+    deducted = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+        (norm_phone(phone),)).fetchone()[0]
+    balance = round(deposited - deducted, 2)
     if amount > balance:
+        conn.rollback()
+        conn.close()
         return jsonify({'error': 'insufficient', 'balance': balance}), 400
-    conn = sqlite3.connect(DB_PATH)
     conn.execute("INSERT INTO deposit_deductions (phone, amount, reason, deducted_by) VALUES (?,?,?,?)",
                  (phone, amount, reason, request.admin_phone))
     conn.commit()
@@ -4056,16 +4088,40 @@ def admin_cashback_redeem():
     """Redeem cashback for client (min 500 UAH). By admin/doctor/specialist."""
     d = request.get_json() or {}
     phone = norm_phone(d.get('phone', ''))
-    amount = float(d.get('amount', 0))
+    try:
+        amount = float(d.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid_amount'}), 400
     if not phone or amount <= 0:
         return jsonify({'error': 'invalid'}), 400
-    cb_balance = _get_cashback_balance(phone)
-    total = _get_deposit_balance(phone) + cb_balance
+    # Atomic balance check + redeem (TOCTOU prevention)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn.execute('BEGIN IMMEDIATE')
+    # Compute cashback balance inside transaction
+    earned = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM cashback WHERE phone=?",
+        (norm_phone(phone),)).fetchone()[0]
+    redeemed = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'",
+        (norm_phone(phone),)).fetchone()[0]
+    cb_balance = round(earned - redeemed, 2)
+    # Compute deposit balance inside transaction
+    deposited = conn.execute(
+        "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
+        (norm_phone(phone),)).fetchone()[0]
+    deducted = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+        (norm_phone(phone),)).fetchone()[0]
+    dep_balance = round(deposited - deducted, 2)
+    total = dep_balance + cb_balance
     if total < CASHBACK_MIN_REDEEM:
+        conn.rollback()
+        conn.close()
         return jsonify({'error': 'min_not_reached', 'total_balance': total, 'min': CASHBACK_MIN_REDEEM}), 400
     if amount > cb_balance:
+        conn.rollback()
+        conn.close()
         return jsonify({'error': 'insufficient', 'cashback_balance': cb_balance}), 400
-    conn = sqlite3.connect(DB_PATH)
     conn.execute("INSERT INTO deposit_deductions (phone, amount, reason, deducted_by) VALUES (?,?,?,?)",
                  (phone, amount, 'cashback_redeem', request.admin_phone))
     conn.commit()
@@ -4120,6 +4176,12 @@ def deposit_check_status():
     order_id = d.get('order_id', '')
     if not order_id:
         return jsonify({'error': 'missing order_id'}), 400
+    # Ownership validation: order must belong to requesting user
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT phone FROM deposits WHERE order_id=?", (order_id,)).fetchone()
+    conn.close()
+    if not row or norm_phone(row[0]) != norm_phone(request.user_phone):
+        return jsonify({'error': 'not_found'}), 404
     sign_params = [WFP_MERCHANT_ACCOUNT, order_id]
     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
     resp = _req.post('https://api.wayforpay.com/api', json={

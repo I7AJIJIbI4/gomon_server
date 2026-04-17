@@ -18,22 +18,6 @@ DB_PATH = '/home/gomoncli/zadarma/users.db'
 
 _pay_state = {}
 
-
-async def _safe_reply(msg, text, **kwargs):
-    """Send message with Markdown, fallback to plain text if parse fails."""
-    try:
-        return await msg.reply_text(text, **kwargs)
-    except Exception:
-        return await msg.reply_text(text, **kwargs)
-
-
-async def _safe_send(bot, chat_id, text, **kwargs):
-    """Send message with Markdown, fallback to plain text if parse fails."""
-    try:
-        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
-    except Exception:
-        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -904,7 +888,8 @@ async def admin_callback(update, context: ContextTypes.DEFAULT_TYPE):
                 "Введіть суму та опис через пробіл:\n"
                 "<code>900 DrumRoll всього тіла</code>\n\n"
                 "Або /admin для скасування"
-            ))
+            ),
+            parse_mode='HTML')
     elif data == 'admin_monitor':
         await _do_monitor(context.bot, chat_id)
     elif data == 'admin_diag':

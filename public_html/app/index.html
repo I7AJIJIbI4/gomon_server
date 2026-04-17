@@ -2907,7 +2907,7 @@ function _openPhotoGallery(phone) {
   var overlay = document.createElement('div');
   overlay.className = 'photo-gallery-overlay';
   overlay.innerHTML =
-    '<button class="photo-gallery-close" onclick="this.parentElement.remove()">&times;</button>' +
+    '<button class="photo-gallery-close">&times;</button>' +
     '<div class="photo-gallery-counter"></div>' +
     '<div class="photo-gallery-label"></div>' +
     '<div class="photo-gallery-img-wrap"><img class="photo-gallery-img" src="" alt=""></div>' +
@@ -2918,6 +2918,16 @@ function _openPhotoGallery(phone) {
   var counterEl = overlay.querySelector('.photo-gallery-counter');
   var labelEl = overlay.querySelector('.photo-gallery-label');
   var thumbsEl = overlay.querySelector('.photo-gallery-thumbs');
+
+  // Keyboard navigation (defined early so _closeGallery can reference it)
+  var _keyHandler = function(e) {
+    if (e.key === 'Escape') { _closeGallery(); }
+    if (e.key === 'ArrowRight' && idx < photos.length - 1) showPhoto(idx + 1);
+    if (e.key === 'ArrowLeft' && idx > 0) showPhoto(idx - 1);
+  };
+  var _closeGallery = function() { overlay.remove(); document.removeEventListener('keydown', _keyHandler); };
+  overlay.querySelector('.photo-gallery-close').onclick = _closeGallery;
+  overlay.onclick = function(e) { if (e.target === overlay) _closeGallery(); };
 
   // Render thumbnails
   photos.forEach(function(p, i) {
@@ -2972,12 +2982,6 @@ function _openPhotoGallery(phone) {
     }
   });
 
-  // Keyboard navigation
-  var _keyHandler = function(e) {
-    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _keyHandler); }
-    if (e.key === 'ArrowRight' && idx < photos.length - 1) showPhoto(idx + 1);
-    if (e.key === 'ArrowLeft' && idx > 0) showPhoto(idx - 1);
-  };
   document.addEventListener('keydown', _keyHandler);
 
   // Click on image → open in Drive
@@ -3004,10 +3008,13 @@ async function _openVisitPhotos(visitName, phone) {
 
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;z-index:10500;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;padding:16px';
-  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+
+  var _escHandler = function(e) { if (e.key === 'Escape') _closeVisitPhotos(); };
+  var _closeVisitPhotos = function() { document.body.removeChild(overlay); document.removeEventListener('keydown', _escHandler); };
+  overlay.onclick = function(e) { if (e.target === overlay) _closeVisitPhotos(); };
 
   var header = '<div style="color:var(--gold-pale);font-size:16px;margin-bottom:12px;text-align:center">' + _esc(visitName) + '</div>';
-  var close = '<button onclick="this.parentElement.remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:white;font-size:24px;cursor:pointer">&times;</button>';
+  var close = '<button style="position:absolute;top:12px;right:16px;background:none;border:none;color:white;font-size:24px;cursor:pointer">&times;</button>';
   var grid = '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;overflow-y:auto;max-height:calc(100vh - 80px)">';
   visitPhotos.forEach(function(p) {
     var tag = p.subfolder ? '<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.6);color:white;font-size:10px;padding:2px 6px;border-radius:4px">' + _esc(p.subfolder) + '</div>' : '';
@@ -3017,9 +3024,8 @@ async function _openVisitPhotos(visitName, phone) {
   });
   grid += '</div>';
   overlay.innerHTML = close + header + grid;
+  overlay.querySelector('button').onclick = _closeVisitPhotos;
   document.body.appendChild(overlay);
-  // Escape to close
-  var _escHandler = function(e) { if (e.key === 'Escape') { document.body.removeChild(overlay); document.removeEventListener('keydown', _escHandler); } };
   document.addEventListener('keydown', _escHandler);
 }
 function closeClientCard() {
@@ -4893,11 +4899,13 @@ async function _depositTopUp(amount, installments) {
   } catch(e) { showToast('Помилка створення платежу'); }
 }
 
+var _depositPollId = null;
 function _refreshBalanceAfterPay(amount) {
+  if (_depositPollId) clearInterval(_depositPollId);
   var pollCount = 0;
-  var pollId = setInterval(async function() {
+  _depositPollId = setInterval(async function() {
     pollCount++;
-    if (pollCount > 60) { clearInterval(pollId); return; }
+    if (pollCount > 60) { clearInterval(_depositPollId); _depositPollId = null; return; }
     try {
       var br = await api('/deposit/balance');
       var newBal = br.balance || 0;
@@ -4908,7 +4916,8 @@ function _refreshBalanceAfterPay(amount) {
       }
       var txs = br.transactions || [];
       if (txs.some(function(t) { return t.type === 'deposit' && t.amount >= amount * 0.9; })) {
-        clearInterval(pollId);
+        clearInterval(_depositPollId);
+        _depositPollId = null;
         showToast('Баланс поповнено!');
         loadDepositBalance();
       }
@@ -5110,7 +5119,8 @@ function openPromo(i) {
   if (!p || !p.details) return;
   document.getElementById('promo-modal-tag').textContent = p.tag;
   document.getElementById('promo-modal-title').textContent = p.title;
-  document.getElementById('promo-modal-body').innerHTML = p.details;
+  // p.details is admin-controlled HTML from promos.json (trusted source)
+  document.getElementById('promo-modal-body').innerHTML = (p.details || '').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   document.getElementById('promo-modal').classList.add('show');
 }
 function closePromoModal() {
@@ -5263,7 +5273,7 @@ async function cancelAppointment(apptId, date, service) {
     });
     if (r.ok) {
       // Видаляємо з локального масиву щоб не чекати синхронізацію
-      appointments = appointments.filter(a => !(a.date === date && a.service === service));
+      appointments = appointments.filter(a => a.appt_id !== apptId);
       localStorage.setItem('gomon_appointments', JSON.stringify(appointments));
       renderAppointments();
       // Оновлюємо home-next-appt

@@ -241,4 +241,19 @@ def force_full_sync():
     return sync_clients()
 
 if __name__ == "__main__":
-    sync_clients()
+    import fcntl
+    import sys
+
+    LOCK_FILE = '/tmp/sync_clients.lock'
+    _lock_fh = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        logger.warning('sync_clients вже запущено (lock зайнятий). Пропускаємо.')
+        sys.exit(0)
+
+    try:
+        sync_clients()
+    finally:
+        fcntl.flock(_lock_fh, fcntl.LOCK_UN)
+        _lock_fh.close()

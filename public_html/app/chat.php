@@ -183,8 +183,7 @@ if ($image_b64) {
     // Strip whitespace from base64 and basic sanity check
     $image_b64 = preg_replace('/\s/', '', $image_b64);
 }
-$client_ip  = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-$client_ip  = trim(explode(',', $client_ip)[0]);
+$client_ip  = $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 // Очищаємо і валідуємо messages
 $clean_messages = [];
@@ -195,6 +194,9 @@ foreach ($messages as $msg) {
         $clean_messages[] = ['role' => $role, 'content' => $content];
     }
 }
+
+// Cap message history to last 20 messages
+$clean_messages = array_slice($clean_messages, -20);
 
 // If image present but no text — add default question
 if (empty($clean_messages) && $image_b64) {
@@ -764,7 +766,3 @@ if (!empty($rl_db)) {
 //  ХЕЛПЕРИ
 // ═══════════════════════════════════════════════════════════════
 
-function escape_md(string $text): string {
-    // Екранування спецсимволів для Telegram Markdown v1
-    return str_replace(['_', '*', '[', '`'], ['\_', '\*', '\[', '\`'], $text);
-}

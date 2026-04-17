@@ -53,6 +53,8 @@
   let isLoading    = false;
   let unreadCount  = 0;
   let typingTimer  = null;
+  let _depPollTimer1 = null;  // deposit polling interval (rate_limit path)
+  let _depPollTimer2 = null;  // deposit polling interval (pre-check path)
 
   // ── ДЕБАУНС СПОВІЩЕНЬ ─────────────────────────────────────────────────────
   let stopTypingFn = null;
@@ -872,6 +874,9 @@
     elToggle.innerHTML = '🌸 <span id="gc-badge"></span>';
     // Оновлюємо ref на badge
     setBadge(unreadCount);
+    // Clear deposit polling intervals
+    if (_depPollTimer1) { clearInterval(_depPollTimer1); _depPollTimer1 = null; }
+    if (_depPollTimer2) { clearInterval(_depPollTimer2); _depPollTimer2 = null; }
   }
 
   // ── PROCEDURE NOTIFY ──────────────────────────────────────────────────────
@@ -986,22 +991,25 @@
           });
           var _depData = await _depRes.json();
           if (_depData.deposit_url) {
+            var _safeUrl2 = '';
+            try { var _u2 = new URL(_depData.deposit_url); _safeUrl2 = _u2.href.replace(/"/g, '&quot;'); } catch(e) {}
             addMessage('assistant', 'Ви використали всі безкоштовні запити на сьогодні.\n\nВнесіть депозит 5 EUR — ліміт знімається на день, а гроші залишаються на вашому рахунку для оплати будь-якої процедури або косметики.');
             var _depEl = document.createElement('div');
             _depEl.className = 'gc-bubble-wrap gc-bubble-assistant';
-            _depEl.innerHTML = '<div class="gc-bubble" style="text-align:center"><a href="' + _depData.deposit_url + '" target="_blank" style="display:inline-block;padding:12px 24px;background:var(--gc-gold,#d4b07a);color:#111;border-radius:10px;text-decoration:none;font-weight:500;font-size:16px">Внести депозит 5 EUR</a></div>';
+            _depEl.innerHTML = '<div class="gc-bubble" style="text-align:center"><a href="' + _safeUrl2 + '" target="_blank" style="display:inline-block;padding:12px 24px;background:var(--gc-gold,#d4b07a);color:#111;border-radius:10px;text-decoration:none;font-weight:500;font-size:16px">Внести депозит 5 EUR</a></div>';
             document.getElementById('gc-messages').appendChild(_depEl);
             scrollBottom();
             // Start polling for deposit approval
+            if (_depPollTimer2) clearInterval(_depPollTimer2);
             var _pollCount2 = 0;
-            var _pollTimer2 = setInterval(async function() {
+            _depPollTimer2 = setInterval(async function() {
               _pollCount2++;
-              if (_pollCount2 > 60) { clearInterval(_pollTimer2); return; }
+              if (_pollCount2 > 60) { clearInterval(_depPollTimer2); _depPollTimer2 = null; return; }
               try {
                 var _br2 = await fetch('/api/deposit/balance', {headers: {'Authorization': 'Bearer ' + (CONFIG.token || '')}});
                 var _bd2 = await _br2.json();
                 if (_bd2.balance > 0) {
-                  clearInterval(_pollTimer2);
+                  clearInterval(_depPollTimer2); _depPollTimer2 = null;
                   try { localStorage.removeItem(_gcRlKey()); } catch(e) {}
                   addMessage('assistant', 'Депозит отримано! Ваш баланс: ' + _bd2.balance.toFixed(0) + ' грн. Ліміт знято — продовжуйте спілкування.');
                   if (typeof loadDepositBalance === 'function') loadDepositBalance();
@@ -1046,22 +1054,25 @@
 
       if (data.error === 'rate_limit') {
         if (data.deposit_url) {
+          var _safeUrl = '';
+          try { var _u = new URL(data.deposit_url); _safeUrl = _u.href.replace(/"/g, '&quot;'); } catch(e) {}
           addMessage('assistant', 'Ви використали всі безкоштовні запити на сьогодні.\n\nВнесіть депозит 5 EUR — ліміт знімається на день, а гроші залишаються на вашому рахунку для оплати будь-якої процедури або косметики.');
           var _depEl = document.createElement('div');
           _depEl.className = 'gc-bubble-wrap gc-bubble-assistant';
-          _depEl.innerHTML = '<div class="gc-bubble" style="text-align:center"><a href="' + data.deposit_url + '" target="_blank" style="display:inline-block;padding:12px 24px;background:var(--gc-gold,#d4b07a);color:#111;border-radius:10px;text-decoration:none;font-weight:500;font-size:16px">Внести депозит 5 EUR</a></div>';
+          _depEl.innerHTML = '<div class="gc-bubble" style="text-align:center"><a href="' + _safeUrl + '" target="_blank" style="display:inline-block;padding:12px 24px;background:var(--gc-gold,#d4b07a);color:#111;border-radius:10px;text-decoration:none;font-weight:500;font-size:16px">Внести депозит 5 EUR</a></div>';
           document.getElementById('gc-messages').appendChild(_depEl);
           scrollBottom();
           // Start polling for deposit approval
+          if (_depPollTimer1) clearInterval(_depPollTimer1);
           var _pollCount = 0;
-          var _pollTimer = setInterval(async function() {
+          _depPollTimer1 = setInterval(async function() {
             _pollCount++;
-            if (_pollCount > 60) { clearInterval(_pollTimer); return; } // 5 min max
+            if (_pollCount > 60) { clearInterval(_depPollTimer1); _depPollTimer1 = null; return; } // 5 min max
             try {
               var _br = await fetch('/api/deposit/balance', {headers: {'Authorization': 'Bearer ' + (CONFIG.token || '')}});
               var _bd = await _br.json();
               if (_bd.balance > 0) {
-                clearInterval(_pollTimer);
+                clearInterval(_depPollTimer1); _depPollTimer1 = null;
                 // Reset client-side rate limit
                 try { localStorage.removeItem(_gcRlKey()); } catch(e) {}
                 addMessage('assistant', 'Депозит отримано! Ваш баланс: ' + _bd.balance.toFixed(0) + ' грн. Ліміт знято — продовжуйте спілкування.');

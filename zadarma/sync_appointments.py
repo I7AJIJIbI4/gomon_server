@@ -172,7 +172,8 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 if aid:
                     by_id[aid] = e  # new data overwrites old for same appt
                 else:
-                    by_id[id(e)] = e
+                    synthetic_key = '{}|{}|{}'.format(e.get('date',''), e.get('service',''), e.get('hour',''))
+                    by_id[synthetic_key] = e
 
             merged = list(by_id.values())
             merged.sort(key=lambda x: x.get('date', ''), reverse=True)
@@ -199,6 +200,16 @@ def sync_recent_appointments(days_back=7, days_forward=90):
 
 if __name__ == '__main__':
     import argparse
+    import fcntl
+
+    LOCK_FILE = '/tmp/sync_appointments.lock'
+    _lock_fh = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(_lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        logger.warning('sync_appointments вже запущено (lock зайнятий). Пропускаємо.')
+        sys.exit(0)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--deep', action='store_true', help='Deep sync: fetch ALL history (years back)')
     args = parser.parse_args()
@@ -214,3 +225,6 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f'\u274c Помилка синхронізації: {e}', exc_info=True)
         sys.exit(1)
+    finally:
+        fcntl.flock(_lock_fh, fcntl.LOCK_UN)
+        _lock_fh.close()

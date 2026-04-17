@@ -2,9 +2,13 @@
 date_default_timezone_set('Europe/Kyiv');
 header('Content-Type: application/json; charset=utf-8');
 
+// IP-based access logging for audit (WLaunch webhook lacks custom header support)
+// TODO: Add shared secret via X-Webhook-Token header when WLaunch API supports it
+$webhook_ip = $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
 // Log all incoming webhooks
 $raw = file_get_contents('php://input');
-$log = date('Y-m-d H:i:s') . ' ' . $raw . "
+$log = date('Y-m-d H:i:s') . ' [IP:' . $webhook_ip . '] ' . $raw . "
 ";
 file_put_contents('/var/log/gomon/wlaunch_webhook.log', $log, FILE_APPEND);
 

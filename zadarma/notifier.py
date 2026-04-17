@@ -131,19 +131,6 @@ def _ensure_notification_log():
         logger.error('_init_notification_log failed: {}'.format(e))
 
 
-def _already_sent(phone, type_, reference, channel):
-    _ensure_notification_log()
-    conn = _db()
-    try:
-        row = conn.execute(
-            'SELECT 1 FROM notification_log WHERE phone=? AND type=? AND reference=? AND channel=?',
-            (phone, type_, reference, channel)
-        ).fetchone()
-        return row is not None
-    finally:
-        conn.close()
-
-
 def _log(phone, type_, reference, channel, status, preview=''):
     _ensure_notification_log()
     conn = _db()
