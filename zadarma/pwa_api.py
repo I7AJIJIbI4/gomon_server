@@ -3899,6 +3899,8 @@ def deposit_create():
 
     client = get_client(phone)
     client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()) if client else ''
+    first_name = client_name.split()[0] if client_name else ''
+    last_name = ' '.join(client_name.split()[1:]) if len(client_name.split()) > 1 else ''
     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
     order_id = 'dep_{}_{}'.format(norm_phone(phone), int(time.time()))
     order_date = int(time.time())
@@ -3912,43 +3914,32 @@ def deposit_create():
                  (norm_phone(phone), 0, amount_uah, order_id, 'pending'))
     conn.commit()
     conn.close()
-    # POST to WayForPay offline mode → get payment URL
-    pay_data = {
+    # Return signed params for WFP widget (frontend opens widget inline)
+    widget_params = {
         'merchantAccount': WFP_MERCHANT_ACCOUNT,
         'merchantDomainName': WFP_MERCHANT_DOMAIN,
         'merchantSignature': signature,
         'merchantTransactionType': 'SALE',
         'merchantTransactionSecureType': 'AUTO',
+        'authorizationType': 'SimpleSignature',
         'orderReference': order_id,
-        'orderDate': order_date,
-        'amount': amount_uah,
+        'orderDate': str(order_date),
+        'amount': str(amount_uah),
         'currency': 'UAH',
-        'productName[]': product_name,
-        'productPrice[]': amount_uah,
-        'productCount[]': 1,
+        'productName': [product_name],
+        'productPrice': [str(amount_uah)],
+        'productCount': [str(1)],
+        'clientFirstName': first_name,
+        'clientLastName': last_name,
         'clientPhone': phone,
-        'clientFirstName': client_name.split()[0] if client_name else '',
         'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
-        'returnUrl': 'https://drgomon.beauty/app/index.html',
-        'paymentSystems': 'card;googlePay;applePay',
+        'straightWidget': True,
         'language': 'UA',
     }
     if installments:
-        pay_data['orderTimeout'] = 86400
-        pay_data['paymentSystems'] = 'card;googlePay;applePay;payParts'
-        pay_data['orderPayParts'] = installments
-    try:
-        resp = _req.post('https://secure.wayforpay.com/pay?behavior=offline', data=pay_data, timeout=10)
-        url_data = resp.json()
-        pay_url = url_data.get('url', '')
-        if pay_url:
-            return jsonify({'ok': True, 'pay_url': pay_url, 'order_id': order_id})
-        else:
-            logger.error('WFP no URL: {}'.format(url_data))
-            return jsonify({'error': 'payment_error', 'detail': url_data}), 502
-    except Exception as e:
-        logger.error('WFP create error: {}'.format(e))
-        return jsonify({'error': 'payment_unavailable'}), 503
+        parts_str = str(installments)
+        widget_params['paymentSystems'] = 'card;googlePay;applePay;payPartsAbank:{p};payParts:{p};payPartsMono:{p};payPartsOtp:{p}'.format(p=parts_str)
+    return jsonify({'ok': True, 'widget_params': widget_params, 'order_id': order_id})
 
 @app.route('/api/deposit/callback', methods=['POST'])
 def deposit_callback():

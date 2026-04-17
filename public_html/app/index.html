@@ -4804,11 +4804,13 @@ async function openDepositBalance() {
     html += '<input id="deposit-custom-amount" type="number" min="100" max="50000" placeholder="Інша сума" style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans);text-align:center">';
     html += '<button onclick="_depositTopUp(parseInt(document.getElementById(\'deposit-custom-amount\').value)||0)" style="padding:8px 14px;background:var(--gold);color:var(--btn-text);border:none;border-radius:8px;font-size:14px;font-family:var(--sans);cursor:pointer">Поповнити</button>';
     html += '</div>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px">';
-    [3000,5000,7000,10000].forEach(function(v) {
-      html += '<button onclick="_depositTopUp(' + v + ',true)" style="padding:8px 12px;border:1px solid var(--gold);border-radius:8px;background:transparent;color:var(--gold);font-size:13px;font-family:var(--sans);cursor:pointer">' + (v/1000) + ' тис · Оплата частинами</button>';
+    html += '<div style="margin-top:10px;text-align:center">';
+    html += '<div style="font-size:13px;color:var(--text3);margin-bottom:8px">Оплата частинами (від 1 000 грн)</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+    [1000,2000,3000,5000,10000].forEach(function(v) {
+      html += '<button onclick="_depositTopUp(' + v + ',true)" style="padding:8px 12px;border:1px solid var(--gold);border-radius:8px;background:transparent;color:var(--gold);font-size:13px;font-family:var(--sans);cursor:pointer">' + (v >= 1000 ? (v/1000) + ' тис' : v) + '</button>';
     });
-    html += '</div>';
+    html += '</div></div>';
     html += '</div>';
     if (txs.length) {
       html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
@@ -4847,6 +4849,15 @@ async function openDepositBalance() {
   }
 }
 
+function _ensureWfpScript(cb) {
+  if (window.Wayforpay) { cb(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://secure.wayforpay.com/server/pay-widget.js';
+  s.onload = cb;
+  s.onerror = function() { showToast('Помилка завантаження платіжної системи'); };
+  document.head.appendChild(s);
+}
+
 async function _depositTopUp(amount, installments) {
   if (!amount || amount < 100) { showToast('Мінімум 100 грн'); return; }
   if (amount > 50000) { showToast('Максимум 50 000 грн'); return; }
@@ -4854,36 +4865,59 @@ async function _depositTopUp(amount, installments) {
   if (installments) body.installments = amount >= 10000 ? 10 : amount >= 7000 ? 6 : amount >= 5000 ? 4 : 3;
   try {
     var r = await api('/deposit/create', {method:'POST', body: JSON.stringify(body)});
-    if (r.pay_url) {
-      window.open(r.pay_url, '_blank');
-      // Start polling
-      var orderId = r.order_id;
-      var pollCount = 0;
-      var pollId = setInterval(async function() {
-        pollCount++;
-        if (pollCount > 60) { clearInterval(pollId); return; } // 5 min max
-        try {
-          var br = await api('/deposit/balance');
-          var newBal = br.balance || 0;
-          var el = document.getElementById('deposit-balance-val');
-          if (el) {
-            el.textContent = newBal > 0 ? newBal.toFixed(0) + ' грн' : '0 грн';
-            el.style.color = newBal > 0 ? 'var(--gold)' : 'var(--text3)';
-          }
-          // Check if deposit appeared
-          var txs = br.transactions || [];
-          if (txs.some(function(t) { return t.type === 'deposit' && t.amount >= amount * 0.9; })) {
-            clearInterval(pollId);
-            showToast('Баланс поповнено!');
-            document.getElementById('confirm-modal').classList.remove('show');
-            setTimeout(function() { openDepositBalance(); }, 500);
-          }
-        } catch(e) {}
-      }, 5000);
-    } else {
+    if (!r.ok || !r.widget_params) {
       showToast(r.error === 'invalid_amount' ? 'Сума від 100 до 50 000 грн' : (r.error || 'Помилка'));
+      return;
     }
+    var params = r.widget_params;
+    var orderId = r.order_id;
+    // Close balance modal before opening widget
+    document.getElementById('confirm-modal').classList.remove('show');
+    document.getElementById('confirm-modal-ok').style.display = '';
+    document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+    _ensureWfpScript(function() {
+      var wfp = new Wayforpay();
+      wfp.run(params,
+        function(response) {
+          // Approved
+          showToast('Оплата успішна! Баланс оновлюється...');
+          _refreshBalanceAfterPay(amount);
+        },
+        function(response) {
+          // Declined
+          showToast('Оплату відхилено');
+        },
+        function(response) {
+          // Pending
+          showToast('Оплата обробляється...');
+          _refreshBalanceAfterPay(amount);
+        }
+      );
+    });
   } catch(e) { showToast('Помилка створення платежу'); }
+}
+
+function _refreshBalanceAfterPay(amount) {
+  var pollCount = 0;
+  var pollId = setInterval(async function() {
+    pollCount++;
+    if (pollCount > 60) { clearInterval(pollId); return; }
+    try {
+      var br = await api('/deposit/balance');
+      var newBal = br.balance || 0;
+      var el = document.getElementById('deposit-balance-val');
+      if (el) {
+        el.textContent = newBal > 0 ? newBal.toFixed(0) + ' грн' : '0 грн';
+        el.style.color = newBal > 0 ? 'var(--gold)' : 'var(--text3)';
+      }
+      var txs = br.transactions || [];
+      if (txs.some(function(t) { return t.type === 'deposit' && t.amount >= amount * 0.9; })) {
+        clearInterval(pollId);
+        showToast('Баланс поповнено!');
+        loadDepositBalance();
+      }
+    } catch(e) {}
+  }, 5000);
 }
 
 function renderHomeAppt() {
