@@ -3938,7 +3938,7 @@ def deposit_create():
     }
     if installments:
         parts_str = str(installments)
-        widget_params['paymentSystems'] = 'card;googlePay;applePay;payPartsAbank:{p};payParts:{p};payPartsMono:{p};payPartsOtp:{p}'.format(p=parts_str)
+        widget_params['paymentSystems'] = 'card;googlePay;applePay;payPartsAbank:{p};payParts:{p};payPartsPrivat:{p};payPartsMono:{p};payPartsOtp:{p}'.format(p=parts_str)
     return jsonify({'ok': True, 'widget_params': widget_params, 'order_id': order_id})
 
 @app.route('/api/deposit/callback', methods=['POST'])
