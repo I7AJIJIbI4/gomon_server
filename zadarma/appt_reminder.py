@@ -282,10 +282,21 @@ def run_feedback(dry_run=False, override_date=None):
     Запускати о 20:00. Підтримує --date YYYY-MM-DD для минулих дат.
     """
     target_date = override_date or kyiv_now().date().strftime('%Y-%m-%d')
-    logger.info('=== FEEDBACK: перевіряємо manual записи на {} ==='.format(target_date))
+    logger.info('=== FEEDBACK: перевіряємо записи на {} ==='.format(target_date))
 
-    appts = _get_manual_appts(target_date)
-    logger.info('Знайдено {} записів'.format(len(appts)))
+    manual = _get_manual_appts(target_date)
+    wlaunch = _get_wlaunch_appts(target_date)
+    # Dedup manual vs wlaunch by phone+time (keep manual), but allow multiple procedures per client
+    manual_keys = set()
+    for a in manual:
+        ph = (a.get('client_phone') or '')[-9:]
+        manual_keys.add((ph, a.get('time', '')))
+    appts = list(manual)
+    for a in wlaunch:
+        ph = (a.get('client_phone') or '')[-9:]
+        if (ph, a.get('time', '')) not in manual_keys:
+            appts.append(a)
+    logger.info('Знайдено {} записів (manual={}, wlaunch={})'.format(len(appts), len(manual), len(appts) - len(manual)))
 
     sent = skipped = failed = cashback_ok = 0
 
