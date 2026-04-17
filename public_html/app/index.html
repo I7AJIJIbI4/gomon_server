@@ -2721,23 +2721,54 @@ function closeApptAction() {
   document.getElementById('adm-appt-action').classList.remove('show');
 }
 
+async function _redeemCashback(phone, amount) {
+  document.getElementById('confirm-modal').classList.remove('show');
+  document.getElementById('confirm-modal-ok').style.display = '';
+  document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+  var ok = await showConfirm('Списати кешбек', 'Списати ' + amount.toFixed(0) + ' грн кешбеку для клієнта?');
+  if (!ok) return;
+  try {
+    var r = await api('/admin/cashback/redeem', {method:'POST', body: JSON.stringify({phone: phone, amount: amount})});
+    if (r.ok) {
+      showToast('Кешбек списано: ' + amount.toFixed(0) + ' грн');
+      _showAdminDepositHistory(phone);
+    } else {
+      showToast(r.error === 'min_not_reached' ? 'Мінімум ' + (r.min || 500) + ' грн (загальний баланс)' : (r.error || 'Помилка'));
+    }
+  } catch(e) { showToast('Помилка'); }
+}
+
 async function _showAdminDepositHistory(phone) {
   try {
     var r = await api('/deposit/balance?phone=' + encodeURIComponent(phone));
     var balance = r.balance || 0;
+    var dep = r.deposit_balance || 0;
+    var cb = r.cashback_balance || 0;
+    var cbMin = r.cashback_min_redeem || 500;
     var txs = r.transactions || [];
     var html = '<div style="padding:20px">';
-    html += '<div style="text-align:center;margin-bottom:16px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Баланс клієнта</span></div>';
+    html += '<div style="text-align:center;margin-bottom:12px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Загальний баланс</span></div>';
+    html += '<div style="display:flex;gap:12px;margin-bottom:16px">';
+    html += '<div style="flex:1;text-align:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)"><div style="font-size:18px;font-weight:500">' + dep.toFixed(0) + ' грн</div><div style="font-size:11px;color:var(--text3)">Депозит</div></div>';
+    html += '<div style="flex:1;text-align:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)"><div style="font-size:18px;font-weight:500;color:' + (cb >= cbMin ? 'var(--gold)' : 'var(--text)') + '">' + cb.toFixed(0) + ' грн</div><div style="font-size:11px;color:var(--text3)">Кешбек 3%</div></div>';
+    html += '</div>';
+    if (cb >= cbMin) {
+      html += '<div style="text-align:center;margin-bottom:12px"><button onclick="_redeemCashback(\'' + _esc(phone) + '\',' + cb + ')" style="padding:10px 20px;background:var(--gold);color:#111;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:var(--sans)">Списати кешбек ' + cb.toFixed(0) + ' грн</button></div>';
+    } else if (cb > 0) {
+      html += '<p style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:12px">Кешбек доступний від ' + cbMin + ' грн (залишилось ' + (cbMin - cb).toFixed(0) + ' грн)</p>';
+    }
     if (txs.length) {
       html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
       txs.forEach(function(tx) {
         var d = tx.date ? tx.date.slice(0,10) : '';
         var sign = tx.amount >= 0 ? '+' : '';
         var color = tx.amount >= 0 ? 'var(--gold)' : 'var(--cancel-fg)';
-        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '') : (tx.reason || 'Списання');
+        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '')
+                  : tx.type === 'cashback' ? 'Кешбек — ' + (tx.procedure || '')
+                  : (tx.reason || 'Списання');
         html += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">';
-        html += '<div><div style="font-size:15px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
-        html += '<div style="font-size:16px;font-weight:500;color:' + color + '">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
+        html += '<div style="flex:1"><div style="font-size:14px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
+        html += '<div style="font-size:15px;font-weight:500;color:' + color + ';white-space:nowrap;margin-left:8px">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
         html += '</div>';
       });
       html += '</div>';
@@ -2779,9 +2810,15 @@ async function openClientCard(phone, name) {
   fetch('/api/deposit/balance?phone=' + encodeURIComponent(phone), {headers: {Authorization: 'Bearer ' + token}})
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      var bal = d.balance || 0;
-      balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Депозит</span><span style="font-size:16px;font-weight:500;color:' + (bal > 0 ? 'var(--gold)' : 'var(--text3)') + ';cursor:pointer" onclick="event.stopPropagation();_showAdminDepositHistory(\'' + _esc(phone) + '\')">' + bal.toFixed(0) + ' грн ›</span>';
-    }).catch(function() { balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Депозит</span><span style="color:var(--text3)">—</span>'; });
+      var dep = d.balance || 0;
+      var cb = d.cashback_balance || 0;
+      var total = dep + cb;
+      var parts = [];
+      if (dep > 0) parts.push('Депозит: ' + dep.toFixed(0) + ' грн');
+      if (cb > 0) parts.push('Кешбек: ' + cb.toFixed(0) + ' грн');
+      var label = parts.length ? parts.join(' · ') : 'Баланс';
+      balEl.innerHTML = '<span style="font-size:13px;color:var(--text3)">' + _esc(label) + '</span><span style="font-size:16px;font-weight:500;color:' + (total > 0 ? 'var(--gold)' : 'var(--text3)') + ';cursor:pointer" onclick="event.stopPropagation();_showAdminDepositHistory(\'' + _esc(phone) + '\')">' + total.toFixed(0) + ' грн ›</span>';
+    }).catch(function() { balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Баланс</span><span style="color:var(--text3)">—</span>'; });
   modal.classList.add('show');
 
   try {
@@ -2807,6 +2844,10 @@ async function openClientCard(phone, name) {
         (v.specialist ? '<span class="client-card-visit-spec" style="color:' + (v.specialist==='victoria'?'#1D9E75':'#7F77DD') + '">' + _esc(v.specialist==='victoria'?'В':'А') + '</span>' : '') +
       '</div>';
     });
+    // "Новий запис" button
+    html += '<div style="padding:12px 0 4px">' +
+      '<button style="width:100%;padding:12px;background:var(--gold);color:var(--btn-text);border:none;border-radius:10px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer" ' +
+      'onclick="closeClientCard();adminGo(\'admin-appts\');showNewApptForm();selectClientAppt(\'' + _esc(phone) + '\',\'' + _esc((name||'').replace(/'/g,"\\'")) + '\')">+ Новий запис</button></div>';
     modal.querySelector('.client-card-visits').innerHTML = html;
 
     // Load photos carousel
@@ -2902,13 +2943,16 @@ async function updateApptStatus(id, status) {
   } catch(e) { showToast('Помилка зʼєднання'); }
 }
 async function cancelAppt(id) {
+  var a = calAppointments.find(function(x){return String(x.id)===String(id);});
+  var label = a ? (a.procedure_name||'запис') : 'запис';
   closeApptAction();
+  var ok = await showConfirm('Скасування', 'Скасувати "' + label + '"?');
+  if (!ok) return;
   try {
     var r = await fetch('/api/admin/calendar/appointments/'+id, {
       method:'DELETE', headers:{Authorization:'Bearer '+token}
     });
     if (!r.ok) { showToast('Помилка: ' + r.status); return; }
-    var a = calAppointments.find(function(x){return String(x.id)===String(id);});
     if (a) a.status = 'CANCELLED';
     renderCalendar();
     showToast('Скасовано');
@@ -2917,6 +2961,8 @@ async function cancelAppt(id) {
 
 async function cancelWlAppt(wlId, phone, date, service) {
   closeApptAction();
+  var ok = await showConfirm('Скасування', 'Скасувати "' + (service||'запис') + '"?');
+  if (!ok) return;
   var apptId = wlId.replace('wl_', '');
   try {
     var r = await fetch('/api/me/appointments/cancel', {
@@ -4031,7 +4077,7 @@ function _renderClientsPage(clients, list, append) {
   }
   var html = page.map(function(c) {
     var apptJson = JSON.stringify(c.appointments || []).replace(/"/g,'&quot;');
-    return '<div class="adm-client-row" data-appts="' + apptJson + '" data-phone="' + _esc(c.phone) + '" onclick="_admShowClientAppts(\'' + _esc((c.name||c.phone).replace(/'/g,"\\'")) + '\', JSON.parse(this.dataset.appts), this.dataset.phone)">' +
+    return '<div class="adm-client-row" data-appts="' + apptJson + '" data-phone="' + _esc(c.phone) + '" onclick="openClientCard(this.dataset.phone, \'' + _esc((c.name||c.phone).replace(/'/g,"\\'")) + '\')">' +
       '<div style="min-width:0">' +
         '<div class="adm-client-name">' + _esc(c.name||c.phone) + '</div>' +
         '<div class="adm-client-phone">' + _esc((c.phone||'').replace(/^380/,'0')) + '</div>' +
@@ -4629,19 +4675,33 @@ async function openDepositBalance() {
   try {
     var r = await api('/deposit/balance');
     var balance = r.balance || 0;
+    var dep = r.deposit_balance || 0;
+    var cb = r.cashback_balance || 0;
+    var cbMin = r.cashback_min_redeem || 500;
     var txs = r.transactions || [];
     var html = '<div style="padding:20px">';
-    html += '<div style="text-align:center;margin-bottom:16px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Доступний баланс</span></div>';
+    html += '<div style="text-align:center;margin-bottom:12px"><span style="font-size:28px;font-weight:500;color:var(--gold)">' + balance.toFixed(0) + ' грн</span><br><span style="font-size:13px;color:var(--text3)">Загальний баланс</span></div>';
+    html += '<div style="display:flex;gap:12px;margin-bottom:16px">';
+    html += '<div style="flex:1;text-align:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--text)">' + dep.toFixed(0) + ' грн</div><div style="font-size:11px;color:var(--text3)">Депозит</div></div>';
+    html += '<div style="flex:1;text-align:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)"><div style="font-size:18px;font-weight:500;color:' + (cb >= cbMin ? 'var(--gold)' : 'var(--text)') + '">' + cb.toFixed(0) + ' грн</div><div style="font-size:11px;color:var(--text3)">Кешбек 3%' + (cb >= cbMin ? ' ✓' : '') + '</div></div>';
+    html += '</div>';
+    if (balance > 0 && balance < cbMin) {
+      html += '<p style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:12px">Баланс доступний для списання від ' + cbMin + ' грн (залишилось ' + (cbMin - balance).toFixed(0) + ' грн)</p>';
+    } else if (balance >= cbMin && cb > 0) {
+      html += '<p style="text-align:center;font-size:12px;color:var(--gold);margin-bottom:12px">Кешбек доступний для списання — зверніться до лікаря</p>';
+    }
     if (txs.length) {
       html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
       txs.forEach(function(tx) {
         var d = tx.date ? tx.date.slice(0,10) : '';
         var sign = tx.amount >= 0 ? '+' : '';
         var color = tx.amount >= 0 ? 'var(--gold)' : 'var(--cancel-fg)';
-        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '') : (tx.reason || 'Списання');
+        var label = tx.type === 'deposit' ? 'Депозит' + (tx.amount_eur ? ' (' + tx.amount_eur + ' EUR)' : '')
+                  : tx.type === 'cashback' ? 'Кешбек 3%' + (tx.procedure ? ' — ' + tx.procedure : '')
+                  : (tx.reason || 'Списання');
         html += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">';
-        html += '<div><div style="font-size:15px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
-        html += '<div style="font-size:16px;font-weight:500;color:' + color + '">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
+        html += '<div style="flex:1"><div style="font-size:14px">' + _esc(label) + '</div><div style="font-size:12px;color:var(--text3)">' + _esc(d) + '</div></div>';
+        html += '<div style="font-size:15px;font-weight:500;color:' + color + ';white-space:nowrap;margin-left:8px">' + sign + Math.abs(tx.amount).toFixed(0) + ' грн</div>';
         html += '</div>';
       });
       html += '</div>';
@@ -6189,8 +6249,7 @@ function _admRenderList(clients) {
       cl.last_service || '',
     ].filter(Boolean).join(' · ');
     const phone = cl.phone ? '<div class="adm-client-sub" style="font-size:11px">' + (cl.phone+'').replace(/^380/,'0') + '</div>' : '';
-    const apptJson = JSON.stringify(cl.appointments || []).replace(/"/g,'&quot;');
-    return `<div class="adm-client-row" onclick="_admShowClientAppts('${cl.name.replace(/'/g,"\\'")}', JSON.parse(this.dataset.appts))" data-appts="${apptJson}">
+    return `<div class="adm-client-row" onclick="openClientCard('${_esc(cl.phone)}', '${_esc(cl.name.replace(/'/g,"\\'"))}')">
       <div style="min-width:0">
         <div class="adm-client-name">${_esc(cl.name)}</div>
         ${sub ? '<div class="adm-client-sub">' + sub + '</div>' : ''}

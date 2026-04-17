@@ -1917,6 +1917,17 @@ def admin_cal_get():
             row_dict['busy'] = True
         result.append(row_dict)
 
+    # Collect wlaunch_ids + phone/date/time keys from manual appointments for dedup
+    _manual_wl_ids = set()
+    _manual_keys = set()
+    for r in result:
+        wl_id = r.get('wlaunch_id') or ''
+        if wl_id:
+            _manual_wl_ids.add(wl_id)
+        ph = r.get('client_phone') or ''
+        if ph:
+            _manual_keys.add((ph, r.get('date', ''), r.get('time', '')))
+
     # 2. WLaunch appointments from services_json
     rows = conn.execute(
         'SELECT phone, first_name, last_name, services_json FROM clients'
@@ -1930,15 +1941,21 @@ def admin_cal_get():
             d = it.get('date', '')
             if not d:
                 continue
-            status = (it.get('status') or '').upper()
             if from_date and d < from_date:
                 continue
             if to_date and d > to_date:
+                continue
+            # Skip if manual appointment already covers this WLaunch record
+            if it.get('appt_id', '') in _manual_wl_ids:
                 continue
             specialist = it.get('specialist')
             hour = it.get('hour')
             minute = it.get('minute', 0) or 0
             time_str = '{:02d}:{:02d}'.format(hour, minute) if hour is not None else ''
+            # Skip by phone+date+time match (manual without wlaunch_id)
+            if (row['phone'], d, time_str) in _manual_keys:
+                continue
+            status = (it.get('status') or '').upper()
             name = ((row['first_name'] or '') + ' ' + (row['last_name'] or '')).strip()
             is_other_spec = 'all' not in vis_names and specialist not in vis_names
             result.append({
@@ -3803,6 +3820,23 @@ def _get_deposit_balance(phone):
     finally:
         conn.close()
 
+CASHBACK_RATE = 0.03  # 3%
+CASHBACK_MIN_REDEEM = 500  # мінімум для списання
+
+def _get_cashback_balance(phone):
+    """Get client cashback balance (earned - redeemed)."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        earned = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM cashback WHERE phone=?",
+            (norm_phone(phone),)).fetchone()[0]
+        redeemed = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'",
+            (norm_phone(phone),)).fetchone()[0]
+        return round(earned - redeemed, 2)
+    finally:
+        conn.close()
+
 def _has_deposit_today(phone):
     """Check if client made a deposit today (for rate limit bypass)."""
     conn = sqlite3.connect(DB_PATH)
@@ -3953,11 +3987,14 @@ def deposit_balance():
     """Get client's deposit balance + transaction history."""
     # Admin can query any phone via ?phone=
     query_phone = request.args.get('phone', '').strip()
-    if query_phone and hasattr(request, 'admin_role') and request.admin_role:
+    is_admin = norm_phone(request.user_phone) in ADMIN_ROLES
+    if query_phone and is_admin:
         phone = norm_phone(query_phone)
     else:
         phone = norm_phone(request.user_phone)
-    balance = _get_deposit_balance(phone)
+    deposit_balance = _get_deposit_balance(phone)
+    cashback_balance = _get_cashback_balance(phone)
+    total_balance = round(deposit_balance + cashback_balance, 2)
     conn = sqlite3.connect(DB_PATH)
     deposits = conn.execute(
         "SELECT amount_eur, amount_uah, status, created_at FROM deposits WHERE phone=? ORDER BY created_at DESC LIMIT 20",
@@ -3965,15 +4002,27 @@ def deposit_balance():
     deductions = conn.execute(
         "SELECT amount, reason, created_at FROM deposit_deductions WHERE phone=? ORDER BY created_at DESC LIMIT 20",
         (phone,)).fetchall()
+    cashbacks = conn.execute(
+        "SELECT amount, procedure_name, procedure_price, appt_date, created_at FROM cashback WHERE phone=? ORDER BY created_at DESC LIMIT 20",
+        (phone,)).fetchall()
     conn.close()
     transactions = []
     for d in deposits:
         if d[2] == 'Approved':
-            transactions.append({'type': 'deposit', 'amount': d[1], 'amount_eur': d[0], 'date': d[3], 'status': d[2]})
+            transactions.append({'type': 'deposit', 'amount': d[1], 'amount_eur': d[0], 'date': d[3]})
     for d in deductions:
-        transactions.append({'type': 'deduction', 'amount': -d[0], 'reason': d[1] or '', 'date': d[2]})
+        label = 'Списання кешбеку' if 'cashback' in (d[1] or '') else (d[1] or 'Списання')
+        transactions.append({'type': 'deduction', 'amount': -d[0], 'reason': label, 'date': d[2]})
+    for c in cashbacks:
+        transactions.append({'type': 'cashback', 'amount': c[0], 'procedure': c[1] or '', 'procedure_price': c[2] or 0, 'date': c[4]})
     transactions.sort(key=lambda x: x.get('date', ''), reverse=True)
-    return jsonify({'balance': balance, 'transactions': transactions})
+    return jsonify({
+        'balance': total_balance,
+        'deposit_balance': deposit_balance,
+        'cashback_balance': cashback_balance,
+        'cashback_min_redeem': CASHBACK_MIN_REDEEM,
+        'transactions': transactions
+    })
 
 @app.route('/api/admin/deposit/deduct', methods=['POST'])
 @require_admin
@@ -3994,6 +4043,30 @@ def admin_deposit_deduct():
     conn.commit()
     conn.close()
     return jsonify({'ok': True, 'new_balance': round(balance - amount, 2)})
+
+@app.route('/api/admin/cashback/redeem', methods=['POST'])
+@require_admin
+def admin_cashback_redeem():
+    """Redeem cashback for client (min 500 UAH). By admin/doctor/specialist."""
+    d = request.get_json() or {}
+    phone = norm_phone(d.get('phone', ''))
+    amount = float(d.get('amount', 0))
+    if not phone or amount <= 0:
+        return jsonify({'error': 'invalid'}), 400
+    cb_balance = _get_cashback_balance(phone)
+    total = _get_deposit_balance(phone) + cb_balance
+    if total < CASHBACK_MIN_REDEEM:
+        return jsonify({'error': 'min_not_reached', 'total_balance': total, 'min': CASHBACK_MIN_REDEEM}), 400
+    if amount > cb_balance:
+        return jsonify({'error': 'insufficient', 'cashback_balance': cb_balance}), 400
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO deposit_deductions (phone, amount, reason, deducted_by) VALUES (?,?,?,?)",
+                 (phone, amount, 'cashback_redeem', request.admin_phone))
+    conn.commit()
+    conn.close()
+    new_cb = round(cb_balance - amount, 2)
+    logger.info('Cashback redeemed: {} UAH for {}, by {}'.format(amount, phone, request.admin_phone))
+    return jsonify({'ok': True, 'new_cashback_balance': new_cb})
 
 @app.route('/api/deposit/reconcile', methods=['POST'])
 def deposit_reconcile():

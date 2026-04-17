@@ -57,6 +57,9 @@ signal.signal(signal.SIGINT, _signal_handler)
 # AI thread limiter (actual semaphore instead of active_count)
 _ai_sem = threading.Semaphore(3)
 
+# Pending procedure callbacks {callback_id: {chat_id, biz_conn_id, procedure, client_name, conv_id}}
+_pending_procedures = {}
+
 
 def init_db():
     """Ensure messages table exists."""
@@ -794,19 +797,45 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
             logger.info("AI cancel for {}: ok={}".format(conv_id, ok))
             return
 
-        # Strip PROCEDURE tag (invisible to client, used in chat.php only)
+        # Strip PROCEDURE tag and extract procedure name
         import re as _re2
+        _proc_match = _re2.search(r'<PROCEDURE>(.*?)</PROCEDURE>', reply, flags=_re2.DOTALL)
+        _procedure_name = _proc_match.group(1).strip() if _proc_match else None
         reply = _re2.sub(r'<PROCEDURE>.*?</PROCEDURE>', '', reply, flags=_re2.DOTALL).strip()
 
         # Check for escalation tag
         if '<ESCALATE>' in reply:
             reply = reply.replace('<ESCALATE>', '').strip()
-            # Send reply to client (the polite handoff message)
             if reply and _send_ai_reply(chat_id, reply, biz_conn_id):
                 _save_ai_message(conv_id, chat_id, reply)
-            # Notify admin
             _notify_admin_escalation(conv_id, chat_id, client_name)
             logger.info('AI escalated conversation {} to admin'.format(conv_id))
+            return
+
+        # Send reply with "Записатись" callback button if procedure detected
+        if _procedure_name:
+            # 1. Send AI reply with inline "Записатись" button (callback, not URL)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            import hashlib as _hl
+            _cb_id = 'proc_' + _hl.md5('{}_{}'.format(chat_id, int(time.time())).encode()).hexdigest()[:8]
+            # Store procedure data for callback
+            _pending_procedures[_cb_id] = {
+                'chat_id': chat_id,
+                'biz_conn_id': biz_conn_id,
+                'procedure': _procedure_name,
+                'client_name': client_name,
+                'conv_id': conv_id,
+            }
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton('Записатись', callback_data=_cb_id)]])
+            try:
+                payload = {'chat_id': int(chat_id), 'text': reply, 'reply_markup': kb.to_dict()}
+                if biz_conn_id:
+                    payload['business_connection_id'] = biz_conn_id
+                requests.post('https://api.telegram.org/bot{}/sendMessage'.format(BOT_TOKEN), json=payload, timeout=10)
+            except Exception:
+                _send_ai_reply(chat_id, reply, biz_conn_id)
+            _save_ai_message(conv_id, chat_id, reply)
+            logger.info('AI reply with procedure button {} sent to {}'.format(_procedure_name, conv_id))
             return
 
         # Send normal reply
@@ -821,6 +850,35 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
 
 def process_update(update, bot_id):
     """Process a single update from Telegram."""
+
+    # Callback query (user clicked inline button)
+    cq = update.get('callback_query')
+    if cq:
+        cb_id = cq.get('data', '')
+        cq_id = cq.get('id', '')
+        proc_data = _pending_procedures.pop(cb_id, None)
+        # Answer callback to remove loading indicator
+        try:
+            requests.post('https://api.telegram.org/bot{}/answerCallbackQuery'.format(BOT_TOKEN),
+                          json={'callback_query_id': cq_id}, timeout=5)
+        except Exception:
+            pass
+        if proc_data:
+            chat_id = proc_data['chat_id']
+            biz_conn_id = proc_data['biz_conn_id']
+            procedure = proc_data['procedure']
+            client_name = proc_data['client_name']
+            conv_id = proc_data['conv_id']
+            # Send procedure name for copy
+            _send_ai_reply(chat_id, '📋 {}'.format(procedure), biz_conn_id)
+            # Send handoff message
+            handoff = 'Ваш запит передано лікарю Вікторії — вона підбере зручний для вас час і підтвердить запис 🌸'
+            _send_ai_reply(chat_id, handoff, biz_conn_id)
+            _save_ai_message(conv_id, chat_id, handoff)
+            # Notify admin
+            _notify_admin_escalation(conv_id, chat_id, client_name)
+            logger.info('Procedure callback: {} escalated for {}'.format(procedure, conv_id))
+        return
 
     # Business message (someone writes to business account)
     bm = update.get('business_message')

@@ -64,6 +64,53 @@ logging.basicConfig(
 logger = logging.getLogger('appt_reminder')
 
 DB_PATH = '/home/gomoncli/zadarma/users.db'
+PRICES_PATH = '/home/gomoncli/private_data/prices.json'
+CASHBACK_RATE = 0.03  # 3%
+
+def _accrue_cashback(appt):
+    """Auto-accrue 3% cashback for completed procedure."""
+    phone = appt.get('client_phone', '')
+    procedure = appt.get('procedure_name', '')
+    appt_date = appt.get('date', '')
+    if not phone or not procedure:
+        return
+    # Find price from prices.json
+    price = 0
+    try:
+        with open(PRICES_PATH, 'r') as f:
+            prices = json.load(f)
+        proc_lower = procedure.lower()
+        for cat in prices:
+            for item in cat.get('items', []):
+                if item.get('name', '').lower() == proc_lower:
+                    p = item.get('price', '')
+                    price = float(''.join(c for c in str(p) if c.isdigit() or c == '.') or '0')
+                    break
+            if price:
+                break
+    except Exception:
+        pass
+    if price <= 0:
+        logger.info('    cashback skip: no price for "{}"'.format(procedure))
+        return
+    cashback_amount = round(price * CASHBACK_RATE, 2)
+    if cashback_amount < 1:
+        return
+    # Check if already accrued for this phone+date+procedure
+    conn = _db()
+    existing = conn.execute(
+        "SELECT 1 FROM cashback WHERE phone=? AND procedure_name=? AND appt_date=? LIMIT 1",
+        (phone, procedure, appt_date)).fetchone()
+    if existing:
+        conn.close()
+        logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
+        return
+    conn.execute(
+        "INSERT INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
+        (phone, cashback_amount, procedure, price, appt_date))
+    conn.commit()
+    conn.close()
+    logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 
@@ -249,6 +296,11 @@ def run_feedback(dry_run=False):
                 ok = any(v for v in results.values() if v)
                 if ok:
                     sent += 1
+                    # Auto-accrue 3% cashback
+                    try:
+                        _accrue_cashback(appt)
+                    except Exception as _ce:
+                        logger.warning('    cashback accrue error: {}'.format(_ce))
                 else:
                     failed += 1
                     logger.warning('    всі канали провалились: {}'.format(results))
