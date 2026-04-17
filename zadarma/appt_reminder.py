@@ -275,19 +275,19 @@ def run_reminder(dry_run=False):
 
 # ─── Режим --feedback (відгук після процедури, о 20:00) ──────────────────────
 
-def run_feedback(dry_run=False):
+def run_feedback(dry_run=False, override_date=None):
     """
-    Знаходить всі записи на сьогодні зі статусом CONFIRMED/DONE
-    і надсилає подяку + посилання на відгук.
-    Запускати о 20:00.
+    Знаходить всі записи на вказану дату (або сьогодні) зі статусом CONFIRMED/DONE
+    і надсилає подяку + посилання на відгук + нараховує кешбек.
+    Запускати о 20:00. Підтримує --date YYYY-MM-DD для минулих дат.
     """
-    today = kyiv_now().date().strftime('%Y-%m-%d')
-    logger.info('=== FEEDBACK: перевіряємо manual записи на {} ==='.format(today))
+    target_date = override_date or kyiv_now().date().strftime('%Y-%m-%d')
+    logger.info('=== FEEDBACK: перевіряємо manual записи на {} ==='.format(target_date))
 
-    appts = _get_manual_appts(today)  # тільки наші записи
+    appts = _get_manual_appts(target_date)
     logger.info('Знайдено {} записів'.format(len(appts)))
 
-    sent = skipped = failed = 0
+    sent = skipped = failed = cashback_ok = 0
 
     for appt in appts:
         phone = appt.get('client_phone', '')
@@ -297,6 +297,13 @@ def run_feedback(dry_run=False):
         logger.info('  → {} | {} | {}'.format(
             phone, appt.get('client_name', '—'), appt.get('procedure_name', '—')
         ))
+
+        # Cashback accrual — always, regardless of notification success
+        try:
+            _accrue_cashback(appt)
+            cashback_ok += 1
+        except Exception as _ce:
+            logger.warning('    cashback accrue error: {}'.format(_ce))
 
         if dry_run:
             logger.info('    [DRY-RUN] пропускаємо відправку')
@@ -313,11 +320,6 @@ def run_feedback(dry_run=False):
                 ok = any(v for v in results.values() if v)
                 if ok:
                     sent += 1
-                    # Auto-accrue 3% cashback
-                    try:
-                        _accrue_cashback(appt)
-                    except Exception as _ce:
-                        logger.warning('    cashback accrue error: {}'.format(_ce))
                 else:
                     failed += 1
                     logger.warning('    всі канали провалились: {}'.format(results))
@@ -325,8 +327,8 @@ def run_feedback(dry_run=False):
             logger.error('    помилка send_post_visit: {}'.format(e))
             failed += 1
 
-    logger.info('=== FEEDBACK done: sent={} skipped={} failed={} ==='.format(
-        sent, skipped, failed))
+    logger.info('=== FEEDBACK done: sent={} skipped={} failed={} cashback={} ==='.format(
+        sent, skipped, failed, cashback_ok))
     return sent, skipped, failed
 
 # ─── Режим --specialist (сповіщення спеціалістам, о 20:00) ──────────────────
@@ -506,6 +508,10 @@ if __name__ == '__main__':
 
     try:
         dry_run  = '--dry-run' in sys.argv
+        override_date = None
+        for i, arg in enumerate(sys.argv):
+            if arg == '--date' and i + 1 < len(sys.argv):
+                override_date = sys.argv[i + 1]
         all_flags = ('--reminder', '--feedback', '--specialist', '--tomorrow')
         no_flags = not any(f in sys.argv for f in all_flags)
         do_rem   = '--reminder'   in sys.argv or no_flags
@@ -515,12 +521,14 @@ if __name__ == '__main__':
 
         if dry_run:
             logger.info('*** DRY-RUN MODE — відправки не буде ***')
+        if override_date:
+            logger.info('*** OVERRIDE DATE: {} ***'.format(override_date))
 
         if do_rem:
             run_reminder(dry_run=dry_run)
 
         if do_fb:
-            run_feedback(dry_run=dry_run)
+            run_feedback(dry_run=dry_run, override_date=override_date)
 
         if do_spec:
             run_specialist_notifications(dry_run=dry_run)
