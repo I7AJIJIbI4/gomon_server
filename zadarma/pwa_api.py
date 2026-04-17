@@ -3902,7 +3902,7 @@ def deposit_create():
     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
     order_id = 'dep_{}_{}'.format(norm_phone(phone), int(time.time()))
     order_date = int(time.time())
-    product_name = 'Поповнення балансу Dr. Gomon Cosmetology'
+    product_name = 'Сплата за послуги по догляду за шкірою голови та тіла'
     # Signature: merchantAccount;merchantDomainName;orderReference;orderDate;amount;currency;productName[0];productCount[0];productPrice[0]
     sign_params = [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, order_id, order_date, amount_uah, 'UAH', product_name, 1, amount_uah]
     signature = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
