@@ -854,7 +854,7 @@ nav{
 
 /* ── NOT-A-CLIENT MODAL ── */
 #confirm-modal{
-  position:fixed;inset:0;z-index:10000;
+  position:fixed;inset:0;z-index:10500;
   background:rgba(0,0,0,0.75);
   display:none;align-items:flex-end;justify-content:center;
   padding:0 0 var(--safe-bottom);
@@ -2798,14 +2798,15 @@ async function openClientCard(phone, name) {
   modal.querySelector('.client-card-name').textContent = name || phone || '—';
   modal.querySelector('.client-card-phone').innerHTML = '<a href="tel:+' + _esc(phone) + '" style="color:var(--gold);text-decoration:none">' + _esc((phone||'').replace(/^380/,'0')) + '</a>';
   modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Завантаження...</div>';
-  // Load deposit balance
+  // Load balance
   var balEl = modal.querySelector('.client-card-balance');
   if (!balEl) {
     balEl = document.createElement('div');
     balEl.className = 'client-card-balance';
-    balEl.style.cssText = 'margin:8px 0 12px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;justify-content:space-between;align-items:center';
     modal.querySelector('.client-card-phone').insertAdjacentElement('afterend', balEl);
   }
+  balEl.style.cssText = 'margin:8px 0 12px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer';
+  balEl.onclick = function() { _showAdminDepositHistory(phone); };
   balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Баланс</span><span style="font-size:14px;color:var(--text3)">...</span>';
   fetch('/api/deposit/balance?phone=' + encodeURIComponent(phone), {headers: {Authorization: 'Bearer ' + token}})
     .then(function(r) { return r.json(); })
@@ -2817,7 +2818,7 @@ async function openClientCard(phone, name) {
       if (dep > 0) parts.push('Депозит: ' + dep.toFixed(0) + ' грн');
       if (cb > 0) parts.push('Кешбек: ' + cb.toFixed(0) + ' грн');
       var label = parts.length ? parts.join(' · ') : 'Баланс';
-      balEl.innerHTML = '<span style="font-size:13px;color:var(--text3)">' + _esc(label) + '</span><span style="font-size:16px;font-weight:500;color:' + (total > 0 ? 'var(--gold)' : 'var(--text3)') + ';cursor:pointer" onclick="event.stopPropagation();_showAdminDepositHistory(\'' + _esc(phone) + '\')">' + total.toFixed(0) + ' грн ›</span>';
+      balEl.innerHTML = '<span style="font-size:13px;color:var(--text3)">' + _esc(label) + '</span><span style="font-size:16px;font-weight:500;color:' + (total > 0 ? 'var(--gold)' : 'var(--text3)') + '">' + total.toFixed(0) + ' грн ›</span>';
     }).catch(function() { balEl.innerHTML = '<span style="font-size:14px;color:var(--text3)">Баланс</span><span style="color:var(--text3)">—</span>'; });
   modal.classList.add('show');
 
