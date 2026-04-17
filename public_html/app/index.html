@@ -4430,53 +4430,54 @@ function renderSuperadminPanel() {
   if (!el) return;
   el.style.padding = '0 20px 20px';
   var html = '<h2 style="font-family:var(--serif);font-size:20px;color:var(--gold-pale);margin:0 0 16px">Управління правами</h2>';
-  _saData.forEach(function(s) {
-    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">';
-    html += '<div style="font-size:18px;color:var(--gold-pale)">' + _esc(s.label) + '</div>';
-    html += '<div style="font-size:13px;color:var(--text3);margin-bottom:10px">' + _esc(s.role) + ' &middot; ' + _esc((s.phone||'').replace(/^380/,'0')) + '</div>';
-    if (s.role === 'full') {
-      html += '<div style="color:var(--text3);font-size:13px;padding:4px 0">Повний доступ (лікар)</div>';
-    } else {
-      Object.keys(FEAT_LABELS).forEach(function(feat) {
-        var val = (s.permissions||{})[feat] || 'write';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);gap:8px">';
-        html += '<span style="font-size:14px;color:var(--text2);flex-shrink:0">' + FEAT_LABELS[feat] + '</span>';
-
-        if (SPEC_FEATURES.indexOf(feat) >= 0) {
-          // Dropdown multiselect
-          var selected = [];
-          try { selected = JSON.parse(val); } catch(e) { selected = [val]; }
-          if (!Array.isArray(selected)) selected = ['own'];
-          var selText = selected.indexOf('all') >= 0 ? 'Всі' : selected.map(function(x){return SPEC_LABELS[x]||x;}).join(', ');
-          var ddId = 'sa-dd-' + s.name + '-' + feat;
-          html += '<div style="position:relative">';
-          html += '<button style="padding:5px 12px;font-size:12px;background:var(--bg3);color:#7F77DD;border:1px solid rgba(127,119,221,.3);border-radius:6px;cursor:pointer;min-width:80px;text-align:left" onclick="_saToggleDd(\''+ddId+'\')">' + _esc(selText) + ' ▾</button>';
-          html += '<div id="'+ddId+'" style="display:none;position:absolute;right:0;top:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:100;min-width:140px;margin-top:4px">';
-          ['all','own'].concat(ALL_SPECS).forEach(function(sp) {
-            var checked = selected.indexOf(sp) >= 0;
-            html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:13px;color:var(--text2);cursor:pointer">';
-            html += '<input type="checkbox" '+(checked?'checked':'')+' onchange="_saSpecCheck(\''+s.name+'\',\''+feat+'\',\''+sp+'\',this.checked)" style="accent-color:#7F77DD">';
-            html += SPEC_LABELS[sp] + '</label>';
-          });
-          html += '</div></div>';
-        } else {
-          // Simple toggle
-          var levels = (feat.indexOf('_tap') >= 0) ? ['allow','deny'] :
-                       (feat === 'calendar_edit' || feat === 'ai_assistant' || feat === 'ai_chat' || feat === 'sync') ? ['write','deny'] :
-                       ['write','read','deny'];
-          html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">';
-          levels.forEach(function(l) {
-            var active = val === l;
-            var bg = active ? (l==='write'||l==='allow'?'rgba(29,158,117,.25)':l==='read'?'rgba(201,169,110,.2)':'rgba(226,75,74,.2)') : 'var(--bg3)';
-            var color = active ? LVL_COLORS[l] : 'var(--text3)';
-            html += '<button style="padding:5px 10px;font-size:12px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:50px" onclick="_saSet(\''+s.name+'\',\''+feat+'\',\''+l+'\')">' + LVL_LABELS[l] + '</button>';
-          });
-          html += '</div>';
-        }
-        html += '</div>';
-      });
-    }
+  _saData.forEach(function(s, si) {
+    var collapseId = 'sa-perms-' + si;
+    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:16px">';
+    html += '<div style="padding:16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="var e=document.getElementById(\''+collapseId+'\');e.style.display=e.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.sa-arrow\').textContent=e.style.display===\'none\'?\'▸\':\'▾\'">';
+    html += '<div><div style="font-size:18px;color:var(--gold-pale)">' + _esc(s.label) + '</div>';
+    html += '<div style="font-size:13px;color:var(--text3)">' + _esc(s.role === 'full' ? 'Лікар' : s.role === 'specialist' ? 'Спеціаліст' : s.role) + ' · ' + _esc((s.phone||'').replace(/^380/,'0')) + '</div></div>';
+    html += '<span class="sa-arrow" style="font-size:18px;color:var(--text3)">▸</span>';
     html += '</div>';
+    html += '<div id="'+collapseId+'" style="display:none;padding:0 16px 16px;border-top:1px solid var(--border)">';
+    Object.keys(FEAT_LABELS).forEach(function(feat) {
+      var val = (s.permissions||{})[feat] || 'write';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);gap:8px">';
+      html += '<span style="font-size:14px;color:var(--text2);flex-shrink:0">' + FEAT_LABELS[feat] + '</span>';
+
+      if (SPEC_FEATURES.indexOf(feat) >= 0) {
+        // Dropdown multiselect
+        var selected = [];
+        try { selected = JSON.parse(val); } catch(e) { selected = [val]; }
+        if (!Array.isArray(selected)) selected = ['own'];
+        var selText = selected.indexOf('all') >= 0 ? 'Всі' : selected.map(function(x){return SPEC_LABELS[x]||x;}).join(', ');
+        var ddId = 'sa-dd-' + s.name + '-' + feat;
+        html += '<div style="position:relative">';
+        html += '<button style="padding:5px 12px;font-size:12px;background:var(--bg3);color:#7F77DD;border:1px solid rgba(127,119,221,.3);border-radius:6px;cursor:pointer;min-width:80px;text-align:left" onclick="event.stopPropagation();_saToggleDd(\''+ddId+'\')">' + _esc(selText) + ' ▾</button>';
+        html += '<div id="'+ddId+'" style="display:none;position:absolute;right:0;top:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:100;min-width:140px;margin-top:4px">';
+        ['all','own'].concat(ALL_SPECS).forEach(function(sp) {
+          var checked = selected.indexOf(sp) >= 0;
+          html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:13px;color:var(--text2);cursor:pointer">';
+          html += '<input type="checkbox" '+(checked?'checked':'')+' onchange="_saSpecCheck(\''+s.name+'\',\''+feat+'\',\''+sp+'\',this.checked)" style="accent-color:#7F77DD">';
+          html += SPEC_LABELS[sp] + '</label>';
+        });
+        html += '</div></div>';
+      } else {
+        // Simple toggle
+        var levels = (feat.indexOf('_tap') >= 0) ? ['allow','deny'] :
+                     (feat === 'calendar_edit' || feat === 'ai_assistant' || feat === 'ai_chat' || feat === 'sync') ? ['write','deny'] :
+                     ['write','read','deny'];
+        html += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">';
+        levels.forEach(function(l) {
+          var active = val === l;
+          var bg = active ? (l==='write'||l==='allow'?'rgba(29,158,117,.25)':l==='read'?'rgba(201,169,110,.2)':'rgba(226,75,74,.2)') : 'var(--bg3)';
+          var color = active ? LVL_COLORS[l] : 'var(--text3)';
+          html += '<button style="padding:5px 10px;font-size:12px;background:'+bg+';color:'+color+';border:none;cursor:pointer;min-width:50px" onclick="_saSet(\''+s.name+'\',\''+feat+'\',\''+l+'\')">' + LVL_LABELS[l] + '</button>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
   });
   html += '<button style="width:100%;background:var(--gold);color:#111;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:500;cursor:pointer;margin-top:8px" onclick="_saSave()" id="sa-save-btn">Зберегти зміни</button>';
 
@@ -4594,7 +4595,6 @@ async function _saSave() {
   if (btn) { btn.disabled = true; btn.textContent = 'Збереження...'; }
   var perms = [];
   _saData.forEach(function(s) {
-    if (s.role === 'full') return;
     Object.keys(s.permissions || {}).forEach(function(f) {
       perms.push({specialist: s.name, feature: f, level: s.permissions[f]});
     });
