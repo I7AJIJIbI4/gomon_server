@@ -64,15 +64,29 @@ logging.basicConfig(
 logger = logging.getLogger('appt_reminder')
 
 DB_PATH = '/home/gomoncli/zadarma/users.db'
+OTP_DB_PATH = '/home/gomoncli/zadarma/otp_sessions.db'
 PRICES_PATH = '/home/gomoncli/private_data/prices.json'
 CASHBACK_RATE = 0.03  # 3%
 
+def _is_app_user(phone):
+    """Check if client has ever logged into the PWA (has session in otp_sessions.db)."""
+    try:
+        conn = sqlite3.connect(OTP_DB_PATH, timeout=5)
+        row = conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
+
 def _accrue_cashback(appt):
-    """Auto-accrue 3% cashback for completed procedure."""
+    """Auto-accrue 3% cashback for completed procedure. Only for app users."""
     phone = appt.get('client_phone', '')
     procedure = appt.get('procedure_name', '')
     appt_date = appt.get('date', '')
     if not phone or not procedure:
+        return
+    if not _is_app_user(phone):
+        logger.info('    cashback skip: {} not an app user'.format(phone))
         return
     # Find price from prices.json
     price = 0
