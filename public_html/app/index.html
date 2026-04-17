@@ -4551,7 +4551,9 @@ async function _saLoadResources() {
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
         '<div style="flex:1"><span style="color:var(--text)">' + _esc(res.name + ' ' + (res.last_name||'')) + '</span>' +
         '<br><span style="font-size:11px;color:var(--text3)">' + _esc((res.phone||'').replace(/^\+380/,'0')) + ' · <span style="color:'+statusColor+'">' + statusText + '</span></span></div>' +
-        (res.active ? '<button style="background:none;border:1px solid rgba(226,75,74,.3);border-radius:6px;padding:4px 10px;font-size:11px;color:#E24B4A;cursor:pointer" onclick="_saDeactivateResource(\''+_esc(res.id)+'\')">Вимкнути</button>' : '') +
+        (res.active
+          ? '<button style="background:none;border:1px solid rgba(226,75,74,.3);border-radius:6px;padding:4px 10px;font-size:11px;color:#E24B4A;cursor:pointer" onclick="_saDeactivateResource(\''+_esc(res.id)+'\')">Вимкнути</button>'
+          : '<button style="background:none;border:1px solid rgba(29,158,117,.3);border-radius:6px;padding:4px 10px;font-size:11px;color:#1D9E75;cursor:pointer" onclick="_saActivateResource(\''+_esc(res.id)+'\')">Увімкнути</button>') +
       '</div>';
     }).join('');
   } catch(e) { el.innerHTML = 'Помилка'; }
@@ -4576,6 +4578,17 @@ async function _saCreateResource() {
       _saLoadResources();
     } else { showToast(data.error || 'Помилка'); }
   } catch(e) { showToast('Помилка зʼєднання'); }
+}
+
+async function _saActivateResource(resId) {
+  try {
+    var r = await fetch('/api/superadmin/wlaunch-resources/' + resId + '/activate', {
+      method:'POST', headers:{Authorization:'Bearer '+token}
+    });
+    var data = await r.json();
+    if (data.ok) { showToast('Активовано'); _saLoadResources(); }
+    else { showToast(data.error || 'Помилка'); }
+  } catch(e) { showToast('Помилка'); }
 }
 
 async function _saDeactivateResource(resId) {

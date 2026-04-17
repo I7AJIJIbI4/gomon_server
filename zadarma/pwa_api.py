@@ -1886,6 +1886,24 @@ def superadmin_wl_resources_deactivate(rid):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/superadmin/wlaunch-resources/<rid>/activate', methods=['POST'])
+@require_superadmin
+def superadmin_wl_resources_activate(rid):
+    """Activate a WLaunch resource."""
+    try:
+        from wlaunch_api import get_branch_id, HEADERS
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        bid = get_branch_id()
+        url = '{}/company/{}/branch/{}/resource/{}'.format(WLAUNCH_API_URL, COMPANY_ID, bid, rid)
+        h = dict(HEADERS, **{'Content-Type': 'application/json'})
+        r = _req.post(url, headers=h, json={'resource': {'active': True}}, timeout=10)
+        if r.status_code == 200:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'WLaunch: {}'.format(r.status_code)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/admin/calendar/appointments', methods=['GET'])
 @require_admin
 def admin_cal_get():
