@@ -4795,14 +4795,9 @@ async function openDepositBalance() {
     // Deposit top-up
     html += '<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">';
     html += '<div style="font-size:14px;font-weight:500;margin-bottom:10px;text-align:center">Поповнити баланс</div>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px">';
-    [500,1000,2000,3000,5000].forEach(function(v) {
-      html += '<button onclick="_depositTopUp(' + v + ')" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans);cursor:pointer">' + v + ' грн</button>';
-    });
-    html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;justify-content:center">';
-    html += '<input id="deposit-custom-amount" type="number" min="100" max="50000" placeholder="Інша сума" style="width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans);text-align:center">';
-    html += '<button onclick="_depositTopUp(parseInt(document.getElementById(\'deposit-custom-amount\').value)||0)" style="padding:8px 14px;background:var(--gold);color:var(--btn-text);border:none;border-radius:8px;font-size:14px;font-family:var(--sans);cursor:pointer">Поповнити</button>';
+    html += '<input id="deposit-custom-amount" type="number" min="100" max="50000" placeholder="Сума, грн" style="width:140px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:15px;font-family:var(--sans);text-align:center">';
+    html += '<button onclick="_depositTopUp(parseInt(document.getElementById(\'deposit-custom-amount\').value)||0)" style="padding:10px 16px;background:var(--gold);color:var(--btn-text);border:none;border-radius:8px;font-size:14px;font-family:var(--sans);cursor:pointer">Поповнити</button>';
     html += '</div>';
     html += '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;justify-content:center">';
     html += '<select id="deposit-installment-amount" style="padding:8px 10px;border:1px solid var(--gold);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-family:var(--sans)">';
