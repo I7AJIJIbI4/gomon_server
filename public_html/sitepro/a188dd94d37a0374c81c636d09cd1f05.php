@@ -1027,7 +1027,7 @@
 
   function loadPrices() {
     if (priceCache) return Promise.resolve(priceCache);
-    return fetch('modal_prices.php').then(function(r) { return r.json(); }).then(function(data) {
+    return fetch('/sitepro/modal_prices.php').then(function(r) { return r.json(); }).then(function(data) {
       priceCache = data;
       return data;
     });

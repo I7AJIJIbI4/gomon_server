@@ -13,6 +13,9 @@ if (!in_array($origin_host, $allowed) && !in_array($referer_host, $allowed)) {
     exit;
 }
 
+if (in_array($origin_host, $allowed)) {
+    header("Access-Control-Allow-Origin: $origin");
+}
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('X-Robots-Tag: noindex, nofollow');
