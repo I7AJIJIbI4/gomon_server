@@ -367,22 +367,61 @@ def fmt_reminder_24h(appt):
 
 
 def fmt_post_visit(appt):
-    """Подяка + відгук через 2 години після візиту."""
+    """Подяка + відгук через 2 години після процедури. З кешбек інфо для app users."""
     v = _appt_vars(appt)
+    phone = appt.get('client_phone', '')
+
+    # Check if app user and get balance info
+    cashback_line = ''
+    if phone:
+        try:
+            import sqlite3
+            otp_conn = sqlite3.connect('/home/gomoncli/zadarma/otp_sessions.db', timeout=5)
+            is_app = otp_conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
+            otp_conn.close()
+            if is_app:
+                conn = sqlite3.connect(DB_PATH, timeout=5)
+                dep = conn.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
+                ded = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
+                cb = conn.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
+                cb_red = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
+                conn.close()
+                total = round(dep - ded + cb - cb_red, 2)
+                # Find cashback for this visit
+                last_cb = 0
+                try:
+                    conn2 = sqlite3.connect(DB_PATH, timeout=5)
+                    row = conn2.execute("SELECT amount FROM cashback WHERE phone=? ORDER BY created_at DESC LIMIT 1", (phone,)).fetchone()
+                    if row:
+                        last_cb = row[0]
+                    conn2.close()
+                except Exception:
+                    pass
+                if last_cb > 0:
+                    cashback_line = '\n\nВам нараховано кешбек +{:.0f} грн (3%). Ваш баланс: {:.0f} грн'.format(last_cb, total)
+                elif total > 0:
+                    cashback_line = '\n\nВаш баланс: {:.0f} грн'.format(total)
+        except Exception:
+            pass
+
     tg = (
         '{first_name}, Dr. Gomon Cosmetology дякує за довіру! '
         'Будемо вдячні і за Ваш відгук:\n'
-        'https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n\n'
-        'А ще в нас є додаток для зручного відстеження записів, новин і акцій:\n'
-        'https://drgomon.beauty/app/'
-    ).format(**v)
+        'https://flyl.link/google'
+    ).format(**v) + cashback_line + (
+        '\n\nА ще в нас є додаток для зручного відстеження записів, новин і акцій:\n'
+        'https://flyl.link/app'
+        if not cashback_line else ''
+    )
     sms = (
         '{first_name}, Dr.Gomon дякує за довіру! '
-        'Відгук: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8 '
-        'Додаток: https://drgomon.beauty/app/'
+        'Відгук: https://flyl.link/google '
+        'Додаток: https://flyl.link/app'
     ).format(**v)
     push_title = 'Дякуємо за візит!'
-    push_body  = 'Залиште відгук — нам важлива ваша думка'
+    push_body = 'Залиште відгук — нам важлива ваша думка'
+    if cashback_line:
+        push_body = 'Кешбек нараховано! Залиште відгук'
     return tg, sms, push_title, push_body
 
 
@@ -582,9 +621,14 @@ def send_reminder_24h(appt):
 
 def send_post_visit(appt):
     """
-    Відгук після процедури. Надсилати о 20:00 у день запису.
+    Подяка + відгук через 2 години після процедури.
     Дедуплікація: один раз на (phone, date).
-    Push only — TG/SMS handled by WLaunch.
+
+    Канали: Push + TG + SMS fallback.
+    Для app users — додає інфо про кешбек і баланс.
+
+    TODO: Запускати через 2 години після процедури (appt_reminder.py --feedback).
+    Зараз: Push only. Розкоментувати TG/SMS блок для повної доставки.
     """
     phone = appt.get('client_phone', '')
     ref = 'feedback|{}'.format(appt.get('date', ''))
@@ -593,12 +637,28 @@ def send_post_visit(appt):
     if _already_sent(phone, 'feedback', ref, 'push'):
         return {'skipped': True}
     tg, sms, push_title, push_body = fmt_post_visit(appt)
-    # Push only — TG/SMS handled by WLaunch
+
+    # Push — завжди
     push_ok = _send_push(phone, push_title, push_body, 'feedback', 'https://flyl.link/google')
     if push_ok is not None:
         _log(phone, 'feedback', ref, 'push', 'sent' if push_ok else 'failed', push_title)
-    logger.info('post_visit (push only) phone={} date={} → push={}'.format(phone, appt.get('date'), push_ok))
-    return {'push': push_ok}
+
+    # ── TG + SMS — ЗАКОМЕНТОВАНО, розкоментувати для активації ──
+    # tg_ok = False
+    # sms_ok = False
+    # if not _already_sent(phone, 'feedback', ref, 'tg'):
+    #     tg_id = _get_tg_id(phone)
+    #     if tg_id:
+    #         tg_ok = _send_tg(tg_id, tg)
+    #         _log(phone, 'feedback', ref, 'tg', 'sent' if tg_ok else 'failed', tg[:80])
+    #     if not tg_ok and not _already_sent(phone, 'feedback', ref, 'sms'):
+    #         from sms_fly import send_sms
+    #         sms_ok = send_sms(phone, sms)
+    #         _log(phone, 'feedback', ref, 'sms', 'sent' if sms_ok else 'failed', sms[:80])
+    # ── кінець закоментованого блоку ──
+
+    logger.info('post_visit phone={} date={} → push={}'.format(phone, appt.get('date'), push_ok))
+    return {'push': push_ok}  # Додати 'tg': tg_ok, 'sms': sms_ok після розкоментування
 
 
 def send_cancellation(appt):

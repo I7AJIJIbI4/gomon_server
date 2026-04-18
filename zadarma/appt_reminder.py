@@ -317,7 +317,25 @@ def run_reminder(dry_run=False):
         sent, skipped, failed))
     return sent, skipped, failed
 
-# ─── Режим --feedback (відгук після процедури, о 20:00) ──────────────────────
+# ─── Режим --feedback (відгук після процедури) ────────────────────────────────
+#
+# Поточна реалізація: запуск через cron о 20:00, обробляє всі записи за день.
+#
+# TODO: Ідеальна реалізація — через 2 години після кожної процедури:
+#   1. Cron кожні 15 хвилин (*/15 * * * *)
+#   2. Для кожного запису: порівняти time + duration_min + 120 хв з kyiv_now()
+#   3. Якщо минуло 2+ години → send_post_visit
+#   4. Dedup через notification_log (вже реалізовано)
+#
+# Для активації TG/SMS — розкоментувати блок у notifier.py::send_post_visit()
+# Текст повідомлення (notifier.py::fmt_post_visit):
+#   TG: "{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні
+#        і за Ваш відгук: https://flyl.link/google
+#        [якщо app user: Вам нараховано кешбек +XX грн (3%). Ваш баланс: YY грн]
+#        [якщо не app user: А ще в нас є додаток: https://flyl.link/app]"
+#   SMS: "{first_name}, Dr.Gomon дякує за довіру!
+#         Відгук: https://flyl.link/google Додаток: https://flyl.link/app"
+# ─────────────────────────────────────────────────────────────────────────────
 
 def run_feedback(dry_run=False, override_date=None):
     """
