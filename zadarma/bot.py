@@ -114,6 +114,7 @@ async def start_command(update, context: ContextTypes.DEFAULT_TYPE):
                 f"акції та персональні рекомендації.\n\n"
                 f"Оберіть потрібне з меню нижче або скористайтесь командами:\n\n"
                 f"/my_services - Мої записи\n"
+                f"/balance - Мій баланс\n"
                 f"/contact - Контакти лікаря\n"
                 f"/map - Як нас знайти\n"
                 f"/channel - Канал акцій та новин",
@@ -521,12 +522,14 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
         if user_id in ADMIN_USER_IDS:
             help_message = (
                 "Команди:\n\n"
-                "/app - Наш застосунок, який точно Вам допоможе\n"
-                "/my_services - Ваші минулі і майбутні записи\n"
-                "/map - Знайти нас на мапі\n"
-                "/scheme - Побачити будівлю на фото\n"
-                "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії\n/contact - Написати лікарю (Instagram/Telegram)\n\n"
+                "/my_services - Мої записи\n"
+                "/balance - Мій баланс (депозит + кешбек)\n"
+                "/app - Мобільний додаток\n"
+                "/map - Як нас знайти\n"
+                "/scheme - Фото локації\n"
+                "/channel - Канал акцій та новин\n"
+                "/call - Зателефонувати\n"
+                "/contact - Контакти лікаря\n\n"
                 "Адмін:\n"
                 "/monitor - Моніторинг API\n"
                 "/diagnostic - Системна діагностика\n"
@@ -537,12 +540,14 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
         elif is_authenticated(user_id):
             help_message = (
                 "Команди:\n\n"
-                "/app - Наш застосунок, який точно Вам допоможе\n"
-                "/my_services - Ваші минулі і майбутні записи\n"
-                "/map - Знайти нас на мапі\n"
-                "/scheme - Побачити будівлю на фото\n"
-                "/channel - Актуальні новини та акції в ТГ каналі\n"
-                "/call - Зателефонувати лікарю Вікторії"
+                "/my_services - Мої записи\n"
+                "/balance - Мій баланс (депозит + кешбек)\n"
+                "/app - Мобільний додаток\n"
+                "/map - Як нас знайти\n"
+                "/scheme - Фото локації\n"
+                "/channel - Канал акцій та новин\n"
+                "/call - Зателефонувати\n"
+                "/contact - Контакти лікаря"
             )
         else:
             help_message = (
