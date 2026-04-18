@@ -1234,33 +1234,38 @@
 
   // Rotate DOM: move first child to end
   function rotateForward() {
-    var first = track.children[0];
-    track.appendChild(first);
-    setOffset(0, false);
+    track.appendChild(track.children[0]);
     updateDots();
   }
 
   // Rotate DOM: move last child to beginning
   function rotateBackward() {
-    var last = track.children[track.children.length - 1];
-    track.insertBefore(last, track.children[0]);
-    setOffset(0, false);
+    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
     updateDots();
   }
 
+  var sliding = false;
+
   function slideNext() {
+    if (sliding) return;
+    sliding = true;
     setOffset(-tw(), true);
-    setTimeout(function() { rotateForward(); }, 520);
+    setTimeout(function() {
+      rotateForward();
+      setOffset(0, false);
+      sliding = false;
+    }, 520);
   }
 
   function slidePrev() {
-    // Move last to front instantly, offset to hide it
+    if (sliding) return;
+    sliding = true;
     rotateBackward();
-    setOffset(-tw(), false);
-    // Then animate into view
+    setOffset(tw(), false);
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
         setOffset(0, true);
+        setTimeout(function() { sliding = false; }, 520);
       });
     });
   }
