@@ -1254,14 +1254,15 @@
   }
 
   function slidePrev() {
-    setOffset(tw(), false); // jump right instantly
-    setTimeout(function() {
-      rotateBackward();
-      setOffset(0, false); // reset
-      // Now slide the "new first" into view
-      setOffset(tw(), false);
-      setTimeout(function() { setOffset(0, true); }, 20);
-    }, 20);
+    // Move last to front instantly, offset to hide it
+    rotateBackward();
+    setOffset(-tw(), false);
+    // Then animate into view
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        setOffset(0, true);
+      });
+    });
   }
 
   function goTo(targetIdx) {
