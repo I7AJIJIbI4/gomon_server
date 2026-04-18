@@ -1261,13 +1261,15 @@
     if (sliding) return;
     sliding = true;
     rotateBackward();
-    setOffset(tw(), false);
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        setOffset(0, true);
-        setTimeout(function() { sliding = false; }, 520);
-      });
-    });
+    // Place new first tile off-screen to the left
+    track.classList.add('no-transition');
+    track.style.transform = 'translateX(' + tw() + 'px)';
+    // Force browser to apply the instant position
+    void track.offsetWidth;
+    // Now animate to 0
+    track.classList.remove('no-transition');
+    track.style.transform = 'translateX(0px)';
+    setTimeout(function() { sliding = false; }, 520);
   }
 
   function goTo(targetIdx) {
@@ -1319,16 +1321,14 @@
         wrap.removeEventListener('click', suppress, true);
       }, true);
     }
-    resetAuto();
-  });
+      });
 
   // Touch drag
   var touchStartX = 0;
   wrap.addEventListener('touchstart', function(e) {
     touchStartX = e.touches[0].clientX;
     track.classList.add('no-transition');
-    stopAuto();
-  }, { passive: true });
+      }, { passive: true });
   wrap.addEventListener('touchmove', function(e) {
     var dx = e.touches[0].clientX - touchStartX;
     track.style.transform = 'translateX(' + dx + 'px)';
@@ -1345,18 +1345,7 @@
       track.classList.remove('no-transition');
       setOffset(0, true);
     }
-    setTimeout(startAuto, 3000);
   });
-
-  // Auto
-  function startAuto() { stopAuto(); autoId = setInterval(slideNext, 4000); }
-  function stopAuto() { if (autoId) { clearInterval(autoId); autoId = null; } }
-  function resetAuto() { stopAuto(); startAuto(); }
-
-  // Auto-scroll disabled for now
-  // wrap.addEventListener('mouseenter', stopAuto);
-  // wrap.addEventListener('mouseleave', startAuto);
-  // startAuto();
 })();
 
 let _sitePromos = null;
