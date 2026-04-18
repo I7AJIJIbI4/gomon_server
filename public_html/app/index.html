@@ -1670,6 +1670,11 @@ async function loadPromos() {
     if (cached) PROMOS = JSON.parse(cached);
   }
   renderPromos();
+  // Deep link: ?promo=cashback opens promo modal
+  var promoParam = new URLSearchParams(window.location.search).get('promo');
+  if (promoParam) {
+    setTimeout(function() { openPromoById(promoParam); }, 300);
+  }
 }
 
 /* ── INIT ── */
@@ -5135,6 +5140,10 @@ function openPromo(i) {
   // p.details is admin-controlled HTML from promos.json (trusted source)
   document.getElementById('promo-modal-body').innerHTML = (p.details || '').replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
   document.getElementById('promo-modal').classList.add('show');
+}
+function openPromoById(promoId) {
+  var idx = PROMOS.findIndex(function(p) { return p.id === promoId; });
+  if (idx >= 0) openPromo(idx);
 }
 function closePromoModal() {
   document.getElementById('promo-modal').classList.remove('show');
