@@ -1294,9 +1294,38 @@
     dragging = false;
     track.classList.remove('dragging');
     var s = step();
-    if (dx < -s / 3) { slideNext(); }
-    else if (dx > s / 3) { slidePrev(); }
-    else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
+    var n = Math.max(0, Math.round(Math.abs(dx) / s));
+    if (n < 1 && Math.abs(dx) > s / 4) n = 1;
+    if (n > count - 1) n = count - 1;
+    if (n > 0 && dx < 0) {
+      // Rotate n-1 tiles instantly, then animate last one
+      busy = true;
+      track.style.transition = 'none';
+      for (var ci = 0; ci < n - 1; ci++) track.appendChild(track.children[0]);
+      track.style.transform = 'translateX(0)';
+      void track.offsetWidth;
+      // Animate last step
+      track.style.transition = 'transform .35s ease';
+      track.style.transform = 'translateX(' + (-s) + 'px)';
+      function endN() { track.removeEventListener('transitionend', endN); track.style.transition = 'none'; track.appendChild(track.children[0]); track.style.transform = 'translateX(0)'; syncDots(); busy = false; }
+      track.addEventListener('transitionend', endN);
+      setTimeout(function() { if (busy) endN(); }, 400);
+    } else if (n > 0 && dx > 0) {
+      busy = true;
+      var wrapper = track.parentElement;
+      track.style.transition = 'none';
+      for (var ci = 0; ci < n; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+      track.style.transform = 'translateX(' + (-s) + 'px)';
+      wrapper.classList.add('sliding-prev');
+      void track.offsetWidth;
+      track.style.transition = 'transform .35s ease';
+      track.style.transform = 'translateX(0)';
+      function endP() { track.removeEventListener('transitionend', endP); track.style.transition = 'none'; wrapper.classList.remove('sliding-prev'); syncDots(); busy = false; }
+      track.addEventListener('transitionend', endP);
+      setTimeout(function() { if (busy) endP(); }, 400);
+    } else {
+      track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)';
+    }
     if (moved) {
       track.addEventListener('click', function block(e) {
         e.stopPropagation(); e.preventDefault();
