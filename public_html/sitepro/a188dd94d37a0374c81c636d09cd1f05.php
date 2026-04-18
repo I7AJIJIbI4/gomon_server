@@ -328,10 +328,9 @@
   /* ── DEALS (АКЦІЇ TILES) ── */
   .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
-  .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; cursor: grab; user-select: none; -webkit-user-select: none; }
-  .deals-scroll.dragging { cursor: grabbing; }
-  .deals-track { display: flex; gap: 16px; transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); will-change: transform; }
-  .deals-track.no-transition { transition: none; }
+  .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; }
+  .deals-track { display: flex; gap: 16px; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .deals-track.dragging { cursor: grabbing; }
   .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
   .deals-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; }
   .deals-dot.active { background: rgba(184,149,90,0.7); transform: scale(1.3); }
@@ -1188,163 +1187,123 @@
     });
   })();
 
-// ── Deals carousel: infinite loop via DOM rotation ──
+// ── Deals carousel ──
 (function() {
   var track = document.getElementById('dealsTrack');
-  var wrap = document.querySelector('.deals-scroll');
-  if (!track || !wrap) return;
-  var tiles = Array.from(track.children);
-  var count = tiles.length;
+  if (!track) return;
+  var wrap = track.parentElement;
+  var count = track.children.length;
   if (!count) return;
   var dotsWrap = document.getElementById('dealsDots');
-  var autoId = null, currentIdx = 0, offset = 0;
+  var busy = false;
 
-  function tw() { return (tiles[0].offsetWidth || 240) + 16; }
-
-  // Store original promo indices on tiles (for openDealModal after rotation)
-  tiles.forEach(function(t, i) { t.dataset.origIdx = i; });
+  // Tag tiles with original index
+  Array.from(track.children).forEach(function(t, i) { t.dataset.origIdx = i; });
 
   // Dots
   for (var i = 0; i < count; i++) {
-    var dot = document.createElement('span');
-    dot.className = 'deals-dot' + (i === 0 ? ' active' : '');
-    dot.dataset.idx = i;
-    dot.onclick = function() { goTo(parseInt(this.dataset.idx)); resetAuto(); };
-    dotsWrap.appendChild(dot);
-  }
-  var dots = dotsWrap.querySelectorAll('.deals-dot');
-
-  function updateDots() {
-    var firstOrigIdx = parseInt(track.children[0].dataset.origIdx);
-    dots.forEach(function(d, i) { d.classList.toggle('active', i === firstOrigIdx); });
-    currentIdx = firstOrigIdx;
+    var d = document.createElement('span');
+    d.className = 'deals-dot' + (i === 0 ? ' active' : '');
+    d.dataset.i = i;
+    d.onclick = function() { goTo(+this.dataset.i); };
+    dotsWrap.appendChild(d);
   }
 
-  function setOffset(px, animate) {
-    offset = px;
-    if (!animate) track.classList.add('no-transition');
-    else track.classList.remove('no-transition');
-    track.style.transform = 'translateX(' + px + 'px)';
-    if (!animate) {
-      // Force reflow
-      track.offsetHeight;
-      track.classList.remove('no-transition');
+  function syncDots() {
+    var idx = +track.children[0].dataset.origIdx;
+    dotsWrap.querySelectorAll('.deals-dot').forEach(function(d, i) {
+      d.classList.toggle('active', i === idx);
+    });
+  }
+
+  function step() { return (track.children[0].offsetWidth || 240) + 16; }
+
+  function animate(from, to, cb) {
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(' + from + 'px)';
+    void track.offsetWidth; // flush
+    track.style.transition = 'transform .45s ease';
+    track.style.transform = 'translateX(' + to + 'px)';
+    busy = true;
+    function done() {
+      track.removeEventListener('transitionend', done);
+      track.style.transition = 'none';
+      if (cb) cb();
+      busy = false;
     }
+    track.addEventListener('transitionend', done);
+    // Safety fallback
+    setTimeout(function() { if (busy) done(); }, 500);
   }
-
-  // Rotate DOM: move first child to end
-  function rotateForward() {
-    track.appendChild(track.children[0]);
-    updateDots();
-  }
-
-  // Rotate DOM: move last child to beginning
-  function rotateBackward() {
-    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-    updateDots();
-  }
-
-  var sliding = false;
 
   function slideNext() {
-    if (sliding) return;
-    sliding = true;
-    setOffset(-tw(), true);
-    setTimeout(function() {
-      rotateForward();
-      setOffset(0, false);
-      sliding = false;
-    }, 520);
+    if (busy) return;
+    animate(0, -step(), function() {
+      track.appendChild(track.children[0]);
+      track.style.transform = 'translateX(0)';
+      syncDots();
+    });
   }
 
   function slidePrev() {
-    if (sliding) return;
-    sliding = true;
-    rotateBackward();
-    // Place new first tile off-screen to the left
-    track.classList.add('no-transition');
-    track.style.transform = 'translateX(' + tw() + 'px)';
-    // Force browser to apply the instant position
-    void track.offsetWidth;
-    // Now animate to 0
-    track.classList.remove('no-transition');
-    track.style.transform = 'translateX(0px)';
-    setTimeout(function() { sliding = false; }, 520);
+    if (busy) return;
+    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+    animate(step(), 0, function() {
+      syncDots();
+    });
   }
 
-  function goTo(targetIdx) {
-    // Rotate until target is first
-    var safety = 0;
-    while (parseInt(track.children[0].dataset.origIdx) !== targetIdx && safety < count) {
-      var first = track.children[0];
-      track.appendChild(first);
-      safety++;
+  function goTo(idx) {
+    if (busy) return;
+    while (+track.children[0].dataset.origIdx !== idx) {
+      track.appendChild(track.children[0]);
     }
-    setOffset(0, false);
-    updateDots();
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0)';
+    syncDots();
   }
 
   // Mouse drag
-  var isDragging = false, startX = 0, dragOffset = 0, moved = false;
-  wrap.addEventListener('mousedown', function(e) {
-    isDragging = true; moved = false;
-    startX = e.pageX; dragOffset = 0;
-    wrap.classList.add('dragging');
-    track.classList.add('no-transition');
+  var dragging = false, sx = 0, dx = 0, moved = false;
+  track.addEventListener('mousedown', function(e) {
+    if (busy) return;
+    dragging = true; moved = false; sx = e.pageX; dx = 0;
+    track.style.transition = 'none';
+    track.classList.add('dragging');
     e.preventDefault();
   });
   document.addEventListener('mousemove', function(e) {
-    if (!isDragging) return;
-    dragOffset = e.pageX - startX;
-    if (Math.abs(dragOffset) > 5) moved = true;
-    track.style.transform = 'translateX(' + dragOffset + 'px)';
+    if (!dragging) return;
+    dx = e.pageX - sx;
+    if (Math.abs(dx) > 5) moved = true;
+    track.style.transform = 'translateX(' + dx + 'px)';
   });
   document.addEventListener('mouseup', function() {
-    if (!isDragging) return;
-    isDragging = false;
-    wrap.classList.remove('dragging');
-    var threshold = tw() / 3;
-    if (dragOffset < -threshold) {
-      // Reset to 0 instantly, then slideNext handles animation
-      setOffset(0, false);
-      slideNext();
-    } else if (dragOffset > threshold) {
-      setOffset(0, false);
-      slidePrev();
-    } else {
-      track.classList.remove('no-transition');
-      setOffset(0, true);
-    }
+    if (!dragging) return;
+    dragging = false;
+    track.classList.remove('dragging');
+    var s = step();
+    if (dx < -s / 3) { track.style.transform = 'translateX(0)'; slideNext(); }
+    else if (dx > s / 3) { track.style.transform = 'translateX(0)'; slidePrev(); }
+    else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
     if (moved) {
-      wrap.addEventListener('click', function suppress(e) {
+      track.addEventListener('click', function block(e) {
         e.stopPropagation(); e.preventDefault();
-        wrap.removeEventListener('click', suppress, true);
+        track.removeEventListener('click', block, true);
       }, true);
     }
-      });
+  });
 
-  // Touch drag
-  var touchStartX = 0;
-  wrap.addEventListener('touchstart', function(e) {
-    touchStartX = e.touches[0].clientX;
-    track.classList.add('no-transition');
-      }, { passive: true });
-  wrap.addEventListener('touchmove', function(e) {
-    var dx = e.touches[0].clientX - touchStartX;
-    track.style.transform = 'translateX(' + dx + 'px)';
-  }, { passive: true });
+  // Touch
+  var tx = 0;
+  wrap.addEventListener('touchstart', function(e) { if (!busy) { tx = e.touches[0].clientX; track.style.transition = 'none'; } }, {passive:true});
+  wrap.addEventListener('touchmove', function(e) { track.style.transform = 'translateX(' + (e.touches[0].clientX - tx) + 'px)'; }, {passive:true});
   wrap.addEventListener('touchend', function(e) {
-    var dx = e.changedTouches[0].clientX - touchStartX;
-    if (dx < -tw() / 3) {
-      setOffset(0, false);
-      slideNext();
-    } else if (dx > tw() / 3) {
-      setOffset(0, false);
-      slidePrev();
-    } else {
-      track.classList.remove('no-transition');
-      setOffset(0, true);
-    }
+    var d = e.changedTouches[0].clientX - tx;
+    track.style.transform = 'translateX(0)';
+    if (d < -step() / 3) slideNext();
+    else if (d > step() / 3) slidePrev();
+    else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
   });
 })();
 
