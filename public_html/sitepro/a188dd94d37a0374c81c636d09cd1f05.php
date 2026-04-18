@@ -1218,41 +1218,46 @@
 
   function step() { return (track.children[0].offsetWidth || 240) + 16; }
 
-  function animate(from, to, cb) {
-    busy = true;
-    track.style.transition = 'none';
-    track.style.transform = 'translateX(' + from + 'px)';
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        track.style.transition = 'transform .45s ease';
-        track.style.transform = 'translateX(' + to + 'px)';
-        function done() {
-          track.removeEventListener('transitionend', done);
-          track.style.transition = 'none';
-          track.style.transform = 'translateX(0)';
-          if (cb) cb();
-          busy = false;
-        }
-        track.addEventListener('transitionend', done);
-        setTimeout(function() { if (busy) done(); }, 600);
-      });
-    });
-  }
-
   function slideNext() {
     if (busy) return;
-    animate(0, -step(), function() {
+    busy = true;
+    var s = step();
+    track.style.transition = 'transform .45s ease';
+    track.style.transform = 'translateX(' + (-s) + 'px)';
+    function end() {
+      track.removeEventListener('transitionend', end);
+      track.style.transition = 'none';
       track.appendChild(track.children[0]);
+      track.style.transform = 'translateX(0)';
       syncDots();
-    });
+      busy = false;
+    }
+    track.addEventListener('transitionend', end);
+    setTimeout(function() { if (busy) end(); }, 500);
   }
 
   function slidePrev() {
     if (busy) return;
+    busy = true;
+    var s = step();
+    // 1. Instantly shift left by one tile width (hide the move)
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(' + (-s) + 'px)';
+    // 2. Move last tile to front (DOM stays visually same because of offset)
     track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-    animate(step(), 0, function() {
+    // 3. Force layout flush
+    void track.offsetWidth;
+    // 4. Animate back to 0 (tile slides in from left)
+    track.style.transition = 'transform .45s ease';
+    track.style.transform = 'translateX(0)';
+    function end() {
+      track.removeEventListener('transitionend', end);
+      track.style.transition = 'none';
       syncDots();
-    });
+      busy = false;
+    }
+    track.addEventListener('transitionend', end);
+    setTimeout(function() { if (busy) end(); }, 500);
   }
 
   function goTo(idx) {
