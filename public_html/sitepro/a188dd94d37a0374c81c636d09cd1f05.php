@@ -1353,10 +1353,10 @@
   function stopAuto() { if (autoId) { clearInterval(autoId); autoId = null; } }
   function resetAuto() { stopAuto(); startAuto(); }
 
-  wrap.addEventListener('mouseenter', stopAuto);
-  wrap.addEventListener('mouseleave', startAuto);
-
-  startAuto();
+  // Auto-scroll disabled for now
+  // wrap.addEventListener('mouseenter', stopAuto);
+  // wrap.addEventListener('mouseleave', startAuto);
+  // startAuto();
 })();
 
 let _sitePromos = null;
