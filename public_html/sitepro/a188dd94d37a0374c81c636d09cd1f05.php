@@ -329,7 +329,6 @@
   .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
   .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; }
-  .deals-scroll.sliding-prev { overflow: visible; }
   .deals-track { display: flex; gap: 16px; cursor: grab; user-select: none; -webkit-user-select: none; }
   .deals-track.dragging { cursor: grabbing; }
   .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
@@ -1188,48 +1187,56 @@
     });
   })();
 
-// ── Deals carousel ──
+// ── Deals carousel — active tile is always children[1], one tile always visible on left ──
 (function() {
   var track = document.getElementById('dealsTrack');
   if (!track) return;
   var wrap = track.parentElement;
   var count = track.children.length;
-  if (!count) return;
+  if (count < 2) return;
   var dotsWrap = document.getElementById('dealsDots');
   var busy = false;
 
-  // Tag tiles with original index
+  // Tag tiles
   Array.from(track.children).forEach(function(t, i) { t.dataset.origIdx = i; });
 
-  // Dots
+  // Move last tile to front so children[1] = original first = "active"
+  track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+
+  function s() { return (track.children[0].offsetWidth || 240) + 16; }
+
+  // Base offset: hide children[0] to the left
+  function setBase() { track.style.transform = 'translateX(' + (-s()) + 'px)'; }
+  track.style.transition = 'none';
+  setBase();
+
+  // Dots — track active = children[1].origIdx
   for (var i = 0; i < count; i++) {
     var d = document.createElement('span');
-    d.className = 'deals-dot' + (i === 0 ? ' active' : '');
+    d.className = 'deals-dot';
     d.dataset.i = i;
     d.onclick = function() { goTo(+this.dataset.i); };
     dotsWrap.appendChild(d);
   }
-
   function syncDots() {
-    var idx = +track.children[0].dataset.origIdx;
+    var activeIdx = +track.children[1].dataset.origIdx;
     dotsWrap.querySelectorAll('.deals-dot').forEach(function(d, i) {
-      d.classList.toggle('active', i === idx);
+      d.classList.toggle('active', i === activeIdx);
     });
   }
+  syncDots();
 
-  function step() { return (track.children[0].offsetWidth || 240) + 16; }
-
+  // slideNext: animate -step more, then rotate first to end, reset base
   function slideNext() {
     if (busy) return;
     busy = true;
-    var s = step();
     track.style.transition = 'transform .45s ease';
-    track.style.transform = 'translateX(' + (-s) + 'px)';
+    track.style.transform = 'translateX(' + (-2 * s()) + 'px)';
     function end() {
       track.removeEventListener('transitionend', end);
       track.style.transition = 'none';
       track.appendChild(track.children[0]);
-      track.style.transform = 'translateX(0)';
+      setBase();
       syncDots();
       busy = false;
     }
@@ -1237,26 +1244,17 @@
     setTimeout(function() { if (busy) end(); }, 500);
   }
 
+  // slidePrev: animate to 0 (reveal left tile), then rotate last to front, reset base
   function slidePrev() {
     if (busy) return;
     busy = true;
-    var s = step();
-    var wrapper = track.parentElement;
-    // 1. Move last to first position
-    track.style.transition = 'none';
-    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-    // 2. Offset so visually nothing changed (new first tile is hidden at -step)
-    track.style.transform = 'translateX(' + (-s) + 'px)';
-    // 3. Allow overflow so left tile is visible during animation
-    wrapper.classList.add('sliding-prev');
-    void track.offsetWidth;
-    // 4. Animate to 0 — tile slides in from left
     track.style.transition = 'transform .45s ease';
     track.style.transform = 'translateX(0)';
     function end() {
       track.removeEventListener('transitionend', end);
       track.style.transition = 'none';
-      wrapper.classList.remove('sliding-prev');
+      track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+      setBase();
       syncDots();
       busy = false;
     }
@@ -1266,25 +1264,23 @@
 
   function goTo(idx) {
     if (busy) return;
-    while (+track.children[0].dataset.origIdx !== idx) {
+    // Rotate until children[1] has origIdx === idx
+    var safety = 0;
+    while (+track.children[1].dataset.origIdx !== idx && safety < count) {
       track.appendChild(track.children[0]);
+      safety++;
     }
     track.style.transition = 'none';
-    track.style.transform = 'translateX(0)';
+    setBase();
     syncDots();
   }
 
-  // Mouse drag — prepend one tile on start so left side always has content
-  var dragging = false, sx = 0, dx = 0, moved = false, dragBaseOffset = 0;
+  // Mouse drag
+  var dragging = false, sx = 0, dx = 0, moved = false;
   track.addEventListener('mousedown', function(e) {
     if (busy) return;
     dragging = true; moved = false; sx = e.pageX; dx = 0;
-    // Prepend last tile to beginning so dragging right reveals it
     track.style.transition = 'none';
-    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-    dragBaseOffset = -step();
-    track.style.transform = 'translateX(' + dragBaseOffset + 'px)';
-    track.parentElement.classList.add('sliding-prev');
     track.classList.add('dragging');
     e.preventDefault();
   });
@@ -1292,64 +1288,41 @@
     if (!dragging) return;
     dx = e.pageX - sx;
     if (Math.abs(dx) > 5) moved = true;
-    track.style.transform = 'translateX(' + (dragBaseOffset + dx) + 'px)';
+    track.style.transform = 'translateX(' + (-s() + dx) + 'px)';
   });
   document.addEventListener('mouseup', function() {
     if (!dragging) return;
     dragging = false;
     track.classList.remove('dragging');
-    var s = step();
-    // dx > 0 means dragged right (prev), dx < 0 means dragged left (next)
-    // Total offset from original position (before prepend) = dx
-    // n = how many tiles to skip
-    var n = Math.max(0, Math.round(Math.abs(dx) / s));
-    if (n < 1 && Math.abs(dx) > s / 4) n = 1;
+    var w = s();
+    var n = Math.max(0, Math.round(Math.abs(dx) / w));
+    if (n < 1 && Math.abs(dx) > w / 4) n = 1;
     if (n > count - 1) n = count - 1;
 
-    busy = true;
-    if (dx > 0 && n > 0) {
-      // Dragged RIGHT — go backward n tiles
-      // We already prepended 1 tile; need n-1 more prepends
-      for (var ci = 0; ci < n - 1; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-      // Snap animate to 0
-      void track.offsetWidth;
-      track.style.transition = 'transform .35s ease';
-      track.style.transform = 'translateX(0)';
-    } else if (dx < 0 && n > 0) {
-      // Dragged LEFT — go forward n tiles
-      // Undo the prepend first: move first back to end
-      track.appendChild(track.children[0]);
-      // Rotate n-1 more
-      for (var ci = 0; ci < n - 1; ci++) track.appendChild(track.children[0]);
-      // Current visual offset = dx (negative), set that and animate to -step then snap
-      track.style.transform = 'translateX(0)';
-      void track.offsetWidth;
-      track.style.transition = 'transform .35s ease';
-      track.style.transform = 'translateX(' + (-s) + 'px)';
-    } else {
-      // Snap back — undo prepend
-      track.style.transition = 'transform .25s ease';
-      track.style.transform = 'translateX(' + dragBaseOffset + 'px)';
-    }
-
-    function endDrag() {
-      track.removeEventListener('transitionend', endDrag);
-      track.style.transition = 'none';
-      track.parentElement.classList.remove('sliding-prev');
-      if (dx < 0 && n > 0) {
-        // Final rotate for slideNext
-        track.appendChild(track.children[0]);
-      } else if (!(dx > 0 && n > 0)) {
-        // Undo prepend if snapped back
-        track.appendChild(track.children[0]);
+    if (n > 0) {
+      busy = true;
+      // Rotate DOM for n tiles
+      if (dx < 0) {
+        for (var ci = 0; ci < n; ci++) track.appendChild(track.children[0]);
+      } else {
+        for (var ci = 0; ci < n; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
       }
-      track.style.transform = 'translateX(0)';
-      syncDots();
-      busy = false;
+      // Animate snap to base
+      void track.offsetWidth;
+      track.style.transition = 'transform .3s ease';
+      setBase();
+      function endD() {
+        track.removeEventListener('transitionend', endD);
+        track.style.transition = 'none';
+        syncDots();
+        busy = false;
+      }
+      track.addEventListener('transitionend', endD);
+      setTimeout(function() { if (busy) endD(); }, 350);
+    } else {
+      track.style.transition = 'transform .25s ease';
+      setBase();
     }
-    track.addEventListener('transitionend', endDrag);
-    setTimeout(function() { if (busy) endDrag(); }, 400);
-
     if (moved) {
       track.addEventListener('click', function block(e) {
         e.stopPropagation(); e.preventDefault();
@@ -1360,13 +1333,21 @@
 
   // Touch
   var tx = 0;
-  wrap.addEventListener('touchstart', function(e) { if (!busy) { tx = e.touches[0].clientX; track.style.transition = 'none'; } }, {passive:true});
-  wrap.addEventListener('touchmove', function(e) { track.style.transform = 'translateX(' + (e.touches[0].clientX - tx) + 'px)'; }, {passive:true});
+  wrap.addEventListener('touchstart', function(e) {
+    if (!busy) { tx = e.touches[0].clientX; track.style.transition = 'none'; }
+  }, {passive:true});
+  wrap.addEventListener('touchmove', function(e) {
+    var d = e.touches[0].clientX - tx;
+    track.style.transform = 'translateX(' + (-s() + d) + 'px)';
+  }, {passive:true});
   wrap.addEventListener('touchend', function(e) {
     var d = e.changedTouches[0].clientX - tx;
-    if (d < -step() / 3) slideNext();
-    else if (d > step() / 3) slidePrev();
-    else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
+    if (Math.abs(d) > s() / 3) {
+      if (d < 0) slideNext(); else slidePrev();
+    } else {
+      track.style.transition = 'transform .25s ease';
+      setBase();
+    }
   });
 })();
 
