@@ -328,8 +328,12 @@
   /* ── DEALS (АКЦІЇ TILES) ── */
   .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
-  .deals-scroll { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; margin-top: 36px; }
+  .deals-scroll { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; margin-top: 36px; scroll-behavior: smooth; cursor: grab; user-select: none; -webkit-user-select: none; }
   .deals-scroll::-webkit-scrollbar { display: none; }
+  .deals-scroll.dragging { cursor: grabbing; scroll-behavior: auto; }
+  .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
+  .deals-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; }
+  .deals-dot.active { background: rgba(184,149,90,0.7); transform: scale(1.3); }
   .deal-tile { flex-shrink: 0; width: 240px; background: var(--surface-card); border: 1px solid var(--border-gold); padding: 24px 20px; position: relative; overflow: hidden; transition: border-color 0.3s ease, background 0.3s ease; cursor: pointer; text-decoration: none; display: block; }
   .deal-tile.featured { border-color: var(--border-gold-xl); }
   .deal-tile::after { content: ''; position: absolute; bottom: 0; right: 0; width: 80px; height: 80px; background: radial-gradient(circle at bottom right, rgba(184,149,90,0.07), transparent 70%); }
@@ -663,6 +667,7 @@
         <p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p>
       </div>
     </div>
+    <div class="deals-dots" id="dealsDots"></div>
   </div>
 </section>
 <!-- SERVICES -->
@@ -1207,6 +1212,94 @@
       }
     });
   })();
+
+// ── Deals carousel: drag, auto-scroll, dots ──
+(function() {
+  var scroll = document.querySelector('.deals-scroll');
+  if (!scroll) return;
+  var tiles = scroll.querySelectorAll('.deal-tile');
+  var dotsWrap = document.getElementById('dealsDots');
+  var autoId = null;
+  var currentIdx = 0;
+
+  // Create dots
+  tiles.forEach(function(_, i) {
+    var dot = document.createElement('span');
+    dot.className = 'deals-dot' + (i === 0 ? ' active' : '');
+    dot.onclick = function() { scrollToTile(i); };
+    dotsWrap.appendChild(dot);
+  });
+
+  function scrollToTile(i) {
+    if (i < 0) i = tiles.length - 1;
+    if (i >= tiles.length) i = 0;
+    currentIdx = i;
+    tiles[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    updateDots();
+  }
+
+  function updateDots() {
+    var dots = dotsWrap.querySelectorAll('.deals-dot');
+    dots.forEach(function(d, i) { d.classList.toggle('active', i === currentIdx); });
+  }
+
+  // Update dots on scroll
+  scroll.addEventListener('scroll', function() {
+    var scrollLeft = scroll.scrollLeft;
+    var tileWidth = (tiles[0] || {}).offsetWidth || 256;
+    var gap = 16;
+    var idx = Math.round(scrollLeft / (tileWidth + gap));
+    if (idx !== currentIdx && idx >= 0 && idx < tiles.length) {
+      currentIdx = idx;
+      updateDots();
+    }
+  });
+
+  // Mouse drag
+  var isDragging = false, startX = 0, scrollStart = 0, moved = false;
+  scroll.addEventListener('mousedown', function(e) {
+    isDragging = true; moved = false;
+    startX = e.pageX; scrollStart = scroll.scrollLeft;
+    scroll.classList.add('dragging');
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var dx = e.pageX - startX;
+    if (Math.abs(dx) > 5) moved = true;
+    scroll.scrollLeft = scrollStart - dx;
+  });
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      scroll.classList.remove('dragging');
+      if (moved) {
+        // Suppress click after drag
+        scroll.addEventListener('click', function suppress(e) {
+          e.stopPropagation(); e.preventDefault();
+          scroll.removeEventListener('click', suppress, true);
+        }, true);
+      }
+    }
+  });
+
+  // Auto-scroll every 4s
+  function startAuto() {
+    stopAuto();
+    autoId = setInterval(function() {
+      currentIdx = (currentIdx + 1) % tiles.length;
+      scrollToTile(currentIdx);
+    }, 4000);
+  }
+  function stopAuto() { if (autoId) { clearInterval(autoId); autoId = null; } }
+
+  // Pause auto on hover/touch
+  scroll.addEventListener('mouseenter', stopAuto);
+  scroll.addEventListener('mouseleave', startAuto);
+  scroll.addEventListener('touchstart', stopAuto, { passive: true });
+  scroll.addEventListener('touchend', function() { setTimeout(startAuto, 3000); });
+
+  startAuto();
+})();
 
 let _sitePromos = null;
 async function _loadSitePromos() {
