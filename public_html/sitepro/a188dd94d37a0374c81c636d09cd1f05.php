@@ -1213,50 +1213,73 @@
     });
   })();
 
-// ── Deals carousel: drag, auto-scroll loop, dots ──
+// ── Deals carousel: infinite loop, drag, auto-scroll, dots ──
 (function() {
   var scroll = document.querySelector('.deals-scroll');
   if (!scroll) return;
-  var tiles = Array.from(scroll.querySelectorAll('.deal-tile'));
-  var dotsWrap = document.getElementById('dealsDots');
-  var count = tiles.length;
+  var origTiles = Array.from(scroll.querySelectorAll('.deal-tile'));
+  var count = origTiles.length;
   if (!count) return;
-  var autoId = null;
-  var currentIdx = 0;
+  var dotsWrap = document.getElementById('dealsDots');
+  var autoId = null, currentIdx = 0;
+
+  // Clone tiles before and after for infinite illusion
+  origTiles.forEach(function(t) { scroll.appendChild(t.cloneNode(true)); });
+  origTiles.forEach(function(t) { scroll.insertBefore(t.cloneNode(true), scroll.firstChild); });
+  // Now: [clone_set] [originals] [clone_set]
+  // Start scrolled to the originals (offset = count * tileW)
+
+  function tw() { return (origTiles[0].offsetWidth || 240) + 16; }
+
+  // Position at real set
+  function initPos() { scroll.scrollLeft = count * tw(); }
+  initPos();
 
   // Create dots
-  for (var di = 0; di < count; di++) {
+  for (var i = 0; i < count; i++) {
     var dot = document.createElement('span');
-    dot.className = 'deals-dot' + (di === 0 ? ' active' : '');
-    dot.dataset.idx = di;
-    dot.onclick = function() { scrollToTile(parseInt(this.dataset.idx)); resetAuto(); };
+    dot.className = 'deals-dot' + (i === 0 ? ' active' : '');
+    dot.dataset.idx = i;
+    dot.onclick = function() {
+      var target = parseInt(this.dataset.idx);
+      currentIdx = target;
+      scroll.scrollTo({ left: (count + target) * tw(), behavior: 'smooth' });
+      updateDots();
+      resetAuto();
+    };
     dotsWrap.appendChild(dot);
   }
   var dots = dotsWrap.querySelectorAll('.deals-dot');
-
-  function tileWidth() { return (tiles[0].offsetWidth || 240) + 16; }
-
-  function scrollToTile(i) {
-    currentIdx = ((i % count) + count) % count;
-    scroll.scrollTo({ left: currentIdx * tileWidth(), behavior: 'smooth' });
-    updateDots();
-  }
 
   function updateDots() {
     dots.forEach(function(d, i) { d.classList.toggle('active', i === currentIdx); });
   }
 
-  // Detect active tile on scroll
+  // Reset position when reaching clones (seamless loop)
+  function checkBounds() {
+    var pos = scroll.scrollLeft;
+    var setWidth = count * tw();
+    if (pos <= 0) {
+      scroll.style.scrollBehavior = 'auto';
+      scroll.scrollLeft = pos + setWidth;
+      scroll.style.scrollBehavior = '';
+    } else if (pos >= setWidth * 2) {
+      scroll.style.scrollBehavior = 'auto';
+      scroll.scrollLeft = pos - setWidth;
+      scroll.style.scrollBehavior = '';
+    }
+  }
+
+  // Detect active on scroll
   var scrollTimer = null;
   scroll.addEventListener('scroll', function() {
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(function() {
-      var idx = Math.round(scroll.scrollLeft / tileWidth());
-      if (idx >= 0 && idx < count && idx !== currentIdx) {
-        currentIdx = idx;
-        updateDots();
-      }
-    }, 80);
+      checkBounds();
+      var raw = Math.round(scroll.scrollLeft / tw());
+      var idx = ((raw % count) + count) % count;
+      if (idx !== currentIdx) { currentIdx = idx; updateDots(); }
+    }, 100);
   });
 
   // Mouse drag
@@ -1277,9 +1300,11 @@
     if (!isDragging) return;
     isDragging = false;
     scroll.classList.remove('dragging');
-    // Snap to nearest tile
-    var idx = Math.round(scroll.scrollLeft / tileWidth());
-    scrollToTile(idx);
+    // Snap
+    var raw = Math.round(scroll.scrollLeft / tw());
+    scroll.scrollTo({ left: raw * tw(), behavior: 'smooth' });
+    currentIdx = ((raw % count) + count) % count;
+    updateDots();
     if (moved) {
       scroll.addEventListener('click', function suppress(e) {
         e.stopPropagation(); e.preventDefault();
@@ -1289,19 +1314,12 @@
     resetAuto();
   });
 
-  // Auto-scroll every 4s — loops back to start
+  // Auto-scroll every 4s — always forward, infinite
   function startAuto() {
     stopAuto();
     autoId = setInterval(function() {
-      var next = currentIdx + 1;
-      if (next >= count) {
-        // Loop: scroll back to first smoothly
-        scroll.scrollTo({ left: 0, behavior: 'smooth' });
-        currentIdx = 0;
-      } else {
-        currentIdx = next;
-        scroll.scrollTo({ left: currentIdx * tileWidth(), behavior: 'smooth' });
-      }
+      scroll.scrollTo({ left: scroll.scrollLeft + tw(), behavior: 'smooth' });
+      currentIdx = (currentIdx + 1) % count;
       updateDots();
     }, 4000);
   }
@@ -1312,6 +1330,9 @@
   scroll.addEventListener('mouseleave', startAuto);
   scroll.addEventListener('touchstart', stopAuto, { passive: true });
   scroll.addEventListener('touchend', function() { setTimeout(startAuto, 3000); });
+
+  // Re-init on resize
+  window.addEventListener('resize', function() { initPos(); });
 
   startAuto();
 })();
