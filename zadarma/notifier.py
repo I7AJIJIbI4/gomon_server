@@ -405,14 +405,12 @@ def fmt_post_visit(appt):
             pass
 
     base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
-    app_msg = '\n\nА ще в нас з\'явився додаток для зручного відстеження записів, новин і акцій: https://flyl.link/app'
+    app_msg = '\n\nНе втрачайте кешбек з кожної процедури з нашим новим додатком для зручного відстеження записів, новин і акцій: https://flyl.link/app'
 
     if cashback_line:
-        # App user — кешбек + баланс, без реклами додатку
         tg = base_msg + cashback_line
         sms = base_msg + cashback_line
     else:
-        # Не app user — запрошення в додаток
         tg = base_msg + app_msg
         sms = base_msg + app_msg
 
