@@ -1219,28 +1219,30 @@
   function step() { return (track.children[0].offsetWidth || 240) + 16; }
 
   function animate(from, to, cb) {
+    busy = true;
     track.style.transition = 'none';
     track.style.transform = 'translateX(' + from + 'px)';
-    void track.offsetWidth; // flush
-    track.style.transition = 'transform .45s ease';
-    track.style.transform = 'translateX(' + to + 'px)';
-    busy = true;
-    function done() {
-      track.removeEventListener('transitionend', done);
-      track.style.transition = 'none';
-      if (cb) cb();
-      busy = false;
-    }
-    track.addEventListener('transitionend', done);
-    // Safety fallback
-    setTimeout(function() { if (busy) done(); }, 500);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        track.style.transition = 'transform .45s ease';
+        track.style.transform = 'translateX(' + to + 'px)';
+        function done() {
+          track.removeEventListener('transitionend', done);
+          track.style.transition = 'none';
+          track.style.transform = 'translateX(0)';
+          if (cb) cb();
+          busy = false;
+        }
+        track.addEventListener('transitionend', done);
+        setTimeout(function() { if (busy) done(); }, 600);
+      });
+    });
   }
 
   function slideNext() {
     if (busy) return;
     animate(0, -step(), function() {
       track.appendChild(track.children[0]);
-      track.style.transform = 'translateX(0)';
       syncDots();
     });
   }
