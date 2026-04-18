@@ -629,35 +629,30 @@
     <div class="deals-scroll">
       <div class="deal-tile featured reveal" onclick='openDealModal(0)'>
         <p class="deal-tag">Постійна програма</p>
-        <p class="deal-title">Кешбек 3% на кожну процедуру</p>
-        <p class="deal-desc">Отримуйте повернення від кожного візиту на внутрішній баланс</p>
+        <p class="deal-title">Кешбек 3% та оплата частинами</p>
+        <p class="deal-desc">Повернення від кожного візиту + безвідсоткове розтермінування</p>
       </div>
       <div class="deal-tile featured reveal" onclick='openDealModal(1)'>
-        <p class="deal-tag">Зручна оплата</p>
-        <p class="deal-title">Оплата частинами без відсотків</p>
-        <p class="deal-desc">Поповнюйте баланс та оплачуйте процедури частинами від 1 000 грн</p>
-      </div>
-      <div class="deal-tile featured reveal" onclick='openDealModal(2)'>
         <p class="deal-tag">Акція</p>
         <p class="deal-title">-10% на ін'єкційні процедури</p>
         <p class="deal-desc">При записі через додаток на будь-яку ін'єкційну процедуру</p>
       </div>
-      <div class="deal-tile featured reveal" onclick='openDealModal(3)'>
+      <div class="deal-tile featured reveal" onclick='openDealModal(2)'>
         <p class="deal-tag">Beta-тестерам</p>
         <p class="deal-title">-10% на будь-яку процедуру</p>
         <p class="deal-desc">За участь у закритому бета-тестуванні Android-додатку</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(4)'>
+      <div class="deal-tile reveal" onclick='openDealModal(3)'>
         <p class="deal-tag">Новим клієнтам</p>
         <p class="deal-title">-40% на перший DrumRoll</p>
         <p class="deal-desc">Знижка 40% на першу процедуру масажу тіла DrumRoll</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(5)'>
+      <div class="deal-tile reveal" onclick='openDealModal(4)'>
         <p class="deal-tag">Постійним клієнтам</p>
         <p class="deal-title">DrumRoll масаж тіла</p>
         <p class="deal-desc">Кожна 5-та процедура — безкоштовно</p>
       </div>
-      <div class="deal-tile reveal" onclick='openDealModal(6)'>
+      <div class="deal-tile reveal" onclick='openDealModal(5)'>
         <p class="deal-tag">Косметика</p>
         <p class="deal-title">Професійна косметика зі знижками</p>
         <p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p>
