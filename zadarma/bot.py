@@ -287,11 +287,11 @@ async def contact_command(update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("Instagram Direct", url="https://ig.me/m/dr.gomon")],
             [InlineKeyboardButton("Telegram", url="https://t.me/DrGomonCosmetology")],
-            [InlineKeyboardButton("Зателефонувати 073-310-31-10", url="tel:+380733103110")],
         ])
         await update.message.reply_text(
             "💬 Зв'язатись з лікарем Вікторією\n\n"
-            "Оберіть зручний спосіб:",
+            "📞 Телефон: 073-310-31-10\n\n"
+            "Або оберіть зручний спосіб:",
             reply_markup=keyboard
         )
     except Exception as e:

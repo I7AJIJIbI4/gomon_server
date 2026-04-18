@@ -404,24 +404,20 @@ def fmt_post_visit(appt):
         except Exception:
             pass
 
-    tg = (
-        '{first_name}, Dr. Gomon Cosmetology дякує за довіру! '
-        'Будемо вдячні і за Ваш відгук:\n'
-        'https://flyl.link/google'
-    ).format(**v) + cashback_line + (
-        '\n\nА ще в нас є додаток для зручного відстеження записів, новин і акцій:\n'
-        'https://flyl.link/app'
-        if not cashback_line else ''
-    )
-    sms = (
-        '{first_name}, Dr.Gomon дякує за довіру! '
-        'Відгук: https://flyl.link/google '
-        'Додаток: https://flyl.link/app'
-    ).format(**v)
-    push_title = 'Дякуємо за візит!'
-    push_body = 'Залиште відгук — нам важлива ваша думка'
+    base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
+    app_msg = '\n\nА ще в нас з\'явився додаток для зручного відстеження записів, новин і акцій: https://flyl.link/app'
+
     if cashback_line:
-        push_body = 'Кешбек нараховано! Залиште відгук'
+        # App user — кешбек + баланс, без реклами додатку
+        tg = base_msg + cashback_line
+        sms = base_msg + cashback_line
+    else:
+        # Не app user — запрошення в додаток
+        tg = base_msg + app_msg
+        sms = base_msg + app_msg
+
+    push_title = 'Дякуємо за візит!'
+    push_body = 'Кешбек нараховано! Залиште відгук' if cashback_line else 'Залиште відгук — нам важлива ваша думка'
     return tg, sms, push_title, push_body
 
 
