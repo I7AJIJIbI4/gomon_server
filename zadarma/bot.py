@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 # Reply keyboard for authenticated users
 def _get_main_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("📋 Мої записи"), KeyboardButton("📱 Додаток", web_app=WebAppInfo(url="https://drgomon.beauty/app/"))],
-        [KeyboardButton("📍 Як знайти"), KeyboardButton("💬 Контакти")],
-        [KeyboardButton("🤖 ШІ асистент")],
+        [KeyboardButton("📋 Мої записи"), KeyboardButton("💰 Мій баланс")],
+        [KeyboardButton("📱 Додаток", web_app=WebAppInfo(url="https://drgomon.beauty/app/")), KeyboardButton("📍 Як знайти")],
+        [KeyboardButton("💬 Контакти"), KeyboardButton("🤖 ШІ асистент")],
         [KeyboardButton("📢 Канал акцій")]
     ], resize_keyboard=True)
 
@@ -130,6 +130,7 @@ async def start_command(update, context: ContextTypes.DEFAULT_TYPE):
                 "Раді бачити вас у Dr. Gomon Cosmetology\n\n"
                 "Оберіть потрібне з меню нижче або скористайтесь командами:\n\n"
                 "/my_services - Мої записи\n"
+                "/balance - Мій баланс\n"
                 "/contact - Контакти лікаря\n"
                 "/map - Як нас знайти\n"
                 "/scheme - Фото локації\n"
@@ -908,6 +909,8 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # Keyboard button routing
     if text == "📋 Мої записи":
         return await my_services_command(update, context)
+    elif text == "💰 Мій баланс":
+        return await balance_command(update, context)
     elif text == "📍 Як знайти":
         return await map_command(update, context)
     elif text == "📞 Зателефонувати":
@@ -1037,6 +1040,85 @@ async def save_channel_post(update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
     except Exception as e:
         logger.error(f'Feed save error: {e}')
+
+
+async def balance_command(update, context: ContextTypes.DEFAULT_TYPE):
+    """Show client's deposit + cashback balance."""
+    user_id = update.effective_user.id
+    import sqlite3
+    DB_PATH = "/home/gomoncli/zadarma/users.db"
+
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        row = conn.execute("SELECT phone FROM users WHERE telegram_id=?", (user_id,)).fetchone()
+        if not row:
+            conn.close()
+            await update.message.reply_text(
+                "Номер телефону не прив'язаний.\n"
+                "Поділіться номером через кнопку нижче або відкрийте додаток: https://drgomon.beauty/go")
+            return
+
+        phone = row[0]
+
+        # Deposit balance
+        dep = conn.execute(
+            "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
+            (phone,)).fetchone()[0]
+        deducted = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+            (phone,)).fetchone()[0]
+        deposit_bal = round(dep - deducted, 2)
+
+        # Cashback balance
+        earned = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM cashback WHERE phone=?",
+            (phone,)).fetchone()[0]
+        redeemed = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'",
+            (phone,)).fetchone()[0]
+        cashback_bal = round(earned - redeemed, 2)
+
+        # Recent transactions (last 5)
+        txs = []
+        for d in conn.execute(
+            "SELECT amount_uah, created_at FROM deposits WHERE phone=? AND status='Approved' ORDER BY created_at DESC LIMIT 5",
+            (phone,)).fetchall():
+            txs.append('+{:.0f} грн — Депозит ({})'.format(d[0], (d[1] or '')[:10]))
+        for c in conn.execute(
+            "SELECT amount, procedure_name, created_at FROM cashback WHERE phone=? ORDER BY created_at DESC LIMIT 5",
+            (phone,)).fetchall():
+            txs.append('+{:.0f} грн — Кешбек 3% ({})'.format(c[0], c[1][:25] if c[1] else ''))
+        for dd in conn.execute(
+            "SELECT amount, reason, created_at FROM deposit_deductions WHERE phone=? ORDER BY created_at DESC LIMIT 5",
+            (phone,)).fetchall():
+            txs.append('-{:.0f} грн — {}'.format(dd[0], dd[1] or 'Списання'))
+
+        conn.close()
+
+        total = deposit_bal + cashback_bal
+        text = '💰 Ваш баланс: {:.0f} грн\n\n'.format(total)
+        if deposit_bal > 0:
+            text += '💳 Депозит: {:.0f} грн\n'.format(deposit_bal)
+        if cashback_bal > 0:
+            text += '🎁 Кешбек 3%: {:.0f} грн\n'.format(cashback_bal)
+        if total == 0:
+            text += 'Поки що транзакцій немає.\n'
+
+        if cashback_bal >= 500:
+            text += '\n✅ Кешбек доступний для списання — зверніться до лікаря при візиті.'
+        elif cashback_bal > 0:
+            text += '\nКешбек доступний для списання від 500 грн (залишилось {:.0f} грн).'.format(500 - total)
+
+        text += '\n\n📱 Поповнити баланс: https://drgomon.beauty/app/'
+
+        if txs:
+            text += '\n\nОстанні операції:\n' + '\n'.join(txs[:5])
+
+        await update.message.reply_text(text)
+
+    except Exception as e:
+        logger.error(f'balance_command error: {e}')
+        await update.message.reply_text('Помилка завантаження балансу. Спробуйте пізніше.')
 
 
 async def my_services_command(update, context: ContextTypes.DEFAULT_TYPE):
@@ -1220,6 +1302,7 @@ def main():
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("sync", sync_command))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("balance", balance_command))
     application.add_handler(CommandHandler("my_services", my_services_command))
     application.add_handler(CommandHandler("services", my_services_command))
     application.add_handler(CommandHandler("monitor", monitor_command))
