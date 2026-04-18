@@ -639,22 +639,21 @@ def send_post_visit(appt):
     if push_ok is not None:
         _log(phone, 'feedback', ref, 'push', 'sent' if push_ok else 'failed', push_title)
 
-    # ── TG + SMS — ЗАКОМЕНТОВАНО, розкоментувати для активації ──
-    # tg_ok = False
-    # sms_ok = False
-    # if not _already_sent(phone, 'feedback', ref, 'tg'):
-    #     tg_id = _get_tg_id(phone)
-    #     if tg_id:
-    #         tg_ok = _send_tg(tg_id, tg)
-    #         _log(phone, 'feedback', ref, 'tg', 'sent' if tg_ok else 'failed', tg[:80])
-    #     if not tg_ok and not _already_sent(phone, 'feedback', ref, 'sms'):
-    #         from sms_fly import send_sms
-    #         sms_ok = send_sms(phone, sms)
-    #         _log(phone, 'feedback', ref, 'sms', 'sent' if sms_ok else 'failed', sms[:80])
-    # ── кінець закоментованого блоку ──
+    # TG + SMS fallback
+    tg_ok = False
+    sms_ok = False
+    if not _already_sent(phone, 'feedback', ref, 'tg'):
+        tg_id = _get_tg_id(phone)
+        if tg_id:
+            tg_ok = _send_tg(tg_id, tg)
+            _log(phone, 'feedback', ref, 'tg', 'sent' if tg_ok else 'failed', tg[:80])
+        if not tg_ok and not _already_sent(phone, 'feedback', ref, 'sms'):
+            from sms_fly import send_sms
+            sms_ok = send_sms(phone, sms)
+            _log(phone, 'feedback', ref, 'sms', 'sent' if sms_ok else 'failed', sms[:80])
 
-    logger.info('post_visit phone={} date={} → push={}'.format(phone, appt.get('date'), push_ok))
-    return {'push': push_ok}  # Додати 'tg': tg_ok, 'sms': sms_ok після розкоментування
+    logger.info('post_visit phone={} date={} → push={} tg={} sms={}'.format(phone, appt.get('date'), push_ok, tg_ok, sms_ok))
+    return {'push': push_ok, 'tg': tg_ok, 'sms': sms_ok}
 
 
 def send_cancellation(appt):
