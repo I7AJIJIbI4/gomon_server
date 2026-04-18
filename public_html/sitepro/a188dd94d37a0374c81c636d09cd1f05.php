@@ -329,6 +329,7 @@
   .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
   .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; }
+  .deals-scroll.sliding-prev { overflow: visible; }
   .deals-track { display: flex; gap: 16px; cursor: grab; user-select: none; -webkit-user-select: none; }
   .deals-track.dragging { cursor: grabbing; }
   .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
@@ -1240,14 +1241,22 @@
     if (busy) return;
     busy = true;
     var s = step();
-    // Animate current position to the right (+step), then rotate DOM
+    var wrapper = track.parentElement;
+    // 1. Move last to first position
+    track.style.transition = 'none';
+    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+    // 2. Offset so visually nothing changed (new first tile is hidden at -step)
+    track.style.transform = 'translateX(' + (-s) + 'px)';
+    // 3. Allow overflow so left tile is visible during animation
+    wrapper.classList.add('sliding-prev');
+    void track.offsetWidth;
+    // 4. Animate to 0 — tile slides in from left
     track.style.transition = 'transform .45s ease';
-    track.style.transform = 'translateX(' + s + 'px)';
+    track.style.transform = 'translateX(0)';
     function end() {
       track.removeEventListener('transitionend', end);
       track.style.transition = 'none';
-      track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-      track.style.transform = 'translateX(0)';
+      wrapper.classList.remove('sliding-prev');
       syncDots();
       busy = false;
     }
