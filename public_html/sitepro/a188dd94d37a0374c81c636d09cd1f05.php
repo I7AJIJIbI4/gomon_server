@@ -1213,46 +1213,50 @@
     });
   })();
 
-// ── Deals carousel: drag, auto-scroll, dots ──
+// ── Deals carousel: drag, auto-scroll loop, dots ──
 (function() {
   var scroll = document.querySelector('.deals-scroll');
   if (!scroll) return;
-  var tiles = scroll.querySelectorAll('.deal-tile');
+  var tiles = Array.from(scroll.querySelectorAll('.deal-tile'));
   var dotsWrap = document.getElementById('dealsDots');
+  var count = tiles.length;
+  if (!count) return;
   var autoId = null;
   var currentIdx = 0;
 
   // Create dots
-  tiles.forEach(function(_, i) {
+  for (var di = 0; di < count; di++) {
     var dot = document.createElement('span');
-    dot.className = 'deals-dot' + (i === 0 ? ' active' : '');
-    dot.onclick = function() { scrollToTile(i); };
+    dot.className = 'deals-dot' + (di === 0 ? ' active' : '');
+    dot.dataset.idx = di;
+    dot.onclick = function() { scrollToTile(parseInt(this.dataset.idx)); resetAuto(); };
     dotsWrap.appendChild(dot);
-  });
+  }
+  var dots = dotsWrap.querySelectorAll('.deals-dot');
+
+  function tileWidth() { return (tiles[0].offsetWidth || 240) + 16; }
 
   function scrollToTile(i) {
-    if (i < 0) i = tiles.length - 1;
-    if (i >= tiles.length) i = 0;
-    currentIdx = i;
-    tiles[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    currentIdx = ((i % count) + count) % count;
+    scroll.scrollTo({ left: currentIdx * tileWidth(), behavior: 'smooth' });
     updateDots();
   }
 
   function updateDots() {
-    var dots = dotsWrap.querySelectorAll('.deals-dot');
     dots.forEach(function(d, i) { d.classList.toggle('active', i === currentIdx); });
   }
 
-  // Update dots on scroll
+  // Detect active tile on scroll
+  var scrollTimer = null;
   scroll.addEventListener('scroll', function() {
-    var scrollLeft = scroll.scrollLeft;
-    var tileWidth = (tiles[0] || {}).offsetWidth || 256;
-    var gap = 16;
-    var idx = Math.round(scrollLeft / (tileWidth + gap));
-    if (idx !== currentIdx && idx >= 0 && idx < tiles.length) {
-      currentIdx = idx;
-      updateDots();
-    }
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function() {
+      var idx = Math.round(scroll.scrollLeft / tileWidth());
+      if (idx >= 0 && idx < count && idx !== currentIdx) {
+        currentIdx = idx;
+        updateDots();
+      }
+    }, 80);
   });
 
   // Mouse drag
@@ -1261,6 +1265,7 @@
     isDragging = true; moved = false;
     startX = e.pageX; scrollStart = scroll.scrollLeft;
     scroll.classList.add('dragging');
+    e.preventDefault();
   });
   document.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
@@ -1269,30 +1274,40 @@
     scroll.scrollLeft = scrollStart - dx;
   });
   document.addEventListener('mouseup', function() {
-    if (isDragging) {
-      isDragging = false;
-      scroll.classList.remove('dragging');
-      if (moved) {
-        // Suppress click after drag
-        scroll.addEventListener('click', function suppress(e) {
-          e.stopPropagation(); e.preventDefault();
-          scroll.removeEventListener('click', suppress, true);
-        }, true);
-      }
+    if (!isDragging) return;
+    isDragging = false;
+    scroll.classList.remove('dragging');
+    // Snap to nearest tile
+    var idx = Math.round(scroll.scrollLeft / tileWidth());
+    scrollToTile(idx);
+    if (moved) {
+      scroll.addEventListener('click', function suppress(e) {
+        e.stopPropagation(); e.preventDefault();
+        scroll.removeEventListener('click', suppress, true);
+      }, true);
     }
+    resetAuto();
   });
 
-  // Auto-scroll every 4s
+  // Auto-scroll every 4s — loops back to start
   function startAuto() {
     stopAuto();
     autoId = setInterval(function() {
-      currentIdx = (currentIdx + 1) % tiles.length;
-      scrollToTile(currentIdx);
+      var next = currentIdx + 1;
+      if (next >= count) {
+        // Loop: scroll back to first smoothly
+        scroll.scrollTo({ left: 0, behavior: 'smooth' });
+        currentIdx = 0;
+      } else {
+        currentIdx = next;
+        scroll.scrollTo({ left: currentIdx * tileWidth(), behavior: 'smooth' });
+      }
+      updateDots();
     }, 4000);
   }
   function stopAuto() { if (autoId) { clearInterval(autoId); autoId = null; } }
+  function resetAuto() { stopAuto(); startAuto(); }
 
-  // Pause auto on hover/touch
   scroll.addEventListener('mouseenter', stopAuto);
   scroll.addEventListener('mouseleave', startAuto);
   scroll.addEventListener('touchstart', stopAuto, { passive: true });

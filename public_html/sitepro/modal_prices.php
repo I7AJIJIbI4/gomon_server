@@ -8,9 +8,12 @@ $referer = $_SERVER['HTTP_REFERER'] ?? '';
 
 $origin_host = parse_url($origin, PHP_URL_HOST) ?: '';
 $referer_host = parse_url($referer, PHP_URL_HOST) ?: '';
-if (!in_array($origin_host, $allowed) && !in_array($referer_host, $allowed)) {
-    http_response_code(403);
-    exit;
+// Allow same-origin (no Origin/Referer headers) or whitelisted domains
+if ($origin_host || $referer_host) {
+    if (!in_array($origin_host, $allowed) && !in_array($referer_host, $allowed)) {
+        http_response_code(403);
+        exit;
+    }
 }
 
 if (in_array($origin_host, $allowed)) {
