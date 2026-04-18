@@ -1388,7 +1388,6 @@ window.addEventListener('DOMContentLoaded', function() {
     <p class="deal-modal-tag" id="dealModalTag"></p>
     <p class="deal-modal-title" id="dealModalTitle"></p>
     <div class="deal-modal-desc" id="dealModalDesc" style="font-size:16px;line-height:1.7;margin-bottom:0"></div>
-    <a class="deal-modal-btn" href="https://drgomon.beauty/app/" target="_blank" rel="noopener" onclick="document.getElementById('dealModal').classList.remove('open')" style="margin-top:24px;display:block;text-align:center">До додатку</a>
   </div>
 </div>
 
