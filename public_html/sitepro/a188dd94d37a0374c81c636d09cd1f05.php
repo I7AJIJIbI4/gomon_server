@@ -519,7 +519,7 @@
   /* === Deal Modal === */
   .deal-modal-overlay { display:none; position:fixed; inset:0; background:var(--overlay-deal); z-index:9999; align-items:center; justify-content:center; padding:20px; }
   .deal-modal-overlay.open { display:flex; }
-  .deal-modal-card { background:var(--deal-card-bg); border:1px solid var(--border-gold-xl); padding:36px 32px; max-width:420px; width:100%; position:relative; text-align:center; }
+  .deal-modal-card { background:var(--deal-card-bg); border:1px solid var(--border-gold-xl); padding:36px 32px; max-width:560px; width:100%; position:relative; text-align:center; }
   .deal-modal-tag { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); margin-bottom:12px; }
   .deal-modal-title { font-size:23px; color:var(--deal-title-color); margin-bottom:10px; font-weight:600; }
   .deal-modal-desc { font-size:16px; color:var(--deal-desc-color); margin-bottom:28px; line-height:1.5; }
@@ -1233,11 +1233,11 @@ function closeDealModal(e) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') document.getElementById('dealModal').classList.remove('open');
 });
-// Deep link: ?promo=cashback or ?promo=deposit
-(function() {
+// Deep link: ?promo=cashback opens modal
+window.addEventListener('DOMContentLoaded', function() {
   var pp = new URLSearchParams(window.location.search).get('promo');
-  if (pp) setTimeout(function() { openDealById(pp); }, 500);
-})();
+  if (pp) setTimeout(function() { openDealById(pp); }, 800);
+});
 </script>
 
 <!-- Deal Modal -->
