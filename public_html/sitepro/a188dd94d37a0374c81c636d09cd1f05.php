@@ -328,9 +328,10 @@
   /* ── DEALS (АКЦІЇ TILES) ── */
   .deals-section { padding: clamp(28px, 5vw, 56px) 0 0; position: relative; }
   .deals-inner { max-width: 1100px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 60px); }
-  .deals-scroll { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-bottom: 12px; margin-top: 36px; scroll-behavior: smooth; cursor: grab; user-select: none; -webkit-user-select: none; }
-  .deals-scroll::-webkit-scrollbar { display: none; }
-  .deals-scroll.dragging { cursor: grabbing; scroll-behavior: auto; }
+  .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .deals-scroll.dragging { cursor: grabbing; }
+  .deals-track { display: flex; gap: 16px; transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); will-change: transform; }
+  .deals-track.no-transition { transition: none; }
   .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
   .deals-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; }
   .deals-dot.active { background: rgba(184,149,90,0.7); transform: scale(1.3); }
@@ -631,40 +632,14 @@
     <p class="section-label reveal">Акції</p>
     <h2 class="section-title reveal">Поточні <em>пропозиції</em></h2>
     <div class="deals-scroll">
-      <div class="deal-tile featured reveal" onclick='openDealModal(0)'>
-        <p class="deal-tag">Постійна програма</p>
-        <p class="deal-title">Кешбек 3% на кожну процедуру</p>
-        <p class="deal-desc">Отримуйте повернення від кожного візиту на внутрішній баланс</p>
-      </div>
-      <div class="deal-tile featured reveal" onclick='openDealModal(1)'>
-        <p class="deal-tag">Зручна оплата</p>
-        <p class="deal-title">Безвідсоткове розтермінування</p>
-        <p class="deal-desc">Оплата будь-якої процедури або косметики частинами від 2 000 грн</p>
-      </div>
-      <div class="deal-tile featured reveal" onclick='openDealModal(2)'>
-        <p class="deal-tag">Акція</p>
-        <p class="deal-title">-10% на ін'єкційні процедури</p>
-        <p class="deal-desc">При записі через додаток на будь-яку ін'єкційну процедуру</p>
-      </div>
-      <div class="deal-tile featured reveal" onclick='openDealModal(3)'>
-        <p class="deal-tag">Beta-тестерам</p>
-        <p class="deal-title">-10% на будь-яку процедуру</p>
-        <p class="deal-desc">За участь у закритому бета-тестуванні Android-додатку</p>
-      </div>
-      <div class="deal-tile reveal" onclick='openDealModal(4)'>
-        <p class="deal-tag">Новим клієнтам</p>
-        <p class="deal-title">-40% на перший DrumRoll</p>
-        <p class="deal-desc">Знижка 40% на першу процедуру масажу тіла DrumRoll</p>
-      </div>
-      <div class="deal-tile reveal" onclick='openDealModal(5)'>
-        <p class="deal-tag">Постійним клієнтам</p>
-        <p class="deal-title">DrumRoll масаж тіла</p>
-        <p class="deal-desc">Кожна 5-та процедура — безкоштовно</p>
-      </div>
-      <div class="deal-tile reveal" onclick='openDealModal(6)'>
-        <p class="deal-tag">Косметика</p>
-        <p class="deal-title">Професійна косметика зі знижками</p>
-        <p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p>
+      <div class="deals-track" id="dealsTrack">
+        <div class="deal-tile featured" onclick='openDealModal(0)'><p class="deal-tag">Постійна програма</p><p class="deal-title">Кешбек 3% на кожну процедуру</p><p class="deal-desc">Отримуйте повернення від кожного візиту на внутрішній баланс</p></div>
+        <div class="deal-tile featured" onclick='openDealModal(1)'><p class="deal-tag">Зручна оплата</p><p class="deal-title">Безвідсоткове розтермінування</p><p class="deal-desc">Оплата будь-якої процедури або косметики частинами від 2 000 грн</p></div>
+        <div class="deal-tile featured" onclick='openDealModal(2)'><p class="deal-tag">Акція</p><p class="deal-title">-10% на ін'єкційні процедури</p><p class="deal-desc">При записі через додаток на будь-яку ін'єкційну процедуру</p></div>
+        <div class="deal-tile featured" onclick='openDealModal(3)'><p class="deal-tag">Beta-тестерам</p><p class="deal-title">-10% на будь-яку процедуру</p><p class="deal-desc">За участь у закритому бета-тестуванні Android-додатку</p></div>
+        <div class="deal-tile" onclick='openDealModal(4)'><p class="deal-tag">Новим клієнтам</p><p class="deal-title">-40% на перший DrumRoll</p><p class="deal-desc">Знижка 40% на першу процедуру масажу тіла DrumRoll</p></div>
+        <div class="deal-tile" onclick='openDealModal(5)'><p class="deal-tag">Постійним клієнтам</p><p class="deal-title">DrumRoll масаж тіла</p><p class="deal-desc">Кожна 5-та процедура — безкоштовно</p></div>
+        <div class="deal-tile" onclick='openDealModal(6)'><p class="deal-tag">Косметика</p><p class="deal-title">Професійна косметика зі знижками</p><p class="deal-desc">Christina, Neauvia, Kemikum та інші бренди</p></div>
       </div>
     </div>
     <div class="deals-dots" id="dealsDots"></div>
@@ -1213,126 +1188,158 @@
     });
   })();
 
-// ── Deals carousel: infinite loop, drag, auto-scroll, dots ──
+// ── Deals carousel: infinite loop via DOM rotation ──
 (function() {
-  var scroll = document.querySelector('.deals-scroll');
-  if (!scroll) return;
-  var origTiles = Array.from(scroll.querySelectorAll('.deal-tile'));
-  var count = origTiles.length;
+  var track = document.getElementById('dealsTrack');
+  var wrap = document.querySelector('.deals-scroll');
+  if (!track || !wrap) return;
+  var tiles = Array.from(track.children);
+  var count = tiles.length;
   if (!count) return;
   var dotsWrap = document.getElementById('dealsDots');
-  var autoId = null, currentIdx = 0;
+  var autoId = null, currentIdx = 0, offset = 0;
 
-  // Clone tiles before and after for infinite illusion
-  origTiles.forEach(function(t) { scroll.appendChild(t.cloneNode(true)); });
-  origTiles.forEach(function(t) { scroll.insertBefore(t.cloneNode(true), scroll.firstChild); });
-  // Now: [clone_set] [originals] [clone_set]
-  // Start scrolled to the originals (offset = count * tileW)
+  function tw() { return (tiles[0].offsetWidth || 240) + 16; }
 
-  function tw() { return (origTiles[0].offsetWidth || 240) + 16; }
+  // Store original promo indices on tiles (for openDealModal after rotation)
+  tiles.forEach(function(t, i) { t.dataset.origIdx = i; });
 
-  // Position at real set
-  function initPos() { scroll.scrollLeft = count * tw(); }
-  initPos();
-
-  // Create dots
+  // Dots
   for (var i = 0; i < count; i++) {
     var dot = document.createElement('span');
     dot.className = 'deals-dot' + (i === 0 ? ' active' : '');
     dot.dataset.idx = i;
-    dot.onclick = function() {
-      var target = parseInt(this.dataset.idx);
-      currentIdx = target;
-      scroll.scrollTo({ left: (count + target) * tw(), behavior: 'smooth' });
-      updateDots();
-      resetAuto();
-    };
+    dot.onclick = function() { goTo(parseInt(this.dataset.idx)); resetAuto(); };
     dotsWrap.appendChild(dot);
   }
   var dots = dotsWrap.querySelectorAll('.deals-dot');
 
   function updateDots() {
-    dots.forEach(function(d, i) { d.classList.toggle('active', i === currentIdx); });
+    var firstOrigIdx = parseInt(track.children[0].dataset.origIdx);
+    dots.forEach(function(d, i) { d.classList.toggle('active', i === firstOrigIdx); });
+    currentIdx = firstOrigIdx;
   }
 
-  // Reset position when reaching clones (seamless loop)
-  function checkBounds() {
-    var pos = scroll.scrollLeft;
-    var setWidth = count * tw();
-    if (pos <= 0) {
-      scroll.style.scrollBehavior = 'auto';
-      scroll.scrollLeft = pos + setWidth;
-      scroll.style.scrollBehavior = '';
-    } else if (pos >= setWidth * 2) {
-      scroll.style.scrollBehavior = 'auto';
-      scroll.scrollLeft = pos - setWidth;
-      scroll.style.scrollBehavior = '';
+  function setOffset(px, animate) {
+    offset = px;
+    if (!animate) track.classList.add('no-transition');
+    else track.classList.remove('no-transition');
+    track.style.transform = 'translateX(' + px + 'px)';
+    if (!animate) {
+      // Force reflow
+      track.offsetHeight;
+      track.classList.remove('no-transition');
     }
   }
 
-  // Detect active on scroll
-  var scrollTimer = null;
-  scroll.addEventListener('scroll', function() {
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(function() {
-      checkBounds();
-      var raw = Math.round(scroll.scrollLeft / tw());
-      var idx = ((raw % count) + count) % count;
-      if (idx !== currentIdx) { currentIdx = idx; updateDots(); }
-    }, 100);
-  });
+  // Rotate DOM: move first child to end
+  function rotateForward() {
+    var first = track.children[0];
+    track.appendChild(first);
+    setOffset(0, false);
+    updateDots();
+  }
+
+  // Rotate DOM: move last child to beginning
+  function rotateBackward() {
+    var last = track.children[track.children.length - 1];
+    track.insertBefore(last, track.children[0]);
+    setOffset(0, false);
+    updateDots();
+  }
+
+  function slideNext() {
+    setOffset(-tw(), true);
+    setTimeout(function() { rotateForward(); }, 520);
+  }
+
+  function slidePrev() {
+    setOffset(tw(), false); // jump right instantly
+    setTimeout(function() {
+      rotateBackward();
+      setOffset(0, false); // reset
+      // Now slide the "new first" into view
+      setOffset(tw(), false);
+      setTimeout(function() { setOffset(0, true); }, 20);
+    }, 20);
+  }
+
+  function goTo(targetIdx) {
+    // Rotate until target is first
+    var safety = 0;
+    while (parseInt(track.children[0].dataset.origIdx) !== targetIdx && safety < count) {
+      var first = track.children[0];
+      track.appendChild(first);
+      safety++;
+    }
+    setOffset(0, false);
+    updateDots();
+  }
 
   // Mouse drag
-  var isDragging = false, startX = 0, scrollStart = 0, moved = false;
-  scroll.addEventListener('mousedown', function(e) {
+  var isDragging = false, startX = 0, dragOffset = 0, moved = false;
+  wrap.addEventListener('mousedown', function(e) {
     isDragging = true; moved = false;
-    startX = e.pageX; scrollStart = scroll.scrollLeft;
-    scroll.classList.add('dragging');
+    startX = e.pageX; dragOffset = 0;
+    wrap.classList.add('dragging');
+    track.classList.add('no-transition');
     e.preventDefault();
   });
   document.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
-    var dx = e.pageX - startX;
-    if (Math.abs(dx) > 5) moved = true;
-    scroll.scrollLeft = scrollStart - dx;
+    dragOffset = e.pageX - startX;
+    if (Math.abs(dragOffset) > 5) moved = true;
+    track.style.transform = 'translateX(' + dragOffset + 'px)';
   });
   document.addEventListener('mouseup', function() {
     if (!isDragging) return;
     isDragging = false;
-    scroll.classList.remove('dragging');
-    // Snap
-    var raw = Math.round(scroll.scrollLeft / tw());
-    scroll.scrollTo({ left: raw * tw(), behavior: 'smooth' });
-    currentIdx = ((raw % count) + count) % count;
-    updateDots();
+    wrap.classList.remove('dragging');
+    track.classList.remove('no-transition');
+    var threshold = tw() / 3;
+    if (dragOffset < -threshold) {
+      slideNext();
+    } else if (dragOffset > threshold) {
+      slidePrev();
+    } else {
+      setOffset(0, true);
+    }
     if (moved) {
-      scroll.addEventListener('click', function suppress(e) {
+      wrap.addEventListener('click', function suppress(e) {
         e.stopPropagation(); e.preventDefault();
-        scroll.removeEventListener('click', suppress, true);
+        wrap.removeEventListener('click', suppress, true);
       }, true);
     }
     resetAuto();
   });
 
-  // Auto-scroll every 4s — always forward, infinite
-  function startAuto() {
+  // Touch drag
+  var touchStartX = 0;
+  wrap.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+    track.classList.add('no-transition');
     stopAuto();
-    autoId = setInterval(function() {
-      scroll.scrollTo({ left: scroll.scrollLeft + tw(), behavior: 'smooth' });
-      currentIdx = (currentIdx + 1) % count;
-      updateDots();
-    }, 4000);
-  }
+  }, { passive: true });
+  wrap.addEventListener('touchmove', function(e) {
+    var dx = e.touches[0].clientX - touchStartX;
+    track.style.transform = 'translateX(' + dx + 'px)';
+  }, { passive: true });
+  wrap.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    track.classList.remove('no-transition');
+    if (dx < -tw() / 3) slideNext();
+    else if (dx > tw() / 3) slidePrev();
+    else setOffset(0, true);
+    setTimeout(startAuto, 3000);
+  });
+
+  // Auto
+  function startAuto() { stopAuto(); autoId = setInterval(slideNext, 4000); }
   function stopAuto() { if (autoId) { clearInterval(autoId); autoId = null; } }
   function resetAuto() { stopAuto(); startAuto(); }
 
-  scroll.addEventListener('mouseenter', stopAuto);
-  scroll.addEventListener('mouseleave', startAuto);
-  scroll.addEventListener('touchstart', stopAuto, { passive: true });
-  scroll.addEventListener('touchend', function() { setTimeout(startAuto, 3000); });
-
-  // Re-init on resize
-  window.addEventListener('resize', function() { initPos(); });
+  wrap.addEventListener('mouseenter', stopAuto);
+  wrap.addEventListener('mouseleave', startAuto);
 
   startAuto();
 })();
