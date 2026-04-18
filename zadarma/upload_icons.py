@@ -30,41 +30,103 @@ logger = logging.getLogger("upload_icons")
 
 ICONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wl_icons")
 
-# Mapping: icon filename (without .png) -> WLaunch service name (exact match)
-# These must match the service names in WLaunch exactly
+# ============================================================
+# Mapping: icon filename (without .png) -> WLaunch service/category name
+# 63 total: 5 categories + 58 services
+# ============================================================
+
 ICON_SERVICE_MAP = {
-    # Ботулінотерапія Neuronox
-    "botox_1z_neuronox": "Ботулінотерапія 1 зона (Neuronox)",
-    "botox_2z_neuronox": "Ботулінотерапія 2 зони (Neuronox)",
-    "botox_3z_neuronox": "Ботулінотерапія 3 зони (Neuronox)",
-    "botox_ff_neuronox": "Ботулінотерапія Full Face (Neuronox)",
+    # ── Categories (type=GROUP) ──
+    "cat_injection":   "Ін'єкційна косметологія",
+    "cat_aparatna":    "Апаратна косметологія",
+    "cat_body":        "Догляд за тілом",
+    "cat_whitening":   "Відбілювання зубів",
+    "cat_care":        "Доглядові процедури",
+
+    # ── Ін'єкційна: Ботулінотерапія Neuronox ──
+    "botox_1z_neuronox":  "Ботулінотерапія 1 зона (Neuronox)",
+    "botox_2z_neuronox":  "Ботулінотерапія 2 зони (Neuronox)",
+    "botox_3z_neuronox":  "Ботулінотерапія 3 зони (Neuronox)",
+    "botox_ff_neuronox":  "Ботулінотерапія Full Face (Neuronox)",
     "nefertiti_neuronox": "Ліфтинг Ніфертіті (Neuronox)",
 
-    # Ботулінотерапія Xeomin
-    "botox_1z_xeomin": "Ботулінотерапія 1 зона (Xeomin)",
-    "botox_2z_xeomin": "Ботулінотерапія 2 зони (Xeomin)",
-    "botox_3z_xeomin": "Ботулінотерапія 3 зони (Xeomin)",
-    "botox_ff_xeomin": "Ботулінотерапія Full Face (Xeomin)",
-    "nefertiti_xeomin": "Ліфтинг Ніфертіті (Xeomin)",
+    # ── Ботулінотерапія Xeomin ──
+    "botox_1z_xeomin":  "Ботулінотерапія 1 зона (Xeomin)",
+    "botox_2z_xeomin":  "Ботулінотерапія 2 зони (Xeomin)",
+    "botox_3z_xeomin":  "Ботулінотерапія 3 зони (Xeomin)",
+    "botox_ff_xeomin":  "Ботулінотерапія Full Face (Xeomin)",
+    "nefertiti_xeomin":  "Ліфтинг Ніфертіті (Xeomin)",
 
-    # Контурна пластика
-    "kontur_neuramis": "Контурна пластика Neuramis Deep",
-    "kontur_saypha": "Контурна пластика Saypha Filler",
-    "kontur_perfecta": "Контурна пластика Perfecta",
-    "kontur_genyal": "Контурна пластика Genyal / Xcelence 3",
+    # ── Гіпергідроз ──
+    "hyperhidrosis": "Лікування гіпергідрозу (Botox)",
 
-    # Мезо / Біоревіталізація
-    "mezo_hair": "Мезотерапія Hair Loss / Hair Vital",
-    "biorevit_skinbooster": "Біоревіталізація Skin Booster",
-    "biorevit_vitaran_eye": "Біоревіталізація Vitaran Tox & Eye",
+    # ── Контурна пластика ──
+    "kontur_neuramis":      "Контурна пластика Neuramis Deep",
+    "kontur_saypha":        "Контурна пластика Saypha Filler",
+    "kontur_perfecta":      "Контурна пластика Perfecta",
+    "kontur_genyal":        "Контурна пластика Genyal / Xcelence 3",
+    "kontur_neauvia_lips":  "Контурна пластика Neauvia Intense Lips",
+    "kontur_neuramis_vol":  "Контурна пластика Neuramis Volume",
+    "kontur_saypha_vol":    "Контурна пластика Saypha Volume",
+    "kontur_neauvia_stim":  "Контурна пластика Neauvia Stimulate",
 
-    # Доглядові процедури
-    "kemikum": "KEMIKUM",
+    # ── Біорепарація ──
+    "biorep_rejuran_hb": "Біорепарація Rejuran HB",
+    "biorep_rejuran_i":  "Біорепарація Rejuran I",
+    "biorep_rejuran_s":  "Біорепарація Rejuran S",
+    "biorep_exosomes":   "Біорепарація Екзосоми (Exoxe) 2.5 ml",
+
+    # ── Біоревіталізація ──
+    "biorevit_smart":         "Smart-біоревіталізація",
+    "biorevit_vitaran_eye":   "Біоревіталізація Vitaran Tox & Eye",
+    "biorevit_neauvia_hydro": "Біоревіталізація Neauvia Hydro Deluxe",
+    "biorevit_skinbooster":   "Біоревіталізація Skin Booster",
+
+    # ── Мезотерапія ──
+    "mezo_hair":          "Мезотерапія Hair Loss / Hair Vital",
+    "mezo_fillup":        "Мезотерапія Fill Up",
+    "mezo_plinest":       "Мезотерапія Plinest One (4 ml)",
+    "mesobotox_monaco":   "Мезоботокс «Монако» (4 ml)",
+
+    # ── Ліполітики ──
+    "lipo_face": "Ліполітики (обличчя, 4 мл)",
+    "lipo_body": "Ліполітики (тіло, 10 мл)",
+
+    # ── Корекції ──
+    "hyaluronidase":      "Гіалуронідаза (розчинення філера)",
+    "correction_filler":  "Корекція філера",
+    "correction_botox":   "Корекція ботулотоксину",
+
+    # ── Апаратна косметологія ──
+    "wow_cleaning":   "WOW-чистка обличчя",
+    "wow_glow":       "WOW-чистка «Сяяння»",
+    "teen_cleaning":  "Підліткова делікатна чистка",
+    "oxygen_glow":    "Кисневий догляд Glow Skin",
+    "carboxy":        "Карбокситерапія",
+
+    # ── Доглядові процедури ──
+    "kemikum":               "KEMIKUM",
     "kemikum_microneedling": "KEMIKUM + мікронідлінг",
-    "prx_t33": "PRX-T33",
+    "prx_t33":               "PRX-T33",
     "prx_t33_microneedling": "PRX-T33 + мікронідлінг",
-    "acid_peeling": "Азелаїновий / Мигдальний / Феруловий",
-    "spa_christina": "SPA-догляд від Christina",
+    "acid_peeling":          "Азелаїновий / Мигдальний / Феруловий",
+    "spa_christina":         "SPA-догляд від Christina",
+
+    # ── Догляд за тілом ──
+    "body_part_massage":   "Моделювання окремої ділянки",
+    "body_full_contour":   "Моделювання всього тіла",
+    "body_relax_massage":  "Загальний релакс-масаж всього тіла",
+    "pressotherapy":       "Пресотерапія «Легкість тіла»",
+
+    # ── Відбілювання зубів ──
+    "whitening_light":    "Відбілювання зубів Light",
+    "whitening_medium":   "Відбілювання зубів Medium",
+    "whitening_maximum":  "Відбілювання зубів Maximum",
+
+    # ── Top-level ──
+    "consultation":         "Консультація",
+    "consultation_offline": "Офлайн-консультація",
+    "consultation_online":  "Онлайн-консультація",
 }
 
 
