@@ -591,12 +591,34 @@ navigator.serviceWorker.addEventListener('message', e => {
 }}
 ```
 
-### Service matching (fuzzy)
+### WLaunch Services — повна синхронізація з prices.json (2026-04-18)
 
-`wlaunch_api.py` матчить послуги з prices.json через 3 рівні:
-1. **Exact** — `procedure_name.lower() == wl_service_name.lower()`
-2. **Substring** — назва містить/міститься (з нормалізацією лапок `«»""`)
-3. **Category map** — keyword → WLaunch generic service (напр. "1 зона" → "Ботулінотерапія")
+**5 категорій (type=GROUP) + Консультація top-level, 57 процедур:**
+| Категорія | Кількість |
+|---|---|
+| Ін'єкційна косметологія | 37 |
+| Доглядові процедури | 6 (пілінги, SPA) |
+| Апаратна косметологія | 5 (WOW-чистки, кисневий, карбокситерапія) |
+| Догляд за тілом | 5 (масаж, моделювання, пресотерапія) |
+| Відбілювання зубів | 3 |
+| Консультація (top-level) | 1 |
+
+**Назви 1:1 з prices.json** — кешбек працює без fuzzy matching.
+Назви з контекстом: "Ботулінотерапія 1 зона (Neuronox)", "Контурна пластика Saypha Filler", тощо.
+
+**WLaunch API для сервісів:**
+- `POST /company/{cid}/service` — створити (company-level)
+- `PUT /company/{cid}/branch/{bid}/service/{sid}` — лінкувати до branch (ОБОВ'ЯЗКОВО після POST!)
+- `POST /company/{cid}/service/{sid}` з `{parentId: "..."}` — переміщення між категоріями
+- `type: "GROUP"` для категорій, `type: "SERVICE"` для послуг
+- Обмеження: неактивну послугу не можна активувати якщо батько неактивний (каскадна деактивація)
+
+### Service matching (fuzzy) — для кешбеку
+
+`appt_reminder.py::_accrue_cashback()` матчить назви через 3 рівні:
+1. **Exact** — `procedure_name.lower() == price_item_name.lower()`
+2. **Substring** — назва містить/міститься (найдовший збіг)
+3. **Category map** — keyword → перша процедура з ціною в категорії
 
 ### Specialist breaks (sync)
 
