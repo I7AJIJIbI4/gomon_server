@@ -1274,12 +1274,17 @@
     syncDots();
   }
 
-  // Mouse drag
-  var dragging = false, sx = 0, dx = 0, moved = false;
+  // Mouse drag — prepend one tile on start so left side always has content
+  var dragging = false, sx = 0, dx = 0, moved = false, dragBaseOffset = 0;
   track.addEventListener('mousedown', function(e) {
     if (busy) return;
     dragging = true; moved = false; sx = e.pageX; dx = 0;
+    // Prepend last tile to beginning so dragging right reveals it
     track.style.transition = 'none';
+    track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+    dragBaseOffset = -step();
+    track.style.transform = 'translateX(' + dragBaseOffset + 'px)';
+    track.parentElement.classList.add('sliding-prev');
     track.classList.add('dragging');
     e.preventDefault();
   });
@@ -1287,45 +1292,64 @@
     if (!dragging) return;
     dx = e.pageX - sx;
     if (Math.abs(dx) > 5) moved = true;
-    track.style.transform = 'translateX(' + dx + 'px)';
+    track.style.transform = 'translateX(' + (dragBaseOffset + dx) + 'px)';
   });
   document.addEventListener('mouseup', function() {
     if (!dragging) return;
     dragging = false;
     track.classList.remove('dragging');
     var s = step();
+    // dx > 0 means dragged right (prev), dx < 0 means dragged left (next)
+    // Total offset from original position (before prepend) = dx
+    // n = how many tiles to skip
     var n = Math.max(0, Math.round(Math.abs(dx) / s));
     if (n < 1 && Math.abs(dx) > s / 4) n = 1;
     if (n > count - 1) n = count - 1;
-    if (n > 0 && dx < 0) {
-      // Rotate n-1 tiles instantly, then animate last one
-      busy = true;
-      track.style.transition = 'none';
+
+    busy = true;
+    if (dx > 0 && n > 0) {
+      // Dragged RIGHT — go backward n tiles
+      // We already prepended 1 tile; need n-1 more prepends
+      for (var ci = 0; ci < n - 1; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+      // Snap animate to 0
+      void track.offsetWidth;
+      track.style.transition = 'transform .35s ease';
+      track.style.transform = 'translateX(0)';
+    } else if (dx < 0 && n > 0) {
+      // Dragged LEFT — go forward n tiles
+      // Undo the prepend first: move first back to end
+      track.appendChild(track.children[0]);
+      // Rotate n-1 more
       for (var ci = 0; ci < n - 1; ci++) track.appendChild(track.children[0]);
+      // Current visual offset = dx (negative), set that and animate to -step then snap
       track.style.transform = 'translateX(0)';
       void track.offsetWidth;
-      // Animate last step
       track.style.transition = 'transform .35s ease';
       track.style.transform = 'translateX(' + (-s) + 'px)';
-      function endN() { track.removeEventListener('transitionend', endN); track.style.transition = 'none'; track.appendChild(track.children[0]); track.style.transform = 'translateX(0)'; syncDots(); busy = false; }
-      track.addEventListener('transitionend', endN);
-      setTimeout(function() { if (busy) endN(); }, 400);
-    } else if (n > 0 && dx > 0) {
-      busy = true;
-      var wrapper = track.parentElement;
-      track.style.transition = 'none';
-      for (var ci = 0; ci < n; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-      track.style.transform = 'translateX(' + (-s) + 'px)';
-      wrapper.classList.add('sliding-prev');
-      void track.offsetWidth;
-      track.style.transition = 'transform .35s ease';
-      track.style.transform = 'translateX(0)';
-      function endP() { track.removeEventListener('transitionend', endP); track.style.transition = 'none'; wrapper.classList.remove('sliding-prev'); syncDots(); busy = false; }
-      track.addEventListener('transitionend', endP);
-      setTimeout(function() { if (busy) endP(); }, 400);
     } else {
-      track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)';
+      // Snap back — undo prepend
+      track.style.transition = 'transform .25s ease';
+      track.style.transform = 'translateX(' + dragBaseOffset + 'px)';
     }
+
+    function endDrag() {
+      track.removeEventListener('transitionend', endDrag);
+      track.style.transition = 'none';
+      track.parentElement.classList.remove('sliding-prev');
+      if (dx < 0 && n > 0) {
+        // Final rotate for slideNext
+        track.appendChild(track.children[0]);
+      } else if (!(dx > 0 && n > 0)) {
+        // Undo prepend if snapped back
+        track.appendChild(track.children[0]);
+      }
+      track.style.transform = 'translateX(0)';
+      syncDots();
+      busy = false;
+    }
+    track.addEventListener('transitionend', endDrag);
+    setTimeout(function() { if (busy) endDrag(); }, 400);
+
     if (moved) {
       track.addEventListener('click', function block(e) {
         e.stopPropagation(); e.preventDefault();
