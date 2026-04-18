@@ -1240,24 +1240,27 @@
     if (busy) return;
     busy = true;
     var s = step();
-    // 1. Instantly shift left by one tile width (hide the move)
+    // 1. Hide track during setup
+    track.style.visibility = 'hidden';
     track.style.transition = 'none';
-    track.style.transform = 'translateX(' + (-s) + 'px)';
-    // 2. Move last tile to front (DOM stays visually same because of offset)
+    // 2. Move last tile to front
     track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-    // 3. Force layout flush
-    void track.offsetWidth;
-    // 4. Animate back to 0 (tile slides in from left)
-    track.style.transition = 'transform .45s ease';
-    track.style.transform = 'translateX(0)';
-    function end() {
-      track.removeEventListener('transitionend', end);
-      track.style.transition = 'none';
-      syncDots();
-      busy = false;
-    }
-    track.addEventListener('transitionend', end);
-    setTimeout(function() { if (busy) end(); }, 500);
+    // 3. Set starting position (new tile is off-screen left)
+    track.style.transform = 'translateX(' + s + 'px)';
+    // 4. Wait for paint, then show and animate
+    requestAnimationFrame(function() {
+      track.style.visibility = '';
+      track.style.transition = 'transform .45s ease';
+      track.style.transform = 'translateX(0)';
+      function end() {
+        track.removeEventListener('transitionend', end);
+        track.style.transition = 'none';
+        syncDots();
+        busy = false;
+      }
+      track.addEventListener('transitionend', end);
+      setTimeout(function() { if (busy) end(); }, 500);
+    });
   }
 
   function goTo(idx) {
