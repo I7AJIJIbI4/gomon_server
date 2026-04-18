@@ -1283,8 +1283,8 @@
     dragging = false;
     track.classList.remove('dragging');
     var s = step();
-    if (dx < -s / 3) { track.style.transform = 'translateX(0)'; slideNext(); }
-    else if (dx > s / 3) { track.style.transform = 'translateX(0)'; slidePrev(); }
+    if (dx < -s / 3) { slideNext(); }
+    else if (dx > s / 3) { slidePrev(); }
     else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
     if (moved) {
       track.addEventListener('click', function block(e) {
@@ -1300,7 +1300,6 @@
   wrap.addEventListener('touchmove', function(e) { track.style.transform = 'translateX(' + (e.touches[0].clientX - tx) + 'px)'; }, {passive:true});
   wrap.addEventListener('touchend', function(e) {
     var d = e.changedTouches[0].clientX - tx;
-    track.style.transform = 'translateX(0)';
     if (d < -step() / 3) slideNext();
     else if (d > step() / 3) slidePrev();
     else { track.style.transition = 'transform .3s ease'; track.style.transform = 'translateX(0)'; }
