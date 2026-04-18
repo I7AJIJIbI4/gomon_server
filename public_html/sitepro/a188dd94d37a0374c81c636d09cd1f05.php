@@ -331,8 +331,9 @@
   .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; }
   .deals-track { display: flex; gap: 16px; cursor: grab; user-select: none; -webkit-user-select: none; }
   .deals-track.dragging { cursor: grabbing; }
-  .deals-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; padding-bottom: 8px; }
-  .deals-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; }
+  .deals-dots { display: flex; justify-content: center; gap: 4px; margin-top: 16px; padding-bottom: 8px; }
+  .deals-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; padding: 0; box-sizing: content-box; position: relative; }
+  .deals-dot::before { content: ''; position: absolute; inset: -8px; }
   .deals-dot.active { background: rgba(184,149,90,0.7); transform: scale(1.3); }
   .deal-tile { flex-shrink: 0; width: 240px; background: var(--surface-card); border: 1px solid var(--border-gold); padding: 24px 20px; position: relative; overflow: hidden; transition: border-color 0.3s ease, background 0.3s ease; cursor: pointer; text-decoration: none; display: block; }
   .deal-tile.featured { border-color: var(--border-gold-xl); }
@@ -1266,45 +1267,28 @@
     if (busy) return;
     var cur = +track.children[1].dataset.origIdx;
     if (cur === idx) return;
-    // Find shortest direction
     var fwd = (idx - cur + count) % count;
     var bck = (cur - idx + count) % count;
-    busy = true;
-    track.style.transition = 'none';
     if (fwd <= bck) {
-      // Go forward: rotate all-but-last instantly, animate last step
-      for (var ci = 0; ci < fwd - 1; ci++) track.appendChild(track.children[0]);
-      setBase();
-      void track.offsetWidth;
-      track.style.transition = 'transform .4s ease';
-      track.style.transform = 'translateX(' + (-2 * s()) + 'px)';
-      function endF() {
-        track.removeEventListener('transitionend', endF);
-        track.style.transition = 'none';
-        track.appendChild(track.children[0]);
-        setBase();
-        syncDots();
-        busy = false;
+      for (var ci = 0; ci < fwd; ci++) {
+        if (ci < fwd - 1) {
+          track.style.transition = 'none';
+          track.appendChild(track.children[0]);
+          setBase();
+        } else {
+          slideNext();
+        }
       }
-      track.addEventListener('transitionend', endF);
-      setTimeout(function() { if (busy) endF(); }, 450);
     } else {
-      // Go backward: rotate all-but-last instantly, animate last step
-      for (var ci = 0; ci < bck - 1; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-      setBase();
-      void track.offsetWidth;
-      track.style.transition = 'transform .4s ease';
-      track.style.transform = 'translateX(0)';
-      function endB() {
-        track.removeEventListener('transitionend', endB);
-        track.style.transition = 'none';
-        track.insertBefore(track.children[track.children.length - 1], track.children[0]);
-        setBase();
-        syncDots();
-        busy = false;
+      for (var ci = 0; ci < bck; ci++) {
+        if (ci < bck - 1) {
+          track.style.transition = 'none';
+          track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+          setBase();
+        } else {
+          slidePrev();
+        }
       }
-      track.addEventListener('transitionend', endB);
-      setTimeout(function() { if (busy) endB(); }, 450);
     }
   }
 
