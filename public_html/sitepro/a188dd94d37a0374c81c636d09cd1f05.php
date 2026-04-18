@@ -1264,15 +1264,48 @@
 
   function goTo(idx) {
     if (busy) return;
-    // Rotate until children[1] has origIdx === idx
-    var safety = 0;
-    while (+track.children[1].dataset.origIdx !== idx && safety < count) {
-      track.appendChild(track.children[0]);
-      safety++;
-    }
+    var cur = +track.children[1].dataset.origIdx;
+    if (cur === idx) return;
+    // Find shortest direction
+    var fwd = (idx - cur + count) % count;
+    var bck = (cur - idx + count) % count;
+    busy = true;
     track.style.transition = 'none';
-    setBase();
-    syncDots();
+    if (fwd <= bck) {
+      // Go forward: rotate all-but-last instantly, animate last step
+      for (var ci = 0; ci < fwd - 1; ci++) track.appendChild(track.children[0]);
+      setBase();
+      void track.offsetWidth;
+      track.style.transition = 'transform .4s ease';
+      track.style.transform = 'translateX(' + (-2 * s()) + 'px)';
+      function endF() {
+        track.removeEventListener('transitionend', endF);
+        track.style.transition = 'none';
+        track.appendChild(track.children[0]);
+        setBase();
+        syncDots();
+        busy = false;
+      }
+      track.addEventListener('transitionend', endF);
+      setTimeout(function() { if (busy) endF(); }, 450);
+    } else {
+      // Go backward: rotate all-but-last instantly, animate last step
+      for (var ci = 0; ci < bck - 1; ci++) track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+      setBase();
+      void track.offsetWidth;
+      track.style.transition = 'transform .4s ease';
+      track.style.transform = 'translateX(0)';
+      function endB() {
+        track.removeEventListener('transitionend', endB);
+        track.style.transition = 'none';
+        track.insertBefore(track.children[track.children.length - 1], track.children[0]);
+        setBase();
+        syncDots();
+        busy = false;
+      }
+      track.addEventListener('transitionend', endB);
+      setTimeout(function() { if (busy) endB(); }, 450);
+    }
   }
 
   // Mouse drag
