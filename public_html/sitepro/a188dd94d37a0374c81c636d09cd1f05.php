@@ -331,10 +331,11 @@
   .deals-scroll { position: relative; overflow: hidden; margin-top: 36px; padding-bottom: 12px; }
   .deals-track { display: flex; gap: 16px; cursor: grab; user-select: none; -webkit-user-select: none; }
   .deals-track.dragging { cursor: grabbing; }
-  .deals-dots { display: flex; justify-content: center; gap: 4px; margin-top: 16px; padding-bottom: 8px; }
-  .deals-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: background 0.3s, transform 0.3s; padding: 0; box-sizing: content-box; position: relative; }
-  .deals-dot::before { content: ''; position: absolute; inset: -8px; }
-  .deals-dot.active { background: rgba(184,149,90,0.7); transform: scale(1.3); }
+  .deals-dots { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 20px; padding-bottom: 8px; }
+  .deals-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(184,149,90,0.2); border: 1px solid rgba(184,149,90,0.3); cursor: pointer; transition: all 0.3s ease; position: relative; }
+  .deals-dot::before { content: ''; position: absolute; inset: -10px; }
+  .deals-dot:hover { background: rgba(184,149,90,0.4); }
+  .deals-dot.active { width: 12px; height: 12px; background: rgba(184,149,90,0.8); border-color: rgba(184,149,90,0.6); }
   .deal-tile { flex-shrink: 0; width: 240px; background: var(--surface-card); border: 1px solid var(--border-gold); padding: 24px 20px; position: relative; overflow: hidden; transition: border-color 0.3s ease, background 0.3s ease; cursor: pointer; text-decoration: none; display: block; }
   .deal-tile.featured { border-color: var(--border-gold-xl); }
   .deal-tile::after { content: ''; position: absolute; bottom: 0; right: 0; width: 80px; height: 80px; background: radial-gradient(circle at bottom right, rgba(184,149,90,0.07), transparent 70%); }
