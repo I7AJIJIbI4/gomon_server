@@ -1626,6 +1626,60 @@ def admin_month_visits():
     visits.sort(key=lambda x: x['date'], reverse=True)
     return jsonify({'visits': visits})
 
+@app.route('/api/admin/sync-prices', methods=['POST'])
+@require_full_admin
+def admin_sync_prices():
+    """Sync prices FROM WLaunch → our prices.json (update prices only, keep structure)."""
+    try:
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        from wlaunch_api import get_branch_id, HEADERS as WL_HEADERS
+        bid = get_branch_id()
+
+        # Fetch all active WLaunch services with prices
+        url = '{}/company/{}/branch/{}/service'.format(WLAUNCH_API_URL, COMPANY_ID, bid)
+        groups = _req.get(url, headers=WL_HEADERS, params={'active': 'true', 'type': 'GROUP', 'parentId': 'root', 'page': 0, 'size': 100}, timeout=15).json().get('content', [])
+
+        wl_prices = {}  # name -> price in UAH
+        for g in groups:
+            kids = _req.get(url, headers=WL_HEADERS, params={'active': 'true', 'parentId': g['id'], 'page': 0, 'size': 200}, timeout=15).json().get('content', [])
+            for k in kids:
+                sid = k['id']
+                pr = _req.get('{}/company/{}/service/{}/prices'.format(WLAUNCH_API_URL, COMPANY_ID, sid), headers=WL_HEADERS, timeout=10)
+                if pr.status_code == 200:
+                    prices_data = pr.json().get('content', [])
+                    if prices_data:
+                        amount_kopiyky = prices_data[0].get('amount', 0)
+                        wl_prices[k['name']] = amount_kopiyky // 100  # kopiyky → UAH
+
+        # Update our prices.json
+        with open(PRICES_PATH, 'r', encoding='utf-8') as f:
+            our_prices = json.load(f)
+
+        updated = 0
+        for cat in our_prices:
+            for item in cat.get('items', []):
+                name = item.get('name', '')
+                if name in wl_prices:
+                    wl_uah = wl_prices[name]
+                    if wl_uah > 0:
+                        new_price = '\u20b4 {}'.format(wl_uah)
+                        if item.get('price', '') != new_price:
+                            item['price'] = new_price
+                            updated += 1
+
+        if updated:
+            import tempfile
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(PRICES_PATH), suffix='.json')
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
+                json.dump(our_prices, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, PRICES_PATH)
+
+        return jsonify({'ok': True, 'updated': updated, 'wl_services': len(wl_prices)})
+    except Exception as e:
+        logger.error('admin_sync_prices error: {}'.format(e))
+        return jsonify({'error': 'sync_failed'}), 500
+
+
 @app.route('/api/admin/sync', methods=['POST'])
 @require_admin
 def admin_sync():
@@ -2658,6 +2712,17 @@ def admin_prices_put():
     for cat in data:
         if not isinstance(cat, dict) or 'cat' not in cat or 'items' not in cat:
             return jsonify({'error': 'invalid_format'}), 400
+    # Load old prices for diff
+    old_prices = {}
+    try:
+        with open(PRICES_PATH, 'r', encoding='utf-8') as f:
+            old_data = json.load(f)
+        for cat in (old_data if isinstance(old_data, list) else []):
+            for item in cat.get('items', []):
+                old_prices[item.get('name', '')] = item.get('price', '')
+    except Exception:
+        pass
+
     try:
         import tempfile
         tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(PRICES_PATH), suffix='.json')
@@ -2668,10 +2733,96 @@ def admin_prices_put():
         except Exception:
             os.unlink(tmp_path)
             raise
+
+        # Sync changes to WLaunch in background
+        import threading
+        new_prices = {}
+        for cat in data:
+            for item in cat.get('items', []):
+                new_prices[item.get('name', '')] = item.get('price', '')
+        if new_prices != old_prices:
+            threading.Thread(target=_sync_prices_to_wlaunch, args=(old_prices, new_prices), daemon=True).start()
+
         return jsonify({'ok': True})
     except Exception as e:
         logger.error('admin_prices_put error: {}'.format(e))
         return jsonify({'error': 'write_failed'}), 500
+
+
+def _parse_price_uah(price_str):
+    """Extract numeric UAH price from string like '₴ 1400' or 'від 7000 грн'. Returns kopiyky (int) or None."""
+    import re
+    if not price_str or 'безкоштовно' in str(price_str).lower():
+        return 0
+    s = str(price_str).replace('\u20b4', '').replace('грн', '').replace('від', '').strip()
+    s = s.replace(' ', '')
+    m = re.search(r'\d+', s)
+    return int(m.group()) * 100 if m else None  # kopiyky
+
+
+def _sync_prices_to_wlaunch(old_prices, new_prices):
+    """Background sync: push price changes to WLaunch."""
+    try:
+        from config import WLAUNCH_API_URL, COMPANY_ID
+        from wlaunch_api import get_branch_id, HEADERS as WL_HEADERS
+        bid = get_branch_id()
+        if not bid:
+            return
+        h = dict(WL_HEADERS, **{'Content-Type': 'application/json'})
+
+        # Fetch all WLaunch services
+        wl_url = '{}/company/{}/service'.format(WLAUNCH_API_URL, COMPANY_ID)
+        resp = _req.get(wl_url, headers=WL_HEADERS, params={'page': 0, 'size': 500}, timeout=15)
+        wl_by_name = {}
+        for s in resp.json().get('content', []):
+            if s.get('active'):
+                wl_by_name[s['name']] = s
+
+        # Get price list ID (from first service that has a price)
+        price_list_id = '3f31ae76-0b21-11ed-8355-65920565acdd'  # known from API
+
+        added = renamed = price_changed = 0
+
+        for name, price_str in new_prices.items():
+            old_price_str = old_prices.get(name)
+
+            if name in wl_by_name:
+                # Service exists — check if price changed
+                if old_price_str != price_str:
+                    amount = _parse_price_uah(price_str)
+                    if amount is not None:
+                        sid = wl_by_name[name]['id']
+                        _req.put('{}/company/{}/service/prices'.format(WLAUNCH_API_URL, COMPANY_ID),
+                            headers=h, json={'prices': [{'service_id': sid, 'amount': amount, 'service_price_list_id': price_list_id}]}, timeout=10)
+                        price_changed += 1
+            else:
+                # New service — find category parent, create in WLaunch
+                # Skip for now — manual creation preferred to avoid orphans
+                added += 1
+
+        # Check for renamed services (old name gone, new name appeared with same price)
+        removed_names = set(old_prices.keys()) - set(new_prices.keys())
+        added_names = set(new_prices.keys()) - set(old_prices.keys())
+        for old_name in removed_names:
+            for new_name in list(added_names):
+                if old_prices.get(old_name) == new_prices.get(new_name) and old_name in wl_by_name:
+                    sid = wl_by_name[old_name]['id']
+                    _req.post('{}/company/{}/service/{}'.format(WLAUNCH_API_URL, COMPANY_ID, sid),
+                        headers=h, json={'company_service': {'name': new_name}}, timeout=10)
+                    added_names.discard(new_name)
+                    renamed += 1
+                    break
+
+        # Deactivate removed services
+        for old_name in removed_names:
+            if old_name in wl_by_name and old_name not in new_prices:
+                sid = wl_by_name[old_name]['id']
+                _req.post('{}/company/{}/service/{}'.format(WLAUNCH_API_URL, COMPANY_ID, sid),
+                    headers=h, json={'company_service': {'active': False}}, timeout=10)
+
+        logger.info('WLaunch sync: prices_changed={} renamed={} new={}'.format(price_changed, renamed, added))
+    except Exception as e:
+        logger.error('_sync_prices_to_wlaunch error: {}'.format(e))
 
 # ── AI intent helpers ──
 _ai_clients_cache = []
