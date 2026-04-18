@@ -1301,13 +1301,16 @@
     if (!isDragging) return;
     isDragging = false;
     wrap.classList.remove('dragging');
-    track.classList.remove('no-transition');
     var threshold = tw() / 3;
     if (dragOffset < -threshold) {
+      // Reset to 0 instantly, then slideNext handles animation
+      setOffset(0, false);
       slideNext();
     } else if (dragOffset > threshold) {
+      setOffset(0, false);
       slidePrev();
     } else {
+      track.classList.remove('no-transition');
       setOffset(0, true);
     }
     if (moved) {
@@ -1332,10 +1335,16 @@
   }, { passive: true });
   wrap.addEventListener('touchend', function(e) {
     var dx = e.changedTouches[0].clientX - touchStartX;
-    track.classList.remove('no-transition');
-    if (dx < -tw() / 3) slideNext();
-    else if (dx > tw() / 3) slidePrev();
-    else setOffset(0, true);
+    if (dx < -tw() / 3) {
+      setOffset(0, false);
+      slideNext();
+    } else if (dx > tw() / 3) {
+      setOffset(0, false);
+      slidePrev();
+    } else {
+      track.classList.remove('no-transition');
+      setOffset(0, true);
+    }
     setTimeout(startAuto, 3000);
   });
 
