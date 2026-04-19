@@ -487,9 +487,16 @@ def fmt_specialist_new_appt(appt):
 
 def fmt_admin_tomorrow_line(appt):
     """Один рядок для адмін-дайджесту завтрашніх записів.
-    Формат: {date} о {time} «{service}». {name}, {phone}, {notes}"""
+    Формат: {date} о {time} «{service}». {name}, +380XXXXXXXXX, {notes}"""
     v = _appt_vars(appt)
-    phone_display = (appt.get('client_phone') or '').replace('380', '0', 1) if appt.get('client_phone') else ''
+    raw_phone = appt.get('client_phone') or ''
+    # Format as +380... for TG auto-linking
+    if raw_phone.startswith('380'):
+        phone_display = '+' + raw_phone
+    elif raw_phone.startswith('0'):
+        phone_display = '+38' + raw_phone
+    else:
+        phone_display = raw_phone
     notes = (appt.get('notes') or '').strip()
     line = '{date_short} о {time} «{service}». {first_name}, {phone}'.format(
         phone=phone_display, **v)
