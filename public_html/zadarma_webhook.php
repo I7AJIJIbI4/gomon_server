@@ -25,18 +25,26 @@ $config = [
     'main_phone'     => ZADARMA_PHONE,
 ];
 
-// Signature verification — reject unsigned/forged requests
+// Signature verification
 $zd_signature = $_SERVER['HTTP_SIGNATURE'] ?? '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debug: log signature details
+    $debug_log = '/var/log/gomon/webhook.log';
+    $ts = date('Y-m-d H:i:s');
+    file_put_contents($debug_log, "[$ts] POST sig='$zd_signature' input_len=" . strlen($input) . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '') . "\n", FILE_APPEND);
+
     if (!$zd_signature) {
+        file_put_contents($debug_log, "[$ts] REJECTED: Missing signature\n", FILE_APPEND);
         http_response_code(403);
         exit(json_encode(['error' => 'Missing signature']));
     }
     $expected = base64_encode(hash_hmac('sha1', $input, $config['zadarma_secret']));
     if (!hash_equals($expected, $zd_signature)) {
+        file_put_contents($debug_log, "[$ts] REJECTED: sig mismatch. expected=$expected got=$zd_signature\n", FILE_APPEND);
         http_response_code(403);
         exit(json_encode(['error' => 'Invalid signature']));
     }
+    file_put_contents($debug_log, "[$ts] OK: signature valid\n", FILE_APPEND);
 }
 
 // Логування у файл
