@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Kyiv');
 /**
  * callback_request_handler.php - Обробка заявки на зворотній зв'язок
  * Розташування: /home/gomoncli/public_html/callback_request_handler.php
@@ -224,31 +225,35 @@ function sendCallbackTelegram($caller_id, $client) {
     callbackLog("📨 Telegram: " . str_replace("\n", " | ", strip_tags($text)));
 
     $url     = "https://api.telegram.org/bot{$callback_config['tg_bot_token']}/sendMessage";
-    $payload = json_encode([
-        'chat_id'    => $callback_config['tg_chat_id'],
-        'text'       => $text,
-        'parse_mode' => 'HTML',
-    ]);
-
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode !== 200) {
-        callbackLog("❌ Telegram HTTP $httpCode: $response");
-        return false;
+    // Send to admin + doctor
+    $chat_ids = [$callback_config['tg_chat_id'], '827551951'];
+    $ok = false;
+    foreach ($chat_ids as $cid) {
+        $payload = json_encode([
+            'chat_id'    => $cid,
+            'text'       => $text,
+            'parse_mode' => 'HTML',
+        ]);
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode === 200) {
+            $ok = true;
+        } else {
+            callbackLog("❌ Telegram HTTP $httpCode to $cid: $response");
+        }
     }
-    callbackLog("✅ Telegram відправлено");
-    return true;
+    callbackLog($ok ? "✅ Telegram відправлено" : "❌ Telegram помилка");
+    return $ok;
 }
 
 
