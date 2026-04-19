@@ -1959,7 +1959,7 @@ async function loadPrices() {
 
 
 /* ── ADMIN ── */
-const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-clients','admin-chat'];
+const ADMIN_SCREENS = ['admin-home','admin-appts','admin-price','admin-clients','admin-chat','admin-notif'];
 let adminRole = null;
 let adminSpecialist = null;
 
@@ -2037,6 +2037,9 @@ function adminGo(id) {
     _startMsgPoll();
   } else {
     _stopMsgPoll();
+  }
+  if (id === 'admin-notif') {
+    _renderNotifScreen();
   }
 }
 
@@ -4500,6 +4503,87 @@ function renderSuperadminPanel() {
   el.innerHTML = html;
 }
 
+/* ── SUPERADMIN NOTIFICATIONS SCREEN ── */
+var _notifTypes = [
+  {group:'Клієнтам',items:[
+    {key:'reminder_24h',icon:'\uD83D\uDD14',label:'Нагадування за 24 год',channels:'Push + TG + SMS'},
+    {key:'post_visit',icon:'\uD83D\uDCAC',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)'},
+    {key:'repeat_proc',icon:'\uD83D\uDD04',label:'Повторні процедури',channels:'TG \u2192 SMS fallback'},
+    {key:'cancellation',icon:'\u274C',label:'Скасування запису',channels:'Push + TG + SMS'},
+    {key:'cashback_accrued',icon:'\uD83D\uDCB0',label:'Кешбек нараховано',channels:'Push'},
+    {key:'cashback_redeemed',icon:'\uD83D\uDCB0',label:'Кешбек списано',channels:'Push + TG + SMS'},
+    {key:'cashback_500',icon:'\uD83D\uDCB0',label:'Кешбек 500 грн досягнуто',channels:'Push'}
+  ]},
+  {group:'Спеціалістам',items:[
+    {key:'spec_new_appt',icon:'\uD83D\uDC69\u200D\u2695\uFE0F',label:'Нові записи',channels:'TG'},
+    {key:'spec_briefing',icon:'\uD83D\uDCCB',label:'Брифінг на завтра (21:05)',channels:'TG'},
+    {key:'spec_photo',icon:'\uD83D\uDCF7',label:'Фото папки (21:00)',channels:'TG'}
+  ]},
+  {group:'Адміну',items:[
+    {key:'admin_report',icon:'\uD83D\uDCCA',label:'Щоденний звіт (22:10)',channels:'TG'},
+    {key:'admin_health',icon:'\uD83D\uDD34',label:'Health check алерти',channels:'TG'},
+    {key:'admin_callback',icon:'\uD83D\uDCDE',label:'Заявки на зворотній зв\'язок',channels:'TG'}
+  ]}
+];
+
+function _getNotifState() {
+  try { return JSON.parse(localStorage.getItem('gomon_notif_toggles')||'{}'); } catch(e) { return {}; }
+}
+
+function _toggleNotif(key) {
+  var state = _getNotifState();
+  // Default is ON (true=on), toggle flips it
+  var current = state[key] !== false;
+  state[key] = !current;
+  localStorage.setItem('gomon_notif_toggles', JSON.stringify(state));
+  showToast('Буде реалізовано');
+  _renderNotifScreen();
+}
+
+function _renderNotifScreen() {
+  var el = document.getElementById('notif-list-content');
+  if (!el) return;
+  var state = _getNotifState();
+  var html = '';
+  _notifTypes.forEach(function(g) {
+    html += '<div style="margin-bottom:20px">';
+    html += '<div style="font-family:var(--serif);font-size:17px;color:var(--gold-pale);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">' + _esc(g.group) + '</div>';
+    g.items.forEach(function(item) {
+      var isOn = state[item.key] !== false; // default ON
+      var toggleBg = isOn ? 'rgba(29,158,117,.35)' : 'rgba(226,75,74,.2)';
+      var toggleDot = isOn ? 'rgba(29,158,117,1)' : 'rgba(226,75,74,.7)';
+      var togglePos = isOn ? '22px' : '2px';
+      var statusText = isOn ? 'ON' : 'OFF';
+      var statusColor = isOn ? '#1D9E75' : '#E24B4A';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:15px;color:var(--text)">' + item.icon + ' ' + _esc(item.label) + '</div>';
+      html += '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + _esc(item.channels) + '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
+      html += '<span style="font-size:11px;font-weight:500;color:'+statusColor+'">'+statusText+'</span>';
+      html += '<div onclick="_toggleNotif(\''+item.key+'\')" style="width:42px;height:24px;border-radius:12px;background:'+toggleBg+';position:relative;cursor:pointer;transition:background .2s">';
+      html += '<div style="width:20px;height:20px;border-radius:50%;background:'+toggleDot+';position:absolute;top:2px;left:'+togglePos+';transition:left .2s"></div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function _replaceChatWithNotifNav() {
+  // Replace Chat nav buttons with Notifications for superadmin
+  document.querySelectorAll('.admin-nav .nav-btn').forEach(function(btn) {
+    var onclick = btn.getAttribute('onclick') || '';
+    if (onclick.includes("'admin-chat'")) {
+      btn.setAttribute('onclick', "adminGo('admin-notif')");
+      btn.innerHTML = '<svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="' + (btn.classList.contains('active') ? 'var(--gold)' : 'var(--text2)') + '" stroke-width="1.2"><path d="M13.73 21a2 2 0 01-3.46 0"/><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg><span class="nav-label"' + (btn.classList.contains('active') ? ' style="color:var(--gold)"' : '') + '>Сповіщення</span>';
+    }
+  });
+}
+
 function _openSpecialistAiChat() {
   if (window.GomonChat) {
     GomonChat.open();
@@ -4704,6 +4788,7 @@ async function afterLogin() {
     if (user.phone === '380375840375' || user.phone === '0375840375') {
       adminGo('admin-home');
       loadSuperadminPanel();
+      _replaceChatWithNotifNav();
       setTimeout(initPush, 1500);
       return;
     }
@@ -6053,6 +6138,21 @@ document.addEventListener('keydown', function(e) {
     <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
     <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
     <button class="nav-btn active" onclick="adminGo('admin-chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label" style="color:var(--gold)">Чат</span></button>
+  </nav>
+</div>
+
+<!-- ══ ADMIN NOTIFICATIONS (superadmin only) ══ -->
+<div class="screen" id="screen-admin-notif">
+  <div class="screen-header-row">
+    <h2>Сповіщення</h2>
+  </div>
+  <div class="screen-scroll" style="padding:0 20px 100px" id="notif-list-content"></div>
+  <nav class="admin-nav">
+    <button class="nav-btn" onclick="adminGo('admin-home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-appts')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label">Календар</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-clients')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="8" r="4"/><path d="M3 19c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="nav-label">Клієнти</span></button>
+    <button class="nav-btn" onclick="adminGo('admin-price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 6h14M4 11h14M4 16h8"/></svg><span class="nav-label">Процедури</span></button>
+    <button class="nav-btn active" onclick="adminGo('admin-notif')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><path d="M13.73 21a2 2 0 01-3.46 0"/><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg><span class="nav-label" style="color:var(--gold)">Сповіщення</span></button>
   </nav>
 </div>
 
