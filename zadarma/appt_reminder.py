@@ -483,14 +483,9 @@ def run_specialist_notifications(dry_run=False):
 
     sent = skipped = failed = 0
 
-    # Лікар Вікторія не хоче отримувати сповіщення про нові записи
-    SKIP_SPECIALIST_NOTIFY = {'victoria'}
-
     for appt in appts:
         if not appt.get('specialist'):
             logger.warning('  skip: немає спеціаліста для запису id={}'.format(appt.get('id')))
-            continue
-        if appt.get('specialist') in SKIP_SPECIALIST_NOTIFY:
             continue
 
         logger.info('  → id={} | {} | {} | {} о {} | spec={}'.format(

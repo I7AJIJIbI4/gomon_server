@@ -46,8 +46,8 @@ LOG_FILE = '/home/gomoncli/zadarma/sms_reminder.log'
 
 # Telegram: кому надсилати звіти (з config.py)
 from config import ADMIN_USER_IDS, ADMIN_USER_ID
-NOTIFY_ALL   = ADMIN_USER_IDS[:2]  # samydoma, DrGomon — підсумки
-NOTIFY_ADMIN = [ADMIN_USER_ID]     # samydoma — помилки
+NOTIFY_ALL   = [ADMIN_USER_ID]     # тільки адмін (0933297777) — підсумки
+NOTIFY_ADMIN = [ADMIN_USER_ID]     # тільки адмін — помилки
 
 # =============================================================================
 # КОНФІГУРАЦІЯ ІНТЕРВАЛІВ (днів до наступної процедури)
