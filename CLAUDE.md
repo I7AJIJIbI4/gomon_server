@@ -480,6 +480,33 @@ navigator.serviceWorker.addEventListener('message', e => {
 2. `systemctl status gomon-api` — сервіс активний
 3. SW версія збільшена → браузери отримають оновлення
 
+### При аудитах ОБОВ'ЯЗКОВО перевіряти:
+
+**Інфраструктура (nginx, DNS, SSL):**
+1. **Webhooks по HTTP**: `curl -X POST http://drgomon.beauty/zadarma_webhook.php` — POST має працювати без redirect (Zadarma, WLaunch, WayForPay шлють по HTTP)
+2. **Certbot if-блоки**: перевірити що `if ($host)` redirect в nginx не перехоплює webhook location blocks
+3. **nginx access.log**: `grep "webhook\|callback" /var/log/nginx/access.log | tail` — чи приходять запити і який HTTP код
+4. **File permissions**: `ls -la private_data/prices.json` — www-data повинен мати доступ (644, не 600)
+5. **Symlinks**: `/home/gomoncli/ → /opt/gomon/app/` — перевірити що не зламаний
+
+**Сервіси та cron:**
+6. **Systemd**: `systemctl is-active gomon-api gomon-bot gomon-tgbiz` — всі три active
+7. **Cron**: `crontab -l | grep -v "^#"` — всі записи валідні, шляхи правильні
+8. **Порти**: `ss -tlnp | grep -E "5001|80|443"` — gunicorn на 5001, nginx на 80/443
+9. **PHP-FPM**: `systemctl is-active php*-fpm` — PHP обробляє .php файли
+
+**Зовнішні інтеграції (перевірити реальними запитами):**
+10. **Zadarma webhook**: зателефонувати і натиснути кнопку IVR — перевірити лог
+11. **WayForPay callback**: створити тестовий платіж — перевірити що callback приходить
+12. **WLaunch sync**: `python3 sync_appointments.py` — перевірити що працює без помилок
+13. **TG bot**: надіслати /help — перевірити відповідь
+14. **TG Business**: написати в DM @DrGomonCosmetology — AI відповідає
+
+**Дані та БД:**
+15. **prices.json readable**: `curl -s https://drgomon.beauty/sitepro/modal_prices.php | head -c 50` — не порожній `{}`
+16. **promos.json**: `curl -s https://drgomon.beauty/promos.php | head -c 50` — не порожній
+17. **SQLite locks**: `fuser zadarma/users.db` — ніхто не тримає lock
+
 ---
 
 ## Конфіденційні файли (НЕ в git)
