@@ -610,14 +610,87 @@ def check_and_send_reminders(dry_run=False):
 
     logger.info('✅ Готово: відправлено={sent}, пропущено={skipped}, помилок={errors}'.format(**stats))
     log_run(stats, current_hour)
-    notify_telegram(stats, sent_details, error_details, dry_run)
+
+    # Save sent details to daily log file (for daily summary at 22:10)
+    if sent_details or error_details:
+        daily_log = '/tmp/sms_reminder_daily.json'
+        existing = []
+        try:
+            with open(daily_log, 'r') as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+        for phone, name, text, channel in sent_details:
+            existing.append({'phone': phone, 'name': name, 'text': text, 'channel': channel, 'time': kyiv_now().strftime('%H:%M'), 'status': 'sent'})
+        for phone, name, text, *_ in error_details:
+            existing.append({'phone': phone, 'name': name, 'text': text, 'channel': 'failed', 'time': kyiv_now().strftime('%H:%M'), 'status': 'error'})
+        try:
+            with open(daily_log, 'w') as f:
+                json.dump(existing, f, ensure_ascii=False)
+        except Exception:
+            pass
+
     return stats
+
+
+def send_daily_summary():
+    """Send daily summary of all reminders sent today. Called by cron at 22:10."""
+    from config import TELEGRAM_TOKEN
+    daily_log = '/tmp/sms_reminder_daily.json'
+    entries = []
+    try:
+        with open(daily_log, 'r') as f:
+            entries = json.load(f)
+    except Exception:
+        pass
+
+    now = kyiv_now().strftime('%d.%m.%Y')
+    sent = [e for e in entries if e.get('status') == 'sent']
+    errors = [e for e in entries if e.get('status') == 'error']
+
+    if not sent and not errors:
+        # Nothing sent today — silent
+        return
+
+    tg_count = sum(1 for e in sent if e.get('channel') == 'tg')
+    sms_count = sum(1 for e in sent if e.get('channel') == 'sms')
+
+    lines = ['📊 <b>Нагадування за {}</b>'.format(now), '']
+    for e in sent:
+        ch_icon = '💬' if e.get('channel') == 'tg' else '📱'
+        lines.append('{} {} <b>{}</b> ({})'.format(e.get('time', ''), ch_icon, e.get('phone', ''), e.get('name', '')))
+        lines.append('<i>{}</i>'.format(e.get('text', '')[:120]))
+        lines.append('')
+
+    lines.append('📊 Всього: <b>{}</b> (💬 TG: {} | 📱 SMS: {})'.format(len(sent), tg_count, sms_count))
+    if errors:
+        lines.append('⚠️ Помилок: {}'.format(len(errors)))
+        for e in errors:
+            lines.append('❌ {} — {}'.format(e.get('phone', ''), e.get('name', '')))
+
+    text = '\n'.join(lines)
+    for uid in NOTIFY_ALL:
+        _tg_send_long(uid, text, TELEGRAM_TOKEN)
+
+    # Clear daily log
+    try:
+        import os
+        os.remove(daily_log)
+    except Exception:
+        pass
+
+    logger.info('Daily summary sent: {} sent, {} errors'.format(len(sent), len(errors)))
 
 
 if __name__ == '__main__':
     import sys
     import os
     import fcntl
+
+    # Check for --daily-summary flag
+    if '--daily-summary' in sys.argv:
+        send_daily_summary()
+        sys.exit(0)
 
     # File lock to prevent overlapping runs
     _lock_fh = open('/tmp/sms_reminder.lock', 'w')
