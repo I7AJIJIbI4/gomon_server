@@ -4506,23 +4506,31 @@ function renderSuperadminPanel() {
 /* ── SUPERADMIN NOTIFICATIONS SCREEN ── */
 var _notifTypes = [
   {group:'Клієнтам',items:[
-    {key:'reminder_24h',icon:'\uD83D\uDD14',label:'Нагадування за 24 год',channels:'Push + TG + SMS'},
-    {key:'post_visit',icon:'\uD83D\uDCAC',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)'},
-    {key:'repeat_proc',icon:'\uD83D\uDD04',label:'Повторні процедури',channels:'TG \u2192 SMS fallback'},
-    {key:'cancellation',icon:'\u274C',label:'Скасування запису',channels:'Push + TG + SMS'},
-    {key:'cashback_accrued',icon:'\uD83D\uDCB0',label:'Кешбек нараховано',channels:'Push'},
-    {key:'cashback_redeemed',icon:'\uD83D\uDCB0',label:'Кешбек списано',channels:'Push + TG + SMS'},
-    {key:'cashback_500',icon:'\uD83D\uDCB0',label:'Кешбек 500 грн досягнуто',channels:'Push'}
+    {key:'reminder_24h',label:'Нагадування за 24 год',channels:'Push + TG + SMS'},
+    {key:'post_visit',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)'},
+    {key:'repeat_proc',label:'Повторні процедури',channels:'TG / SMS fallback'},
+    {key:'cancellation',label:'Скасування запису',channels:'Push + TG + SMS'},
+    {key:'cashback_accrued',label:'Кешбек нараховано',channels:'Push'},
+    {key:'cashback_redeemed',label:'Кешбек списано',channels:'Push + TG + SMS'},
+    {key:'cashback_500',label:'Кешбек 500 грн досягнуто',channels:'Push'}
   ]},
-  {group:'Спеціалістам',items:[
-    {key:'spec_new_appt',icon:'\uD83D\uDC69\u200D\u2695\uFE0F',label:'Нові записи',channels:'TG'},
-    {key:'spec_briefing',icon:'\uD83D\uDCCB',label:'Брифінг на завтра (21:05)',channels:'TG'},
-    {key:'spec_photo',icon:'\uD83D\uDCF7',label:'Фото папки (21:00)',channels:'TG'}
+  {group:'Спеціалісту (Анастасія)',items:[
+    {key:'spec_new_appt',label:'Нові записи клієнтів',channels:'TG'},
+    {key:'spec_briefing',label:'Брифінг записів на завтра',channels:'TG, 21:05'},
+    {key:'spec_photo',label:'Фото папки до/після',channels:'TG, 21:00'},
+    {key:'spec_cancel',label:'Скасування записів клієнтів',channels:'TG'}
+  ]},
+  {group:'Лікарю (Вікторія)',items:[
+    {key:'doc_briefing',label:'Брифінг всіх записів на завтра',channels:'TG, 21:05'},
+    {key:'doc_cancel',label:'Скасування записів клієнтів',channels:'TG'},
+    {key:'doc_callback',label:'Заявки на зворотній зв\'язок',channels:'TG'},
+    {key:'doc_photo',label:'Фото папки до/після',channels:'TG, 21:00'}
   ]},
   {group:'Адміну',items:[
-    {key:'admin_report',icon:'\uD83D\uDCCA',label:'Щоденний звіт (22:10)',channels:'TG'},
-    {key:'admin_health',icon:'\uD83D\uDD34',label:'Health check алерти',channels:'TG'},
-    {key:'admin_callback',icon:'\uD83D\uDCDE',label:'Заявки на зворотній зв\'язок',channels:'TG'}
+    {key:'admin_report',label:'Щоденний звіт повідомлень',channels:'TG, 22:10'},
+    {key:'admin_health',label:'Health check алерти',channels:'TG, кожні 5 хв'},
+    {key:'admin_callback',label:'Заявки на зворотній зв\'язок',channels:'TG'},
+    {key:'admin_sync',label:'Звіт синхронізації клієнтів',channels:'TG, 09:00 / 21:00'}
   ]}
 ];
 
@@ -4557,7 +4565,7 @@ function _renderNotifScreen() {
       var statusColor = isOn ? '#1D9E75' : '#E24B4A';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
       html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:15px;color:var(--text)">' + item.icon + ' ' + _esc(item.label) + '</div>';
+      html += '<div style="font-size:15px;color:var(--text)">' + _esc(item.label) + '</div>';
       html += '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + _esc(item.channels) + '</div>';
       html += '</div>';
       html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
