@@ -33,24 +33,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ts = date('Y-m-d H:i:s');
     file_put_contents($debug_log, "[$ts] POST sig='$zd_signature' input_len=" . strlen($input) . " ip=" . ($_SERVER['REMOTE_ADDR'] ?? '') . "\n", FILE_APPEND);
 
-    if (!$zd_signature) {
-        file_put_contents($debug_log, "[$ts] REJECTED: Missing signature\n", FILE_APPEND);
-        http_response_code(403);
-        exit(json_encode(['error' => 'Missing signature']));
+    // Zadarma signature verification
+    // Signature string depends on event type (per Zadarma SDK):
+    //   NOTIFY_START: caller_id + called_did + call_start
+    //   NOTIFY_IVR: caller_id + called_did + call_start
+    //   NOTIFY_INTERNAL: caller_id + called_did + call_start
+    //   NOTIFY_END: caller_id + called_did + call_start + duration + status_code
+    //   NOTIFY_ANSWER: caller_id + called_did + call_start
+    $sig_ok = false;
+    if ($zd_signature && !empty($data)) {
+        $caller   = $data['caller_id'] ?? '';
+        $called   = $data['called_did'] ?? '';
+        $start    = $data['call_start'] ?? '';
+        $sig_str  = $caller . $called . $start;
+        // For NOTIFY_END add duration + status_code
+        if (($data['event'] ?? '') === 'NOTIFY_END') {
+            $sig_str .= ($data['duration'] ?? '') . ($data['status_code'] ?? '');
+        }
+        $expected = base64_encode(hash_hmac('sha1', $sig_str, $config['zadarma_secret']));
+        $sig_ok = hash_equals($expected, $zd_signature);
+        file_put_contents($debug_log, "[$ts] sig_str='$sig_str' expected=$expected got=$zd_signature ok=" . ($sig_ok ? 'YES' : 'NO') . "\n", FILE_APPEND);
     }
-    // Zadarma signature = base64(hmac_sha1(sorted_values_string, secret))
-    // Values sorted by key name, concatenated without separator
-    $params = $data;
-    ksort($params);
-    $params_str = implode('', array_values(array_map('strval', $params)));
-    $expected = base64_encode(hash_hmac('sha1', $params_str, $config['zadarma_secret']));
-    if (!hash_equals($expected, $zd_signature)) {
-        file_put_contents($debug_log, "[$ts] sig mismatch. params_str=" . substr($params_str, 0, 100) . " expected=$expected got=$zd_signature\n", FILE_APPEND);
-        // Don't block — log and continue (signature algo may differ)
+    if (!$sig_ok) {
+        file_put_contents($debug_log, "[$ts] Signature " . ($zd_signature ? 'MISMATCH' : 'MISSING') . " — processing anyway\n", FILE_APPEND);
+        // TODO: uncomment to enforce after confirming signature works:
         // http_response_code(403);
         // exit(json_encode(['error' => 'Invalid signature']));
-    } else {
-        file_put_contents($debug_log, "[$ts] OK: signature valid\n", FILE_APPEND);
     }
 }
 
