@@ -693,8 +693,8 @@ navigator.serviceWorker.addEventListener('message', e => {
 | Місце | localStorage ключ | Ліміт |
 |-------|------------------|-------|
 | Сайт (`gomon-widget.js`) | `gw_rl` | 10/день |
-| PWA гість | `gc_rl_guest` | 10/день |
-| PWA авторизований | `gc_rl_{phone}` | 20/день |
+| PWA гість | `gc_rl_guest` | 5/день |
+| PWA авторизований | `gc_rl_{phone}` | 10/день |
 
 Структура: `{"date":"2026-03-30","count":5}` — скидається наступного дня.
 При ліміті — картка "Записатись на консультацію" (Instagram Direct).
@@ -856,8 +856,8 @@ GomonAI працює в **трьох незалежних каналах** з є
 
 | Канал | Endpoint | Модель | Rate limit | Історія | Ескалація |
 |-------|----------|--------|-----------|---------|-----------|
-| **Сайт** (gomon-widget.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 10/день (guest) | sessionStorage | Ні |
-| **Додаток** (gomon-chat.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 20/день (authed) | in-memory JS | Ні |
+| **Сайт** (gomon-widget.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 5/день (guest) | sessionStorage | Ні |
+| **Додаток** (gomon-chat.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 10/день (authed) | in-memory JS | Ні |
 | **Telegram Business** | `tg_business_listener.py` | claude-sonnet-4-5 | 20/день | БД messages | **Так** → адмін |
 
 ### System prompt

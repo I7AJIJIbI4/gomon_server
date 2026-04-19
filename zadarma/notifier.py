@@ -377,26 +377,22 @@ def fmt_post_visit(appt):
         try:
             import sqlite3
             otp_conn = sqlite3.connect('/home/gomoncli/zadarma/otp_sessions.db', timeout=5)
-            is_app = otp_conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
-            otp_conn.close()
+            try:
+                is_app = otp_conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
+            finally:
+                otp_conn.close()
             if is_app:
                 conn = sqlite3.connect(DB_PATH, timeout=5)
-                dep = conn.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
-                ded = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
-                cb = conn.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
-                cb_red = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
-                conn.close()
-                total = round(dep - ded + cb - cb_red, 2)
-                # Find cashback for this visit
-                last_cb = 0
                 try:
-                    conn2 = sqlite3.connect(DB_PATH, timeout=5)
-                    row = conn2.execute("SELECT amount FROM cashback WHERE phone=? ORDER BY created_at DESC LIMIT 1", (phone,)).fetchone()
-                    if row:
-                        last_cb = row[0]
-                    conn2.close()
-                except Exception:
-                    pass
+                    dep = conn.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
+                    ded = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
+                    cb = conn.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
+                    cb_red = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
+                    total = round(dep - ded + cb - cb_red, 2)
+                    last_cb_row = conn.execute("SELECT amount FROM cashback WHERE phone=? ORDER BY created_at DESC LIMIT 1", (phone,)).fetchone()
+                    last_cb = last_cb_row[0] if last_cb_row else 0
+                finally:
+                    conn.close()
                 if last_cb > 0:
                     cashback_line = '\n\nВам нараховано кешбек +{:.0f} грн (3%). Ваш баланс: {:.0f} грн'.format(last_cb, total)
                 elif total > 0:

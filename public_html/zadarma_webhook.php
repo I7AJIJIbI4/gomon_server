@@ -55,10 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         file_put_contents($debug_log, "[$ts] sig_str='$sig_str' expected=$expected got=$zd_signature ok=" . ($sig_ok ? 'YES' : 'NO') . "\n", FILE_APPEND);
     }
     if (!$sig_ok) {
-        file_put_contents($debug_log, "[$ts] Signature " . ($zd_signature ? 'MISMATCH' : 'MISSING') . " — processing anyway\n", FILE_APPEND);
-        // TODO: uncomment to enforce after confirming signature works:
-        // http_response_code(403);
-        // exit(json_encode(['error' => 'Invalid signature']));
+        file_put_contents($debug_log, "[$ts] Signature " . ($zd_signature ? 'MISMATCH' : 'MISSING') . "\n", FILE_APPEND);
+        // NOTIFY_END has different sig format — allow it; block only missing signatures
+        if (!$zd_signature) {
+            http_response_code(403);
+            exit(json_encode(['error' => 'Missing signature']));
+        }
     }
 }
 

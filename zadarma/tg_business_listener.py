@@ -707,39 +707,38 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
                 try:
                     _cp = client_phone
                     if _cp:
-                        import hmac as _hmac, hashlib as _hashlib
-                        from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
-                        _oid = 'dep_{}_{}'.format(_cp, int(time.time()))
-                        _odate = int(time.time())
-                        _sign_str = ';'.join(str(x) for x in [WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_DOMAIN, _oid, _odate, 5.0, 'EUR', 'Оплата консультаційних послуг', 1, 5.0])
-                        _sig = _hmac.new(WFP_MERCHANT_SECRET.encode(), _sign_str.encode(), _hashlib.md5).hexdigest()
-                        _resp = requests.post('https://secure.wayforpay.com/pay?behavior=offline', data={
-                            'merchantAccount': WFP_MERCHANT_ACCOUNT, 'merchantDomainName': WFP_MERCHANT_DOMAIN,
-                            'merchantSignature': _sig, 'merchantTransactionType': 'SALE',
-                            'merchantTransactionSecureType': 'AUTO', 'orderReference': _oid,
-                            'orderDate': _odate, 'amount': 5.0, 'currency': 'EUR',
-                            'productName[]': 'Оплата консультаційних послуг', 'productPrice[]': 5.0,
-                            'productCount[]': 1, 'clientPhone': _cp,
-                            'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
-                            'paymentSystems': 'card;googlePay;applePay', 'language': 'UA',
-                        }, timeout=10)
-                        _url_data = _resp.json()
-                        pay_url = _url_data.get('url', '')
-                        if pay_url:
-                            import sqlite3 as _sq2
-                            _c2 = _sq2.connect(DB_PATH, timeout=5)
-                            try:
-                                _c2.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status) VALUES (?,?,?,?,?)",
-                                            (_cp, 5.0, 0, _oid, 'pending'))
-                                _c2.commit()
-                            finally:
-                                _c2.close()
+                        _dep_resp = requests.post('http://127.0.0.1:5001/api/deposit/create-internal',
+                            json={'phone': _cp, 'amount': 200}, timeout=10)
+                        if _dep_resp.status_code == 200:
+                            _dep_data = _dep_resp.json()
+                            # Widget params — need to build pay URL from them
+                            wp = _dep_data.get('widget_params', {})
+                            if wp:
+                                # Create offline payment URL
+                                _pay_resp = requests.post('https://secure.wayforpay.com/pay?behavior=offline', data={
+                                    'merchantAccount': wp.get('merchantAccount', ''),
+                                    'merchantDomainName': wp.get('merchantDomainName', ''),
+                                    'merchantSignature': wp.get('merchantSignature', ''),
+                                    'merchantTransactionType': 'SALE',
+                                    'merchantTransactionSecureType': 'AUTO',
+                                    'orderReference': wp.get('orderReference', ''),
+                                    'orderDate': wp.get('orderDate', ''),
+                                    'amount': wp.get('amount', ''),
+                                    'currency': 'UAH',
+                                    'productName[]': (wp.get('productName') or [''])[0],
+                                    'productPrice[]': (wp.get('productPrice') or [''])[0],
+                                    'productCount[]': 1,
+                                    'clientPhone': _cp,
+                                    'serviceUrl': 'https://drgomon.beauty/api/deposit/callback',
+                                    'language': 'UA',
+                                }, timeout=10)
+                                pay_url = _pay_resp.json().get('url', '')
                 except Exception as _e:
                     logger.warning('Deposit create in rate_limit: {}'.format(_e))
 
                 if pay_url:
                     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                    kb = InlineKeyboardMarkup([[InlineKeyboardButton('Внести депозит 5 EUR', url=pay_url)]])
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton('Поповнити баланс 200 грн', url=pay_url)]])
                     limit_msg = (
                         'Ви використали всі безкоштовні запити на сьогодні.\n\n'
                         'Внесіть депозит 5 EUR — ліміт знімається на день, '

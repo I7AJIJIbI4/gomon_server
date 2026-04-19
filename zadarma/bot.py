@@ -1109,10 +1109,10 @@ async def balance_command(update, context: ContextTypes.DEFAULT_TYPE):
         if total == 0:
             text += 'Поки що транзакцій немає.\n'
 
-        if cashback_bal >= 500:
+        if total >= 500 and cashback_bal > 0:
             text += '\n✅ Кешбек доступний для списання — зверніться до лікаря при візиті.'
         elif cashback_bal > 0:
-            text += '\nКешбек доступний для списання від 500 грн (залишилось {:.0f} грн).'.format(500 - total)
+            text += '\nКешбек доступний для списання від 500 грн загального балансу (залишилось {:.0f} грн).'.format(max(0, 500 - total))
 
         text += '\n\n📱 Поповнити баланс: https://drgomon.beauty/app/'
 
