@@ -4296,7 +4296,23 @@ def admin_cashback_redeem():
     conn.commit()
     conn.close()
     new_cb = round(cb_balance - amount, 2)
+    new_total = round(total - amount, 2)
     logger.info('Cashback redeemed: {} UAH for {}, by {}'.format(amount, phone, request.admin_phone))
+
+    # Notify client about cashback redemption (background)
+    import threading
+    def _notify_redeem():
+        try:
+            from notifier import notify_client
+            text = 'З вашого балансу Dr. Gomon Cosmetology списано {:.0f} грн кешбеку. Залишок балансу: {:.0f} грн'.format(amount, new_total)
+            notify_client(phone, text, text,
+                push_title='Кешбек списано',
+                push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
+                push_tag='cashback_redeem', push_url='/app/#home')
+        except Exception as e:
+            logger.error('cashback redeem notify error: {}'.format(e))
+    threading.Thread(target=_notify_redeem, daemon=True).start()
+
     return jsonify({'ok': True, 'new_cashback_balance': new_cb})
 
 @app.route('/api/deposit/reconcile', methods=['POST'])

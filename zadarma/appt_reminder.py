@@ -172,6 +172,26 @@ def _accrue_cashback(appt):
         logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
     else:
         logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
+        # Check if total balance just reached 500 UAH → push notification
+        try:
+            conn2 = _db()
+            total_cb = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
+            cb_redeemed = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
+            dep = conn2.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
+            dep_ded = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
+            conn2.close()
+            total = round(dep - dep_ded + total_cb - cb_redeemed, 2)
+            prev_total = round(total - cashback_amount, 2)
+            if total >= 500 and prev_total < 500:
+                logger.info('    cashback threshold reached! total={}'.format(total))
+                from push_sender import send_push_to_phone
+                send_push_to_phone(phone,
+                    title='Ваш кешбек готовий до списання!',
+                    body='Баланс {:.0f} грн. Оберіть процедуру і зверніться до лікаря'.format(total),
+                    url='https://drgomon.beauty/app/#price',
+                    tag='cashback_threshold')
+        except Exception as e:
+            logger.warning('    cashback threshold check error: {}'.format(e))
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 
@@ -362,10 +382,26 @@ def run_feedback(dry_run=False, override_date=None):
 
     sent = skipped = failed = cashback_ok = 0
 
+    now = kyiv_now()
+
     for appt in appts:
         phone = appt.get('client_phone', '')
         if not phone:
             continue
+
+        # Check if 2+ hours passed since procedure end
+        appt_time = appt.get('time', '')
+        appt_date = appt.get('date', '')
+        duration_min = appt.get('duration_min') or 60
+        if appt_time and appt_date:
+            try:
+                appt_start = datetime.strptime('{} {}'.format(appt_date, appt_time), '%Y-%m-%d %H:%M')
+                appt_end = appt_start + timedelta(minutes=duration_min)
+                send_after = appt_end + timedelta(hours=2)
+                if now < send_after:
+                    continue  # Too early — skip, will be picked up on next cron run
+            except (ValueError, TypeError):
+                pass  # Can't parse time — send anyway
 
         logger.info('  → {} | {} | {}'.format(
             phone, appt.get('client_name', '—'), appt.get('procedure_name', '—')
