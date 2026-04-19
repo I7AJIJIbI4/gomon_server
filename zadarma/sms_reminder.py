@@ -634,52 +634,113 @@ def check_and_send_reminders(dry_run=False):
 
 
 def send_daily_summary():
-    """Send daily summary of all reminders sent today. Called by cron at 22:10."""
+    """Send daily summary of ALL notifications sent today. Called by cron at 22:10.
+    Reads from notification_log (all types) + sms_reminder daily log."""
     from config import TELEGRAM_TOKEN
+    today_str = kyiv_now().strftime('%Y-%m-%d')
+    today_display = kyiv_now().strftime('%d.%m.%Y')
+
+    # 1. Read notification_log (feedback, cancel, reminder, etc.)
+    notif_entries = []
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        rows = conn.execute(
+            "SELECT phone, type, channel, status, sent_at, message_preview "
+            "FROM notification_log WHERE sent_at LIKE ? ORDER BY sent_at",
+            (today_str + '%',)).fetchall()
+        conn.close()
+        for phone, ntype, channel, status, sent_at, preview in rows:
+            notif_entries.append({
+                'phone': phone, 'type': ntype, 'channel': channel,
+                'status': status, 'time': (sent_at or '')[11:16],
+                'preview': (preview or '')[:100]
+            })
+    except Exception as e:
+        logger.error('daily_summary notification_log error: {}'.format(e))
+
+    # 2. Read sms_reminder daily log (repeat procedure reminders)
+    reminder_entries = []
     daily_log = '/tmp/sms_reminder_daily.json'
-    entries = []
     try:
         with open(daily_log, 'r') as f:
-            entries = json.load(f)
+            reminder_entries = json.load(f)
     except Exception:
         pass
 
-    now = kyiv_now().strftime('%d.%m.%Y')
-    sent = [e for e in entries if e.get('status') == 'sent']
-    errors = [e for e in entries if e.get('status') == 'error']
+    # Combine counts
+    total_notif = len(notif_entries)
+    total_remind = len([e for e in reminder_entries if e.get('status') == 'sent'])
+    total_remind_err = len([e for e in reminder_entries if e.get('status') == 'error'])
 
-    if not sent and not errors:
-        # Nothing sent today — silent
-        return
+    if total_notif == 0 and total_remind == 0 and total_remind_err == 0:
+        return  # Nothing today
 
-    tg_count = sum(1 for e in sent if e.get('channel') == 'tg')
-    sms_count = sum(1 for e in sent if e.get('channel') == 'sms')
+    TYPE_LABELS = {
+        'feedback': '💬 Відгук', 'cancel': '❌ Скасування',
+        'appt_reminder': '🔔 Нагадування', 'appt_confirm': '✅ Підтвердження',
+        'spec_new': '👩‍⚕️ Спеціалісту', 'cashback_redeem': '💰 Кешбек',
+    }
 
-    lines = ['📊 <b>Нагадування за {}</b>'.format(now), '']
-    for e in sent:
-        ch_icon = '💬' if e.get('channel') == 'tg' else '📱'
-        lines.append('{} {} <b>{}</b> ({})'.format(e.get('time', ''), ch_icon, e.get('phone', ''), e.get('name', '')))
-        lines.append('<i>{}</i>'.format(e.get('text', '')[:120]))
+    lines = ['📊 <b>Повідомлення за {}</b>'.format(today_display), '']
+
+    # Group notification_log by type
+    by_type = {}
+    for e in notif_entries:
+        t = e['type']
+        if t not in by_type:
+            by_type[t] = {'sent': 0, 'failed': 0, 'entries': []}
+        if e['status'] == 'sent':
+            by_type[t]['sent'] += 1
+        else:
+            by_type[t]['failed'] += 1
+        by_type[t]['entries'].append(e)
+
+    for ntype, data in by_type.items():
+        label = TYPE_LABELS.get(ntype, ntype)
+        lines.append('<b>{}</b>: {} відпр.{}'.format(
+            label, data['sent'],
+            ' ({} помилок)'.format(data['failed']) if data['failed'] else ''))
+        # Show details (max 5 per type)
+        for e in data['entries'][:5]:
+            ch = '💬' if e['channel'] == 'tg' else '📱' if e['channel'] == 'sms' else '🔔'
+            phone_display = e['phone'].replace('380', '+380', 1) if e['phone'].startswith('380') else e['phone']
+            lines.append('  {} {} {}'.format(e['time'], ch, phone_display))
+        if len(data['entries']) > 5:
+            lines.append('  ... і ще {}'.format(len(data['entries']) - 5))
         lines.append('')
 
-    lines.append('📊 Всього: <b>{}</b> (💬 TG: {} | 📱 SMS: {})'.format(len(sent), tg_count, sms_count))
-    if errors:
-        lines.append('⚠️ Помилок: {}'.format(len(errors)))
-        for e in errors:
-            lines.append('❌ {} — {}'.format(e.get('phone', ''), e.get('name', '')))
+    # Repeat procedure reminders
+    if total_remind > 0 or total_remind_err > 0:
+        tg_r = sum(1 for e in reminder_entries if e.get('channel') == 'tg' and e.get('status') == 'sent')
+        sms_r = sum(1 for e in reminder_entries if e.get('channel') == 'sms' and e.get('status') == 'sent')
+        lines.append('<b>🔄 Повторні процедури</b>: {} відпр. (💬{} 📱{})'.format(total_remind, tg_r, sms_r))
+        for e in reminder_entries[:5]:
+            if e.get('status') != 'sent':
+                continue
+            ch = '💬' if e.get('channel') == 'tg' else '📱'
+            lines.append('  {} {} {} ({})'.format(e.get('time', ''), ch, e.get('phone', ''), e.get('name', '')))
+        if total_remind > 5:
+            lines.append('  ... і ще {}'.format(total_remind - 5))
+        if total_remind_err:
+            lines.append('  ⚠️ Помилок: {}'.format(total_remind_err))
+        lines.append('')
+
+    # Total
+    grand_total = total_notif + total_remind
+    lines.append('📊 <b>Всього за день: {}</b>'.format(grand_total))
 
     text = '\n'.join(lines)
     for uid in NOTIFY_ALL:
         _tg_send_long(uid, text, TELEGRAM_TOKEN)
 
-    # Clear daily log
+    # Clear daily reminder log
     try:
         import os
         os.remove(daily_log)
     except Exception:
         pass
 
-    logger.info('Daily summary sent: {} sent, {} errors'.format(len(sent), len(errors)))
+    logger.info('Daily summary: {} notif + {} reminders'.format(total_notif, total_remind))
 
 
 if __name__ == '__main__':
