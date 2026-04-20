@@ -878,7 +878,7 @@ nav{
   animation:sheetUp .3s ease;
 }
 .confirm-sheet-title{font-family:var(--serif);font-size:22px;font-weight:300;color:var(--gold-pale);margin-bottom:8px}
-.confirm-sheet-text{font-size:17px;color:var(--text2);margin-bottom:24px;line-height:1.6}
+.confirm-sheet-text{font-size:17px;color:var(--text2);margin-bottom:24px;line-height:1.6;max-height:70vh;overflow-y:auto}
 .confirm-ok-btn{width:100%;padding:14px;background:var(--cancel-fg);border:none;border-radius:12px;color:#fff;font-family:var(--sans);font-size:17px;font-weight:600;cursor:pointer;margin-bottom:10px}
 .confirm-cancel-btn{width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--text3);font-family:var(--sans);font-size:16px;cursor:pointer}
 #ptr-loader{
@@ -4636,7 +4636,7 @@ function _renderNotifHistory() {
     if (e.type) types[e.type] = true;
   });
 
-  var html = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">';
+  var html = '<div style="position:sticky;top:0;z-index:10;background:var(--bg);padding:10px 0 10px;margin-bottom:4px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">';
   // Date filter
   html += '<select onchange="_notifHistoryFilters.date=this.value;_renderNotifHistory()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--sans)">';
   html += '<option value="">Всі дати</option>';
