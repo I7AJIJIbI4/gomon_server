@@ -317,7 +317,7 @@ async def map_command(update, context: ContextTypes.DEFAULT_TYPE):
 
         if media:
             captions = [
-                "📍 БЦ Галерея, 6 поверх\nвул. Смілянська, 23, Черкаси\n\n🚪 Лівий вхід «Ліфт» (поруч з кафе «Шарлотка»)\n\n🗺 Google Maps: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8",
+                "📍 БЦ Галерея, 6 поверх\nвул. Смілянська, 23, Черкаси\n\n🚪 Лівий вхід «Ліфт» (поруч з кафе «Шарлотка»)\n\n🗺 Google Maps: https://flyl.link/map",
                 ""
             ]
             media_group = []
@@ -327,7 +327,7 @@ async def map_command(update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(
                 "📍 БЦ Галерея, 6 поверх\nвул. Смілянська, 23, Черкаси\n\n"
-                "🗺 Google Maps: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8"
+                "🗺 Google Maps: https://flyl.link/map"
             )
         logger.info(f"Map sent to user {user_id}")
 

@@ -329,14 +329,14 @@ def fmt_appt_confirm(appt):
         'Ваш спеціаліст {spec_name} (тел. 073-310-31-10) '
         'чекатиме Вас за адресою в БЦ Галерея (чорна скляна будівля поруч з ТЦ Будинок Торгівлі), '
         'вхід через двері з надписом "ЛІФТ", 6 поверх\n\n'
-        '📍 Карта: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n'
+        '📍 Карта: https://flyl.link/map\n'
         '📱 Додаток: https://drgomon.beauty/app/'
     ).format(**v)
     sms = (
         '{first_name}, Ви записані на "{service}" Dr.Gomon на {date_short} о {time}. '
         'Спеціаліст {spec_name} (073-310-31-10). '
         'БЦ Галерея, "ЛІФТ", 6 пов. '
-        'Карта: https://maps.app.goo.gl/6mLtqfEi8RJycP4d8'
+        'Карта: https://flyl.link/map'
     ).format(**v)
     push_title = 'Запис підтверджено ✅'
     push_body  = '{service}, {date_short} о {time}'.format(**v)
@@ -353,7 +353,7 @@ def fmt_reminder_24h(appt):
         '👩‍⚕️ {spec_name} (тел. 073-310-31-10)\n\n'
         '📍 БЦ Галерея (чорна скляна будівля поруч з ТЦ Будинок Торгівлі), '
         'вхід через двері з надписом "ЛІФТ", 6 поверх\n'
-        '🗺 https://maps.app.goo.gl/6mLtqfEi8RJycP4d8\n'
+        '🗺 https://flyl.link/map\n'
         '📱 Додаток: https://drgomon.beauty/app/'
     ).format(**v)
     sms = (
