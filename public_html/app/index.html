@@ -4665,21 +4665,32 @@ function _renderNotifHistory() {
   if (!data.length) {
     html += '<div style="text-align:center;padding:20px;color:var(--text3)">Немає записів</div>';
   } else {
-    data.slice(0, 100).forEach(function(e) {
+    data.slice(0, 100).forEach(function(e, idx) {
       var ch = CH_ICONS[e.channel] || e.channel;
       var type = TYPE_LABELS[e.type] || e.type;
       var time = (e.sent_at||'').slice(11,16);
       var date = (e.sent_at||'').slice(5,10).replace('-','.');
+      var fullDate = (e.sent_at||'').slice(0,16).replace('T',' ');
       var phone = (e.phone||'').replace(/^380/,'+380');
       var statusColor = e.status === 'sent' ? '#1D9E75' : '#E24B4A';
       var statusIcon = e.status === 'sent' ? '✓' : '✗';
-      html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:8px;align-items:flex-start">';
+      var detailId = 'nh-detail-' + idx;
+      html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer" onclick="var d=document.getElementById(\''+detailId+'\');d.style.display=d.style.display===\'none\'?\'\':\'none\'">';
+      html += '<div style="display:flex;gap:8px;align-items:flex-start">';
       html += '<div style="font-size:12px;color:var(--text3);white-space:nowrap;min-width:70px">'+date+' '+time+'</div>';
       html += '<div style="font-size:14px;min-width:20px">'+ch+'</div>';
       html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:13px;color:var(--text)"><span style="color:'+statusColor+'">'+statusIcon+'</span> '+_esc(type)+' → '+_esc(phone)+'</div>';
+      html += '<div style="font-size:13px;color:var(--text)"><span style="color:'+statusColor+'">'+statusIcon+'</span> '+_esc(type)+' → '+_esc(phone)+' <span style="font-size:10px;color:var(--text3)">▾</span></div>';
       if (e.message_preview) html += '<div style="font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(e.message_preview)+'</div>';
       html += '</div></div>';
+      // Expandable detail
+      html += '<div id="'+detailId+'" style="display:none;margin:6px 0 4px;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">';
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:6px"><b>Час:</b> '+_esc(fullDate)+'</div>';
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:6px"><b>Канал:</b> '+_esc((e.channel||'').toUpperCase())+' <b>Статус:</b> <span style="color:'+statusColor+'">'+_esc(e.status||'')+'</span></div>';
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:6px"><b>Тип:</b> '+_esc(type)+' <b>Телефон:</b> '+_esc(phone)+'</div>';
+      if (e.message_preview) html += '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.5;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">'+_esc(e.message_preview)+'</div>';
+      html += '</div>';
+      html += '</div>';
     });
     if (data.length > 100) html += '<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">Показано 100 з '+data.length+'</div>';
   }

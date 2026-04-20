@@ -1647,7 +1647,7 @@ def admin_notif_history():
             entries.append({
                 'phone': phone, 'type': ntype, 'channel': channel,
                 'status': status, 'sent_at': sent_at,
-                'message_preview': (preview or '')[:120]
+                'message_preview': preview or ''
             })
         # sms_reminders (repeat procedure reminders)
         rows2 = conn.execute(
