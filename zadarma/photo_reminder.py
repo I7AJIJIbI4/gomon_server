@@ -9,6 +9,7 @@ Usage:
 """
 
 import sys
+import re
 import json
 import sqlite3
 import logging
@@ -75,7 +76,6 @@ def _get_drugs_for_procedure(procedure_name):
             price_str = item.get('price', '')
             if not name or 'безкоштовно' in price_str.lower():
                 continue
-            import re
             p = re.search(r'\d+', str(price_str).replace(' ', ''))
             price_val = int(p.group()) if p else 0
             if price_val > 0:
@@ -98,16 +98,21 @@ def _send_drug_buttons(tg_id, appts, date_str):
             continue
 
         # Build inline keyboard — 2 buttons per row
+        # callback_data max 64 bytes (UTF-8). Use short phone (last 10 digits) + short date (MMDD)
+        ph_short = client_phone[-10:] if len(client_phone) > 10 else client_phone
+        dt_short = date_str[5:].replace('-', '')  # "2026-04-20" → "0420"
         rows = []
         for i in range(0, len(drugs), 2):
             row = []
             for d in drugs[i:i+2]:
-                cb_data = 'cb|{}|{}|{}|{}'.format(client_phone, date_str, d['name'][:30], d['price'])
-                row.append({'text': '{} ₴{}'.format(d['name'][:25], d['price']), 'callback_data': cb_data[:64]})
+                # cb|phone10|MMDD|price — drug name NOT in callback, resolved from price+procedure
+                cb_data = 'cb|{}|{}|{}'.format(ph_short, dt_short, d['price'])
+                row.append({'text': '{} ₴{}'.format(d['name'][:25], d['price']), 'callback_data': cb_data})
             rows.append(row)
 
-        # Add "Enter custom price" button at the end
-        rows.append([{'text': '✏️ Ввести ціну вручну', 'callback_data': 'cbcustom|{}|{}|{}'.format(client_phone, date_str, procedure[:20])}])
+        # Add "Enter custom price" button
+        cb_custom = 'cc|{}|{}'.format(ph_short, dt_short)
+        rows.append([{'text': '✏️ Ввести ціну вручну', 'callback_data': cb_custom}])
 
         text = '💰 Кешбек для {} ({})\nОберіть препарат або введіть ціну:'.format(client_name, procedure)
 
@@ -146,6 +151,7 @@ def _get_todays_appointments(date_str):
         appointments.append({
             'id': r['id'],
             'client_name': r['client_name'] or r['client_phone'] or '—',
+            'client_phone': r['client_phone'] or '',
             'procedure': r['procedure_name'],
             'specialist': r['specialist'],
             'time': r['time'] or '',
@@ -170,6 +176,7 @@ def _get_todays_appointments(date_str):
             appointments.append({
                 'id': 'wl_' + (s.get('appt_id') or ''),
                 'client_name': name,
+                'client_phone': r['phone'] or '',
                 'procedure': s.get('service', ''),
                 'specialist': s.get('specialist', ''),
                 'time': '{:02d}:00'.format(s['hour']) if s.get('hour') is not None else '',

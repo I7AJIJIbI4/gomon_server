@@ -874,44 +874,69 @@ async def _do_sync(bot, chat_id):
 
 
 async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle drug selection for cashback: cb|phone|date|drug_name|price"""
+    """Handle drug selection for cashback: cb|phone10|MMDD|price"""
     query = update.callback_query
     await query.answer()
-    data = query.data
-    parts = data.split('|')
-    if len(parts) < 5:
+    parts = query.data.split('|')
+    if len(parts) < 4:
         await query.edit_message_text('❌ Невірні дані')
         return
-    _, phone, appt_date, drug_name, price_str = parts[0], parts[1], parts[2], parts[3], parts[4]
+    ph_short, dt_short, price_str = parts[1], parts[2], parts[3]
     try:
         price = float(price_str)
     except (ValueError, TypeError):
         await query.edit_message_text('❌ Невірна ціна')
         return
 
-    import sqlite3
-    from tz_utils import kyiv_now
-    DB_PATH = '/home/gomoncli/zadarma/users.db'
-    confirmer = str(update.effective_user.id)
+    # Resolve full phone and date
+    year = str(kyiv_now().year) if len(dt_short) == 4 else '2026'
+    appt_date = '{}-{}-{}'.format(year, dt_short[:2], dt_short[2:4])
 
+    # Find full phone by last 10 digits
+    import sqlite3
+    from tz_utils import kyiv_now as _kn
+    DB_PATH = '/home/gomoncli/zadarma/users.db'
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    row = conn.execute("SELECT phone FROM clients WHERE phone LIKE ?", ('%' + ph_short[-9:],)).fetchone()
+    phone = row[0] if row else ph_short
+
+    # Extract procedure and drug from button text
+    btn_text = query.data  # fallback
+    if query.message and query.message.reply_markup:
+        # Find which button was clicked by matching price
+        for btn_row in query.message.reply_markup.inline_keyboard:
+            for btn in btn_row:
+                if btn.callback_data == query.data:
+                    btn_text = btn.text  # e.g. "Saypha Filler ₴4900"
+                    break
+
+    # Extract drug name from button text (remove ₴price suffix)
+    drug_name = btn_text.rsplit('₴', 1)[0].strip() if '₴' in btn_text else btn_text
+
+    # Extract procedure from message text: "Кешбек для Name (Procedure)"
+    msg_text = query.message.text or ''
+    procedure = ''
+    if '(' in msg_text and ')' in msg_text:
+        procedure = msg_text.split('(')[-1].split(')')[0]
+
+    confirmer = str(update.effective_user.id)
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10)
         conn.execute(
             "INSERT OR REPLACE INTO cashback_pending "
-            "(phone, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-            (phone, query.message.text.split('(')[-1].rstrip(')\nОберіть препарат:').strip() if '(' in (query.message.text or '') else '',
-             drug_name, price, appt_date, confirmer, kyiv_now().strftime('%Y-%m-%d %H:%M:%S')))
+            "(phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+            (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         conn.close()
 
         cashback_amount = round(price * 0.03, 2)
-        phone_display = phone.replace('380', '+380', 1) if phone.startswith('380') else phone
+        phone_display = ('+' + phone) if phone.startswith('380') else phone
         await query.edit_message_text(
             '✅ {} — {} (₴{})\nКешбек +{:.0f} грн буде нараховано через 24 год'.format(
                 phone_display, drug_name, int(price), cashback_amount))
         logger.info('Cashback confirmed: {} {} {} ₴{} by {}'.format(phone, appt_date, drug_name, price, confirmer))
     except Exception as e:
+        conn.close()
         logger.error('cashback_drug_callback error: {}'.format(e))
         await query.edit_message_text('❌ Помилка: {}'.format(str(e)[:50]))
 
@@ -919,16 +944,33 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
 _cashback_custom_state = {}  # user_id -> {phone, date, procedure}
 
 async def cashback_custom_callback(update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle 'Enter custom price' button: cbcustom|phone|date|procedure"""
+    """Handle 'Enter custom price' button: cc|phone10|MMDD"""
     query = update.callback_query
     await query.answer()
     parts = query.data.split('|')
-    if len(parts) < 4:
+    if len(parts) < 3:
         return
-    _, phone, appt_date, procedure = parts[0], parts[1], parts[2], parts[3]
+    ph_short, dt_short = parts[1], parts[2]
+
+    # Resolve
+    import sqlite3
+    from tz_utils import kyiv_now as _kn
+    year = str(_kn().year)
+    appt_date = '{}-{}-{}'.format(year, dt_short[:2], dt_short[2:4])
+    conn = sqlite3.connect('/home/gomoncli/zadarma/users.db', timeout=5)
+    row = conn.execute("SELECT phone FROM clients WHERE phone LIKE ?", ('%' + ph_short[-9:],)).fetchone()
+    conn.close()
+    phone = row[0] if row else ph_short
+
+    # Extract procedure from message
+    msg_text = query.message.text or ''
+    procedure = ''
+    if '(' in msg_text and ')' in msg_text:
+        procedure = msg_text.split('(')[-1].split(')')[0]
+
     user_id = update.effective_user.id
     _cashback_custom_state[user_id] = {'phone': phone, 'date': appt_date, 'procedure': procedure}
-    phone_display = phone.replace('380', '+380', 1) if phone.startswith('380') else phone
+    phone_display = ('+' + phone) if phone.startswith('380') else phone
     await query.edit_message_text(
         '✏️ Введіть ціну процедури для {} ({}):\n\n'
         'Наприклад: 4900'.format(phone_display, procedure))
@@ -1415,7 +1457,7 @@ def main():
     application.add_handler(CommandHandler("sync_help", handle_sync_help_command))
 
     application.add_handler(CommandHandler("admin", admin_command))
-    application.add_handler(CallbackQueryHandler(cashback_custom_callback, pattern='^cbcustom\\|'))
+    application.add_handler(CallbackQueryHandler(cashback_custom_callback, pattern='^cc\\|'))
     application.add_handler(CallbackQueryHandler(cashback_drug_callback, pattern='^cb\\|'))
     application.add_handler(CallbackQueryHandler(admin_callback, pattern='^(pay_start|admin_monitor|admin_diag|admin_logs|admin_sync)$'))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.CHANNEL_POST, general_text_handler))
