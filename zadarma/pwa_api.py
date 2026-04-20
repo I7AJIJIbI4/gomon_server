@@ -1651,7 +1651,7 @@ def admin_notif_history():
             })
         # sms_reminders (repeat procedure reminders)
         rows2 = conn.execute(
-            "SELECT client_phone, service, sent_date, status "
+            "SELECT phone, service, sent_date, status "
             "FROM sms_reminders WHERE sent_date >= ? ORDER BY sent_date DESC LIMIT 200",
             (cutoff,)).fetchall()
         for phone, service, sent_date, status in rows2:
