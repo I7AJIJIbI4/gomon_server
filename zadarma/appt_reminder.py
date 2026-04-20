@@ -411,12 +411,17 @@ def run_feedback(dry_run=False, override_date=None):
             phone, appt.get('client_name', '—'), appt.get('procedure_name', '—')
         ))
 
-        # Cashback accrual — always, regardless of notification success
-        try:
-            _accrue_cashback(appt)
-            cashback_ok += 1
-        except Exception as _ce:
-            logger.warning('    cashback accrue error: {}'.format(_ce))
+        # Cashback: auto-accrue only for procedures without drug selection
+        # (procedures not in PROCEDURE_TO_CATEGORIES use auto-accrual)
+        procedure = appt.get('procedure_name', '')
+        NEEDS_DRUG_SELECTION = {'Ботулінотерапія', 'Контурна пластика губ', 'Контурна пластика обличчя',
+                                'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія'}
+        if procedure not in NEEDS_DRUG_SELECTION:
+            try:
+                _accrue_cashback(appt)
+                cashback_ok += 1
+            except Exception as _ce:
+                logger.warning('    cashback accrue error: {}'.format(_ce))
 
         if dry_run:
             logger.info('    [DRY-RUN] пропускаємо відправку')
@@ -440,9 +445,91 @@ def run_feedback(dry_run=False, override_date=None):
             logger.error('    помилка send_post_visit: {}'.format(e))
             failed += 1
 
-    logger.info('=== FEEDBACK done: sent={} skipped={} failed={} cashback={} ==='.format(
-        sent, skipped, failed, cashback_ok))
+    # Process pending cashback (confirmed by doctor, 24h passed)
+    pending_accrued = _process_pending_cashback(dry_run)
+    cashback_ok += pending_accrued
+
+    logger.info('=== FEEDBACK done: sent={} skipped={} failed={} cashback={} (pending={}) ==='.format(
+        sent, skipped, failed, cashback_ok, pending_accrued))
     return sent, skipped, failed
+
+
+def _process_pending_cashback(dry_run=False):
+    """Accrue cashback for pending entries where 24h passed since confirmation."""
+    now = kyiv_now()
+    conn = _db()
+    rows = conn.execute(
+        "SELECT id, phone, drug_specific, price, appt_date, confirmed_at "
+        "FROM cashback_pending WHERE accrued=0 AND confirmed_at IS NOT NULL"
+    ).fetchall()
+
+    accrued = 0
+    for row_id, phone, drug, price, appt_date, confirmed_at in rows:
+        try:
+            confirmed_dt = datetime.strptime(confirmed_at, '%Y-%m-%d %H:%M:%S')
+            if now < confirmed_dt + timedelta(hours=24):
+                continue  # Not yet 24h
+        except (ValueError, TypeError):
+            continue
+
+        if dry_run:
+            logger.info('    [DRY] pending cashback: {} {} {} ₴{}'.format(phone, appt_date, drug, price))
+            continue
+
+        cashback_amount = round(price * CASHBACK_RATE, 2)
+        if cashback_amount < 1:
+            conn.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
+            conn.commit()
+            continue
+
+        # Insert into cashback table
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
+                (phone, cashback_amount, drug, price, appt_date))
+            conn.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
+            conn.commit()
+            accrued += 1
+            logger.info('    pending cashback accrued: {} +{} ({}  ₴{})'.format(phone, cashback_amount, drug, price))
+
+            # Notify client
+            try:
+                from notifier import notify_client
+                # Get total balance
+                dep = conn.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
+                ded = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
+                cb = conn.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
+                cb_red = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
+                total = round(dep - ded + cb - cb_red, 2)
+
+                text = 'Вам нараховано кешбек +{:.0f} грн (3% від {}). Ваш баланс: {:.0f} грн\n\nhttps://flyl.link/app'.format(
+                    cashback_amount, drug, total)
+                notify_client(phone, text, text,
+                    push_title='Кешбек нараховано!',
+                    push_body='+{:.0f} грн від {}'.format(cashback_amount, drug),
+                    push_tag='cashback_accrued', push_url='/app/#home')
+            except Exception as ne:
+                logger.warning('    cashback notify error: {}'.format(ne))
+
+            # Check threshold
+            try:
+                total_after = round(dep - ded + cb - cb_red, 2)
+                total_before = round(total_after - cashback_amount, 2)
+                if total_after >= 500 and total_before < 500:
+                    from push_sender import send_push_to_phone
+                    send_push_to_phone(phone,
+                        title='Ваш кешбек готовий до списання!',
+                        body='Баланс {:.0f} грн. Оберіть процедуру і зверніться до лікаря'.format(total_after),
+                        url='https://drgomon.beauty/app/#price',
+                        tag='cashback_threshold')
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.error('    pending cashback accrual error: {}'.format(e))
+
+    conn.close()
+    return accrued
 
 # ─── Режим --specialist (сповіщення спеціалістам, о 20:00) ──────────────────
 

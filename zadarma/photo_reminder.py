@@ -42,6 +42,87 @@ SPEC_NAMES = {
 }
 
 
+PRICES_PATH = '/home/gomoncli/private_data/prices.json'
+
+# Mapping: generic WLaunch procedure name → prices.json category names that contain drugs
+PROCEDURE_TO_CATEGORIES = {
+    'Ботулінотерапія': ['Ботулінотерапія Neuronox / Nabota', 'Ботулінотерапія Xeomin'],
+    'Контурна пластика губ': ['Контурна пластика губ'],
+    'Контурна пластика обличчя': ['Контурна пластика обличчя'],
+    'Біорепарація шкіри': ['Біорепарація шкіри'],
+    'Біоревіталізація шкіри': ['Біоревіталізація шкіри'],
+    'Мезотерапія': ['Мезотерапія'],
+}
+
+
+def _get_drugs_for_procedure(procedure_name):
+    """Get list of {name, price} drugs from prices.json for a generic procedure."""
+    cats = PROCEDURE_TO_CATEGORIES.get(procedure_name)
+    if not cats:
+        return []
+    try:
+        with open(PRICES_PATH, 'r') as f:
+            prices = json.load(f)
+    except Exception:
+        return []
+    drugs = []
+    for cat in prices:
+        cat_name = cat.get('cat', '')
+        if cat_name not in cats:
+            continue
+        for item in cat.get('items', []):
+            name = item.get('name', '')
+            price_str = item.get('price', '')
+            if not name or 'безкоштовно' in price_str.lower():
+                continue
+            import re
+            p = re.search(r'\d+', str(price_str).replace(' ', ''))
+            price_val = int(p.group()) if p else 0
+            if price_val > 0:
+                drugs.append({'name': name, 'price': price_val})
+    return drugs
+
+
+def _send_drug_buttons(tg_id, appts, date_str):
+    """Send inline keyboard with drug options for each appointment that needs cashback confirmation."""
+    import requests as _req
+    for a in appts:
+        procedure = a.get('procedure', '')
+        drugs = _get_drugs_for_procedure(procedure)
+        if not drugs:
+            continue  # No drugs to choose — fixed price procedure, auto-accrue
+
+        client_phone = a.get('client_phone', '')
+        client_name = a.get('client_name', '')
+        if not client_phone:
+            continue
+
+        # Build inline keyboard — 2 buttons per row
+        rows = []
+        for i in range(0, len(drugs), 2):
+            row = []
+            for d in drugs[i:i+2]:
+                cb_data = 'cb|{}|{}|{}|{}'.format(client_phone, date_str, d['name'][:30], d['price'])
+                row.append({'text': '{} ₴{}'.format(d['name'][:25], d['price']), 'callback_data': cb_data[:64]})
+            rows.append(row)
+
+        # Add "Enter custom price" button at the end
+        rows.append([{'text': '✏️ Ввести ціну вручну', 'callback_data': 'cbcustom|{}|{}|{}'.format(client_phone, date_str, procedure[:20])}])
+
+        text = '💰 Кешбек для {} ({})\nОберіть препарат або введіть ціну:'.format(client_name, procedure)
+
+        try:
+            _req.post(
+                'https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN),
+                json={
+                    'chat_id': tg_id,
+                    'text': text,
+                    'reply_markup': {'inline_keyboard': rows}
+                }, timeout=10)
+        except Exception as e:
+            logger.error('Drug buttons send error: {}'.format(e))
+
+
 def _get_today_str():
     """Today's date in Kyiv timezone."""
     try:
@@ -179,6 +260,12 @@ def create_folders_and_notify(date_str=None):
             logger.info('TG sent to {} ({} appts)'.format(spec, len(appts)))
         except Exception as e:
             logger.error('TG error for {}: {}'.format(spec, e))
+
+        # Send cashback drug selection buttons for each appointment
+        try:
+            _send_drug_buttons(tg_id, appts, date_str or kyiv_now().strftime('%Y-%m-%d'))
+        except Exception as e:
+            logger.error('Drug buttons error for {}: {}'.format(spec, e))
 
 
 def check_uploads(date_str=None):
