@@ -4602,6 +4602,102 @@ function _renderNotifScreen() {
   el.innerHTML = html;
 }
 
+var _notifHistoryData = [];
+var _notifHistoryFilters = {date:'',channel:'',type:''};
+
+async function _openNotifHistory() {
+  // Load from API
+  try {
+    var r = await api('/admin/notifications/history');
+    _notifHistoryData = r.entries || [];
+  } catch(e) { _notifHistoryData = []; }
+  _notifHistoryFilters = {date:'',channel:'',type:''};
+  _renderNotifHistory();
+}
+
+function _renderNotifHistory() {
+  var data = _notifHistoryData;
+  var f = _notifHistoryFilters;
+
+  // Apply filters
+  if (f.date) data = data.filter(function(e) { return (e.sent_at||'').startsWith(f.date); });
+  if (f.channel) data = data.filter(function(e) { return e.channel === f.channel; });
+  if (f.type) data = data.filter(function(e) { return e.type === f.type; });
+
+  var TYPE_LABELS = {feedback:'Відгук',cancel:'Скасування',appt_reminder:'Нагадування 24г',appt_confirm:'Підтвердження',spec_new:'Спеціалісту',cashback_redeem:'Кешбек списано'};
+  var CH_ICONS = {tg:'💬',sms:'📱',push:'🔔'};
+
+  // Get unique dates, channels, types for filters
+  var dates = {};
+  var types = {};
+  _notifHistoryData.forEach(function(e) {
+    var d = (e.sent_at||'').slice(0,10);
+    if (d) dates[d] = true;
+    if (e.type) types[e.type] = true;
+  });
+
+  var html = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">';
+  // Date filter
+  html += '<select onchange="_notifHistoryFilters.date=this.value;_renderNotifHistory()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--sans)">';
+  html += '<option value="">Всі дати</option>';
+  Object.keys(dates).sort().reverse().forEach(function(d) {
+    html += '<option value="'+d+'"'+(f.date===d?' selected':'')+'>'+d.slice(5).replace('-','.')+'</option>';
+  });
+  html += '</select>';
+  // Channel filter
+  html += '<select onchange="_notifHistoryFilters.channel=this.value;_renderNotifHistory()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--sans)">';
+  html += '<option value="">Всі канали</option>';
+  ['tg','sms','push'].forEach(function(ch) {
+    html += '<option value="'+ch+'"'+(f.channel===ch?' selected':'')+'>'+(CH_ICONS[ch]||'')+' '+ch.toUpperCase()+'</option>';
+  });
+  html += '</select>';
+  // Type filter
+  html += '<select onchange="_notifHistoryFilters.type=this.value;_renderNotifHistory()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:13px;font-family:var(--sans)">';
+  html += '<option value="">Всі типи</option>';
+  Object.keys(types).sort().forEach(function(t) {
+    html += '<option value="'+t+'"'+(f.type===t?' selected':'')+'>'+(TYPE_LABELS[t]||t)+'</option>';
+  });
+  html += '</select>';
+  html += '<span style="font-size:12px;color:var(--text3);align-self:center">'+data.length+' з '+_notifHistoryData.length+'</span>';
+  html += '</div>';
+
+  // Entries
+  if (!data.length) {
+    html += '<div style="text-align:center;padding:20px;color:var(--text3)">Немає записів</div>';
+  } else {
+    data.slice(0, 100).forEach(function(e) {
+      var ch = CH_ICONS[e.channel] || e.channel;
+      var type = TYPE_LABELS[e.type] || e.type;
+      var time = (e.sent_at||'').slice(11,16);
+      var date = (e.sent_at||'').slice(5,10).replace('-','.');
+      var phone = (e.phone||'').replace(/^380/,'+380');
+      var statusColor = e.status === 'sent' ? '#1D9E75' : '#E24B4A';
+      var statusIcon = e.status === 'sent' ? '✓' : '✗';
+      html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:8px;align-items:flex-start">';
+      html += '<div style="font-size:12px;color:var(--text3);white-space:nowrap;min-width:70px">'+date+' '+time+'</div>';
+      html += '<div style="font-size:14px;min-width:20px">'+ch+'</div>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:13px;color:var(--text)"><span style="color:'+statusColor+'">'+statusIcon+'</span> '+_esc(type)+' → '+_esc(phone)+'</div>';
+      if (e.message_preview) html += '<div style="font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(e.message_preview)+'</div>';
+      html += '</div></div>';
+    });
+    if (data.length > 100) html += '<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">Показано 100 з '+data.length+'</div>';
+  }
+
+  // Show in confirm modal
+  document.getElementById('confirm-modal-title').textContent = 'Історія сповіщень';
+  document.getElementById('confirm-modal-text').innerHTML = html;
+  document.getElementById('confirm-modal-ok').style.display = 'none';
+  document.getElementById('confirm-modal-cancel').textContent = 'Закрити';
+  document.getElementById('confirm-modal').classList.add('show');
+  document.getElementById('confirm-modal-cancel').onclick = function() {
+    document.getElementById('confirm-modal').classList.remove('show');
+    document.getElementById('confirm-modal-ok').style.display = '';
+    document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+    document.getElementById('confirm-modal-cancel').onclick = null;
+  };
+}
+
 function _replaceChatWithNotifNav() {
   // Replace Chat nav buttons with Notifications for superadmin
   document.querySelectorAll('.admin-nav .nav-btn').forEach(function(btn) {
@@ -6174,6 +6270,7 @@ document.addEventListener('keydown', function(e) {
 <div class="screen" id="screen-admin-notif">
   <div class="screen-header-row">
     <h2>Сповіщення</h2>
+    <button class="adm-header-btn" onclick="_openNotifHistory()">Історія</button>
   </div>
   <div class="screen-scroll" style="padding:0 20px 100px" id="notif-list-content"></div>
   <nav class="admin-nav">

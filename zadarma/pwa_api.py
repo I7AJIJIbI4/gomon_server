@@ -1626,6 +1626,49 @@ def admin_month_visits():
     visits.sort(key=lambda x: x['date'], reverse=True)
     return jsonify({'visits': visits})
 
+@app.route('/api/admin/notifications/history', methods=['GET'])
+@require_admin
+def admin_notif_history():
+    """Get notification history from notification_log + sms_reminders."""
+    days = int(request.args.get('days', 7))
+    from tz_utils import kyiv_now
+    from datetime import timedelta
+    cutoff = (kyiv_now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    entries = []
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    try:
+        # notification_log
+        rows = conn.execute(
+            "SELECT phone, type, channel, status, sent_at, message_preview "
+            "FROM notification_log WHERE sent_at >= ? ORDER BY sent_at DESC LIMIT 500",
+            (cutoff,)).fetchall()
+        for phone, ntype, channel, status, sent_at, preview in rows:
+            entries.append({
+                'phone': phone, 'type': ntype, 'channel': channel,
+                'status': status, 'sent_at': sent_at,
+                'message_preview': (preview or '')[:120]
+            })
+        # sms_reminders (repeat procedure reminders)
+        rows2 = conn.execute(
+            "SELECT client_phone, service, sent_date, status "
+            "FROM sms_reminders WHERE sent_date >= ? ORDER BY sent_date DESC LIMIT 200",
+            (cutoff,)).fetchall()
+        for phone, service, sent_date, status in rows2:
+            ch = 'tg' if 'tg' in (status or '') else 'sms'
+            entries.append({
+                'phone': phone, 'type': 'repeat_proc', 'channel': ch,
+                'status': 'sent' if 'sent' in (status or '') else 'failed',
+                'sent_at': sent_date,
+                'message_preview': 'Повторна: ' + (service or '')[:80]
+            })
+    finally:
+        conn.close()
+
+    entries.sort(key=lambda x: x.get('sent_at', ''), reverse=True)
+    return jsonify({'entries': entries[:500]})
+
+
 @app.route('/api/admin/sync-prices', methods=['POST'])
 @require_full_admin
 def admin_sync_prices():
