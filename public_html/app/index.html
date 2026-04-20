@@ -4507,9 +4507,9 @@ function renderSuperadminPanel() {
 var _notifTypes = [
   {group:'Клієнтам',items:[
     {key:'reminder_24h',label:'Нагадування за 24 год',channels:'Push + TG + SMS',
-     tpl:'{first_name}, нагадуємо про ваш запис завтра!\n📅 {date}, {time}\n💆 {service}\n👩‍⚕️ {spec_name}\n📍 БЦ Галерея, "ЛІФТ", 6 поверх\n🗺 maps.app.goo.gl/...'},
+     tpl:'{first_name}, нагадуємо про ваш запис завтра!\n📅 {date}, {time}\n💆 {service}\n👩‍⚕️ {spec_name}\n📍 БЦ Галерея, "ЛІФТ", 6 поверх\n🗺 flyl.link/map'},
     {key:'post_visit',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)',
-     tpl:'{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: flyl.link/google\n\n[app user] Вам нараховано кешбек +XX грн (3%). Ваш баланс: YY грн\n[не app user] Не втрачайте кешбек з кожної процедури з нашим додатком: flyl.link/app'},
+     tpl:'{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: flyl.link/google\n\n[app user] Вам нараховано кешбек +XX грн (3%). Ваш баланс: YY грн\n[не app user] Не втрачайте кешбек з кожної процедури з нашим додатком: flyl.link/app\n\n⚠️ Якщо клієнт вже залишив відгук на Google — лінка на відгук не надсилається (sync щодня о 08:00)'},
     {key:'repeat_proc',label:'Повторні процедури',channels:'TG / SMS fallback',
      tpl:'Привіт, {name}! Минуло {elapsed} з «{service}». Dr.Gomon чекає вас для повторної процедури.\nЗаписатись: ig.me/m/dr.gomon | t.me/DrGomonCosmetology'},
     {key:'cancellation',label:'Скасування запису',channels:'Push + TG + SMS',
@@ -4549,7 +4549,9 @@ var _notifTypes = [
     {key:'admin_callback',label:'Заявки на зворотній зв\'язок',channels:'TG',
      tpl:'📞 Заявка на зворотній зв\'язок\n👤 {name} ({phone})\n📋 Клієнт: {visits} візитів\n🕐 {time}'},
     {key:'admin_sync',label:'Звіт синхронізації клієнтів',channels:'TG, 09:00 / 21:00',
-     tpl:'Синхронізація: нових клієнтів: N, оновлено: M'}
+     tpl:'Синхронізація: нових клієнтів: N, оновлено: M'},
+    {key:'admin_reviews',label:'Sync Google Reviews',channels:'Cron, 08:00',
+     tpl:'Авто-sync відгуків з Google Places API.\nМатчинг по імені з БД клієнтів.\nКлієнти з відгуком не отримують прохання залишити відгук у post-visit повідомленні.\n\nПоточний стан: 125 відгуків, 4.9 рейтинг'}
   ]}
 ];
 
