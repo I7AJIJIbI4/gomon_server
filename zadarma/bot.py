@@ -876,6 +876,9 @@ async def _do_sync(bot, chat_id):
 async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
     """Handle drug selection for cashback: cb|phone10|MMDD|price"""
     query = update.callback_query
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await query.answer('❌ Доступ заборонено')
+        return
     await query.answer()
     parts = query.data.split('|')
     if len(parts) < 4:
@@ -946,6 +949,9 @@ _cashback_custom_state = {}  # user_id -> {phone, date, procedure}
 async def cashback_custom_callback(update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 'Enter custom price' button: cc|phone10|MMDD"""
     query = update.callback_query
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await query.answer('❌ Доступ заборонено')
+        return
     await query.answer()
     parts = query.data.split('|')
     if len(parts) < 3:

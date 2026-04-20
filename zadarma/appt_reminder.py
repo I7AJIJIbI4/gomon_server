@@ -166,24 +166,27 @@ def _accrue_cashback(appt):
         return
     # Atomic insert — skip if already exists (UNIQUE constraint on phone+procedure_name+appt_date)
     conn = _db()
-    conn.execute(
-        "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
-        (phone, cashback_amount, procedure, price, appt_date))
-    conn.commit()
-    changes = conn.total_changes
-    conn.close()
-    if changes == 0:
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
+            (phone, cashback_amount, procedure, price, appt_date))
+        conn.commit()
+        # H2 fix: use SELECT changes() instead of total_changes
+        actual_changes = conn.execute("SELECT changes()").fetchone()[0]
+    finally:
+        conn.close()
+
+    if actual_changes == 0:
         logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
     else:
         logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
         # Check if total balance just reached 500 UAH → push notification
+        conn2 = _db()
         try:
-            conn2 = _db()
             total_cb = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
             cb_redeemed = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
             dep = conn2.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
             dep_ded = conn2.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
-            conn2.close()
             total = round(dep - dep_ded + total_cb - cb_redeemed, 2)
             prev_total = round(total - cashback_amount, 2)
             if total >= 500 and prev_total < 500:
@@ -196,6 +199,8 @@ def _accrue_cashback(appt):
                     tag='cashback_threshold')
         except Exception as e:
             logger.warning('    cashback threshold check error: {}'.format(e))
+        finally:
+            conn2.close()
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 
@@ -414,8 +419,13 @@ def run_feedback(dry_run=False, override_date=None):
         # Cashback: auto-accrue only for procedures without drug selection
         # (procedures not in PROCEDURE_TO_CATEGORIES use auto-accrual)
         procedure = appt.get('procedure_name', '')
-        NEEDS_DRUG_SELECTION = {'Ботулінотерапія', 'Контурна пластика губ', 'Контурна пластика обличчя',
-                                'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія'}
+        # Shared with photo_reminder.py PROCEDURE_TO_CATEGORIES — procedures that need doctor drug confirmation
+        try:
+            from photo_reminder import PROCEDURE_TO_CATEGORIES
+            NEEDS_DRUG_SELECTION = set(PROCEDURE_TO_CATEGORIES.keys())
+        except ImportError:
+            NEEDS_DRUG_SELECTION = {'Ботулінотерапія', 'Контурна пластика губ', 'Контурна пластика обличчя',
+                                    'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія'}
         if procedure not in NEEDS_DRUG_SELECTION:
             try:
                 _accrue_cashback(appt)
@@ -458,10 +468,13 @@ def _process_pending_cashback(dry_run=False):
     """Accrue cashback for pending entries where 24h passed since confirmation."""
     now = kyiv_now()
     conn = _db()
-    rows = conn.execute(
-        "SELECT id, phone, drug_specific, price, appt_date, confirmed_at "
-        "FROM cashback_pending WHERE accrued=0 AND confirmed_at IS NOT NULL"
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            "SELECT id, phone, drug_specific, price, appt_date, confirmed_at "
+            "FROM cashback_pending WHERE accrued=0 AND confirmed_at IS NOT NULL"
+        ).fetchall()
+    finally:
+        conn.close()
 
     accrued = 0
     for row_id, phone, drug, price, appt_date, confirmed_at in rows:
@@ -478,52 +491,62 @@ def _process_pending_cashback(dry_run=False):
 
         cashback_amount = round(price * CASHBACK_RATE, 2)
         if cashback_amount < 1:
-            conn.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
-            conn.commit()
+            c = _db()
+            try:
+                c.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
+                c.commit()
+            finally:
+                c.close()
             continue
 
-        # Insert into cashback table
+        # Insert into cashback table — close DB before network calls
+        c = _db()
+        total = 0
         try:
-            conn.execute(
+            c.execute(
                 "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
                 (phone, cashback_amount, drug, price, appt_date))
-            conn.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
-            conn.commit()
+            c.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
+            c.commit()
             accrued += 1
             logger.info('    pending cashback accrued: {} +{} ({}  ₴{})'.format(phone, cashback_amount, drug, price))
 
-            # Notify client
-            try:
-                from notifier import notify_client
-                # Get total balance
-                dep = conn.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
-                ded = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
-                cb = conn.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
-                cb_red = conn.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
-                total = round(dep - ded + cb - cb_red, 2)
+            # Read balance while still in DB
+            dep = c.execute("SELECT COALESCE(SUM(amount_uah),0) FROM deposits WHERE phone=? AND status='Approved'", (phone,)).fetchone()[0]
+            ded = c.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=?", (phone,)).fetchone()[0]
+            cb = c.execute("SELECT COALESCE(SUM(amount),0) FROM cashback WHERE phone=?", (phone,)).fetchone()[0]
+            cb_red = c.execute("SELECT COALESCE(SUM(amount),0) FROM deposit_deductions WHERE phone=? AND reason LIKE 'cashback%'", (phone,)).fetchone()[0]
+            total = round(dep - ded + cb - cb_red, 2)
+        except Exception as e:
+            logger.error('    pending cashback accrual error: {}'.format(e))
+            continue
+        finally:
+            c.close()
 
-                text = 'Вам нараховано кешбек +{:.0f} грн (3% від {}). Ваш баланс: {:.0f} грн\n\nhttps://flyl.link/app'.format(
-                    cashback_amount, drug, total)
-                notify_client(phone, text, text,
-                    push_title='Кешбек нараховано!',
-                    push_body='+{:.0f} грн від {}'.format(cashback_amount, drug),
-                    push_tag='cashback_accrued', push_url='/app/#home')
-            except Exception as ne:
-                logger.warning('    cashback notify error: {}'.format(ne))
+        # Network calls AFTER closing DB connection
+        try:
+            from notifier import notify_client
+            text = 'Вам нараховано кешбек +{:.0f} грн (3% від {}). Ваш баланс: {:.0f} грн\n\nhttps://flyl.link/app'.format(
+                cashback_amount, drug, total)
+            notify_client(phone, text, text,
+                push_title='Кешбек нараховано!',
+                push_body='+{:.0f} грн від {}'.format(cashback_amount, drug),
+                push_tag='cashback_accrued', push_url='/app/#home')
+        except Exception as ne:
+            logger.warning('    cashback notify error: {}'.format(ne))
 
-            # Check threshold
-            try:
-                total_after = round(dep - ded + cb - cb_red, 2)
-                total_before = round(total_after - cashback_amount, 2)
-                if total_after >= 500 and total_before < 500:
-                    from push_sender import send_push_to_phone
-                    send_push_to_phone(phone,
-                        title='Ваш кешбек готовий до списання!',
-                        body='Баланс {:.0f} грн. Оберіть процедуру і зверніться до лікаря'.format(total_after),
-                        url='https://drgomon.beauty/app/#price',
-                        tag='cashback_threshold')
-            except Exception:
-                pass
+        # Check threshold
+        try:
+            prev_total = round(total - cashback_amount, 2)
+            if total >= 500 and prev_total < 500:
+                from push_sender import send_push_to_phone
+                send_push_to_phone(phone,
+                    title='Ваш кешбек готовий до списання!',
+                    body='Баланс {:.0f} грн. Оберіть процедуру і зверніться до лікаря'.format(total),
+                    url='https://drgomon.beauty/app/#price',
+                    tag='cashback_threshold')
+        except Exception:
+            pass
 
         except Exception as e:
             logger.error('    pending cashback accrual error: {}'.format(e))
