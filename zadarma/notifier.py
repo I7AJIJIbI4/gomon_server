@@ -400,7 +400,20 @@ def fmt_post_visit(appt):
         except Exception:
             pass
 
-    base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
+    # Check if client already left a Google review — don't ask again
+    has_review = False
+    try:
+        from sync_reviews import has_google_review
+        has_review = has_google_review(phone)
+    except Exception:
+        pass
+
+    if has_review:
+        # Already reviewed — just thank, no review link
+        base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру!'.format(**v)
+    else:
+        base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
+
     app_msg = '\n\nНе втрачайте кешбек з кожної процедури з нашим новим додатком для зручного відстеження записів, новин і акцій: https://flyl.link/app'
 
     if cashback_line:
@@ -411,7 +424,10 @@ def fmt_post_visit(appt):
         sms = base_msg + app_msg
 
     push_title = 'Дякуємо за візит!'
-    push_body = 'Кешбек нараховано! Залиште відгук' if cashback_line else 'Залиште відгук — нам важлива ваша думка'
+    if has_review:
+        push_body = 'Кешбек нараховано!' if cashback_line else 'Дякуємо за візит!'
+    else:
+        push_body = 'Кешбек нараховано! Залиште відгук' if cashback_line else 'Залиште відгук — нам важлива ваша думка'
     return tg, sms, push_title, push_body
 
 
