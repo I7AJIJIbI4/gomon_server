@@ -4506,31 +4506,50 @@ function renderSuperadminPanel() {
 /* ── SUPERADMIN NOTIFICATIONS SCREEN ── */
 var _notifTypes = [
   {group:'Клієнтам',items:[
-    {key:'reminder_24h',label:'Нагадування за 24 год',channels:'Push + TG + SMS'},
-    {key:'post_visit',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)'},
-    {key:'repeat_proc',label:'Повторні процедури',channels:'TG / SMS fallback'},
-    {key:'cancellation',label:'Скасування запису',channels:'Push + TG + SMS'},
-    {key:'cashback_accrued',label:'Кешбек нараховано',channels:'Push'},
-    {key:'cashback_redeemed',label:'Кешбек списано',channels:'Push + TG + SMS'},
-    {key:'cashback_500',label:'Кешбек 500 грн досягнуто',channels:'Push'}
+    {key:'reminder_24h',label:'Нагадування за 24 год',channels:'Push + TG + SMS',
+     tpl:'{first_name}, нагадуємо про ваш запис завтра!\n📅 {date}, {time}\n💆 {service}\n👩‍⚕️ {spec_name}\n📍 БЦ Галерея, "ЛІФТ", 6 поверх\n🗺 maps.app.goo.gl/...'},
+    {key:'post_visit',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)',
+     tpl:'{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: flyl.link/google\n\n[app user] Вам нараховано кешбек +XX грн (3%). Ваш баланс: YY грн\n[не app user] Не втрачайте кешбек з кожної процедури з нашим додатком: flyl.link/app'},
+    {key:'repeat_proc',label:'Повторні процедури',channels:'TG / SMS fallback',
+     tpl:'Привіт, {name}! Минуло {elapsed} з «{service}». Dr.Gomon чекає вас для повторної процедури.\nЗаписатись: ig.me/m/dr.gomon | t.me/DrGomonCosmetology'},
+    {key:'cancellation',label:'Скасування запису',channels:'Push + TG + SMS',
+     tpl:'{first_name}, Ваш запис на {date} о {time} скасовано. Якщо виникнуть питання, спеціаліст {spec_name} з радістю відповість за тел. {spec_phone} або в Instagram {spec_insta}'},
+    {key:'cashback_accrued',label:'Кешбек нараховано',channels:'Push',
+     tpl:'Push: Дякуємо за візит! Кешбек нараховано! Залиште відгук'},
+    {key:'cashback_redeemed',label:'Кешбек списано',channels:'Push + TG + SMS',
+     tpl:'З вашого балансу Dr. Gomon Cosmetology списано {amount} грн кешбеку. Залишок балансу: {total} грн'},
+    {key:'cashback_500',label:'Кешбек 500 грн досягнуто',channels:'Push',
+     tpl:'Push: Ваш кешбек готовий до списання! Баланс {total} грн. Оберіть процедуру і зверніться до лікаря'}
   ]},
   {group:'Спеціалісту (Анастасія)',items:[
-    {key:'spec_new_appt',label:'Нові записи клієнтів',channels:'TG'},
-    {key:'spec_briefing',label:'Брифінг записів на завтра',channels:'TG, 21:05'},
-    {key:'spec_photo',label:'Фото папки до/після',channels:'TG, 21:00'},
-    {key:'spec_cancel',label:'Скасування записів клієнтів',channels:'TG'}
+    {key:'spec_new_appt',label:'Нові записи клієнтів',channels:'TG',
+     tpl:'{spec_name}, до тебе на {date} о {time} записаний клієнт {first_name} на процедуру "{service}". Вартість {price}, тривалість {duration}.'},
+    {key:'spec_briefing',label:'Брифінг записів на завтра',channels:'TG, 21:05',
+     tpl:'{spec_name}, до тебе на завтра {date} о {time} записаний клієнт {first_name} на процедуру "{service}". Вартість {price}, тривалість {duration}.'},
+    {key:'spec_photo',label:'Фото папки до/після',channels:'TG, 21:00',
+     tpl:'{spec_name}, сьогодні були процедури:\n1. {client} — {procedure} → Папка: {drive_link}\nЗавантажте фото до/після в папки.'},
+    {key:'spec_cancel',label:'Скасування записів клієнтів',channels:'TG',
+     tpl:'Скасовано запис: {client_name} на "{service}" {date} о {time}'}
   ]},
   {group:'Лікарю (Вікторія)',items:[
-    {key:'doc_briefing',label:'Брифінг всіх записів на завтра',channels:'TG, 21:05'},
-    {key:'doc_cancel',label:'Скасування записів клієнтів',channels:'TG'},
-    {key:'doc_callback',label:'Заявки на зворотній зв\'язок',channels:'TG'},
-    {key:'doc_photo',label:'Фото папки до/після',channels:'TG, 21:00'}
+    {key:'doc_briefing',label:'Брифінг всіх записів на завтра',channels:'TG, 21:05',
+     tpl:'Записи на завтра (N):\n{date} о {time} «{service}». {first_name}, +380XXXXXXXXX'},
+    {key:'doc_cancel',label:'Скасування записів клієнтів',channels:'TG',
+     tpl:'Скасовано запис: {client_name} на "{service}" {date} о {time}'},
+    {key:'doc_callback',label:'Заявки на зворотній зв\'язок',channels:'TG',
+     tpl:'📞 Заявка на зворотній зв\'язок\n👤 {name} ({phone})\n🕐 {time}'},
+    {key:'doc_photo',label:'Фото папки до/після',channels:'TG, 21:00',
+     tpl:'Сьогодні були процедури:\n1. {client} — {procedure} → {drive_link}'}
   ]},
   {group:'Адміну',items:[
-    {key:'admin_report',label:'Щоденний звіт повідомлень',channels:'TG, 22:10'},
-    {key:'admin_health',label:'Health check алерти',channels:'TG, кожні 5 хв'},
-    {key:'admin_callback',label:'Заявки на зворотній зв\'язок',channels:'TG'},
-    {key:'admin_sync',label:'Звіт синхронізації клієнтів',channels:'TG, 09:00 / 21:00'}
+    {key:'admin_report',label:'Щоденний звіт повідомлень',channels:'TG, 22:10',
+     tpl:'📊 Повідомлення за {date}\n💬 Відгук: N відпр.\n🔄 Повторні: N відпр. (💬X 📱Y)\n📊 Всього за день: N'},
+    {key:'admin_health',label:'Health check алерти',channels:'TG, кожні 5 хв',
+     tpl:'🔴 Dr. Gomon — проблеми:\nСайт: HTTP 500\n\n🟢 Dr. Gomon — відновлено:\nСайт — відновлено (було з HH:MM)'},
+    {key:'admin_callback',label:'Заявки на зворотній зв\'язок',channels:'TG',
+     tpl:'📞 Заявка на зворотній зв\'язок\n👤 {name} ({phone})\n📋 Клієнт: {visits} візитів\n🕐 {time}'},
+    {key:'admin_sync',label:'Звіт синхронізації клієнтів',channels:'TG, 09:00 / 21:00',
+     tpl:'Синхронізація: нових клієнтів: N, оновлено: M'}
   ]}
 ];
 
@@ -4565,8 +4584,10 @@ function _renderNotifScreen() {
       var statusColor = isOn ? '#1D9E75' : '#E24B4A';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
       html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:15px;color:var(--text)">' + _esc(item.label) + '</div>';
+      var tplId = 'notif-tpl-' + item.key;
+      html += '<div style="font-size:15px;color:var(--text);cursor:pointer" onclick="var e=document.getElementById(\''+tplId+'\');e.style.display=e.style.display===\'none\'?\'\':\'none\'">' + _esc(item.label) + ' <span style="font-size:11px;color:var(--text3)">▾</span></div>';
       html += '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + _esc(item.channels) + '</div>';
+      html += '<div id="'+tplId+'" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--text3);white-space:pre-wrap;line-height:1.5;font-family:var(--sans)">' + _esc(item.tpl || '') + '</div>';
       html += '</div>';
       html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
       html += '<span style="font-size:11px;font-weight:500;color:'+statusColor+'">'+statusText+'</span>';
