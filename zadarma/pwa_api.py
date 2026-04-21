@@ -790,7 +790,7 @@ def ig_ai_reply():
         prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public_html', 'app', 'system_prompt.txt')
         with open(prompt_path, 'r') as f:
             system_prompt = f.read()
-        system_prompt += '\n\nТи спілкуєшся в Instagram Direct. Відповідай стисло і дружньо. Для запису направляй в Instagram Direct до лікаря @dr.gomon або в Telegram @DrGomonCosmetology.'
+        system_prompt += '\n\n---\n## Контекст: Instagram Direct (DM)\nТи спілкуєшся з клієнтом в Instagram Direct лікаря Dr. Gomon. Відповідай стисло і дружньо. Клієнт вже в правильному каналі — НЕ направляй нікуди. При запиті на запис або ескалації — повідом: "Лікар Вікторія відповість вам у найближчий вільний час".'
 
         # Load prices
         try:
