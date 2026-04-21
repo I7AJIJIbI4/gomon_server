@@ -791,7 +791,7 @@ def ig_message_webhook():
 
         conn.execute(
             "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
-            "VALUES (?, ?, ?, 'ig', ?, ?, ?, 0, datetime('now'))",
+            "VALUES (?, ?, ?, 'instagram', ?, ?, ?, 0, datetime('now'))",
             (conv_id, sender_id, sender_name, text or ('[медіа]' if media_url else ''), media_type, media_url or ''))
         conn.commit()
         conn.close()
@@ -931,7 +931,7 @@ def ig_ai_reply():
                 conv_id = 'ig_{}'.format(sender_id)
                 conn.execute(
                     "INSERT INTO messages (conversation_id, sender_id, platform, content, media_type, is_from_admin, created_at) "
-                    "VALUES (?, 'ai_bot', 'ig', ?, 'text', 1, datetime('now'))",
+                    "VALUES (?, 'ai_bot', 'instagram', ?, 'text', 1, datetime('now'))",
                     (conv_id, reply_clean))
                 conn.commit()
                 conn.close()
@@ -3937,9 +3937,8 @@ def admin_messages_list():
     if denied: return denied
     """List conversations with last message, unread count."""
     platform = request.args.get('platform', '').strip()
-    # Frontend sends 'instagram'/'telegram', DB stores 'ig'/'telegram'
-    if platform == 'instagram':
-        platform = 'ig'
+    # Normalize platform filter
+    # (DB now stores 'instagram'/'telegram' consistently)
     unread_only = request.args.get('unread_only', '') == '1'
 
     conn = sqlite3.connect(DB_PATH)
@@ -3976,7 +3975,7 @@ def admin_messages_list():
                 'client_phone':    r['client_phone'],
                 'client_name':     client_name,
                 'sender_name':     r['sender_name'],
-                'platform':        'instagram' if r['platform'] == 'ig' else r['platform'],
+                'platform':        r['platform'],
                 'last_message':    r['last_message'],
                 'last_at':         r['last_at'],
                 'media_type':      r['media_type'],
@@ -4140,8 +4139,10 @@ def admin_messages_send():
 
     # Determine platform and recipient from conversation_id
     parts = conv_id.split('_', 1)
-    platform = parts[0]  # 'tg', 'ig', etc.
+    platform_short = parts[0]  # 'tg', 'ig', etc.
     recipient_id = parts[1] if len(parts) > 1 else ''
+    # DB stores full names: 'telegram', 'instagram' (not 'tg', 'ig')
+    platform = {'tg': 'telegram', 'ig': 'instagram'}.get(platform_short, platform_short)
 
     # Resolve local file path from file_ref
     file_path = None
@@ -4156,7 +4157,7 @@ def admin_messages_send():
     error_detail = None
     tg_file_id = None  # capture file_id from TG response for DB
 
-    if platform == 'tg':
+    if platform_short == 'tg':
         # Send via Telegram Bot API
         try:
             result = _send_tg_from_api(
@@ -4180,7 +4181,7 @@ def admin_messages_send():
                 error_detail = result.get('description', 'telegram_error')
         except Exception as e:
             error_detail = str(e)
-    elif platform == 'ig':
+    elif platform_short == 'ig':
         # Instagram Graph API via send.php proxy
         try:
             from config import IG_FALLBACK_TOKEN
