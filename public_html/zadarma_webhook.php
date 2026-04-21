@@ -186,7 +186,74 @@ function handleIvrResponse($data) {
 }
 
 function handleCallEnd($data) {
-    writeLog("Кінець дзвінка від " . ($data['caller_id'] ?? '') . ", тривалість: " . ($data['duration'] ?? 0) . "с");
+    global $DOCTOR_EXTENSIONS;
+    $caller_id = $data['caller_id'] ?? 'Unknown';
+    $duration  = intval($data['duration'] ?? 0);
+    $internal  = $data['internal'] ?? '';
+    $status    = $data['disposition'] ?? $data['status_code'] ?? '';
+
+    writeLog("Кінець дзвінка від $caller_id, тривалість: {$duration}с, internal: $internal, status: $status");
+
+    // Missed call to doctor — duration 0 means doctor didn't answer
+    if ($internal && in_array($internal, $DOCTOR_EXTENSIONS) && $duration == 0 && $caller_id !== 'Unknown') {
+        writeLog("=== ПРОПУЩЕНИЙ ДЗВІНОК лікарю від $caller_id ===");
+
+        // Send TG to admin + doctor about missed call
+        $config_path = __DIR__ . '/app/config.php';
+        if (file_exists($config_path)) {
+            require_once $config_path;
+            $tg_token = defined('TG_BOT_TOKEN') ? TG_BOT_TOKEN : '';
+            $admin_id = defined('TG_CALLBACK_CHAT') ? TG_CALLBACK_CHAT : '';
+            $doctor_id = '827551951'; // Вікторія
+
+            if ($tg_token) {
+                $phone_display = preg_replace('/^380/', '+380', $caller_id);
+                $now = date('H:i');
+
+                // Lookup client name
+                $client_info = '';
+                try {
+                    $db = new SQLite3('/home/gomoncli/zadarma/users.db', SQLITE3_OPEN_READONLY);
+                    $search = '%' . substr($caller_id, -9) . '%';
+                    $stmt = $db->prepare("SELECT first_name, last_name, visits_count FROM clients WHERE phone LIKE :p LIMIT 1");
+                    $stmt->bindValue(':p', $search, SQLITE3_TEXT);
+                    $result = $stmt->execute();
+                    if ($row = $result->fetchArray()) {
+                        $name = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                        if ($name) $client_info = "\n👤 $name (візитів: " . ($row['visits_count'] ?? 0) . ")";
+                    }
+                    $db->close();
+                } catch (Exception $e) {}
+
+                $text = "📞 Пропущений дзвінок\n\n"
+                      . "📱 $phone_display$client_info\n"
+                      . "🕐 $now";
+
+                $url = "https://api.telegram.org/bot$tg_token/sendMessage";
+                foreach ([$admin_id, $doctor_id] as $chat_id) {
+                    if (!$chat_id) continue;
+                    $ch = curl_init();
+                    curl_setopt_array($ch, [
+                        CURLOPT_URL => $url,
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => json_encode(['chat_id' => $chat_id, 'text' => $text]),
+                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT => 10,
+                    ]);
+                    curl_exec($ch);
+                    curl_close($ch);
+                }
+                writeLog("TG sent: missed call from $caller_id");
+
+                // Also send callback SMS to client
+                require_once __DIR__ . '/callback_request_handler.php';
+                handleCallbackRequest($caller_id);
+                writeLog("Callback request sent for missed call from $caller_id");
+            }
+        }
+    }
+
     echo json_encode(['status' => 'ok']);
 }
 
