@@ -1669,6 +1669,83 @@ def admin_notif_history():
     return jsonify({'entries': entries[:500]})
 
 
+@app.route('/api/admin/notifications/schedule', methods=['POST'])
+@require_admin
+def admin_notif_schedule():
+    """Update cron schedule for a notification type. Time in Kyiv, converted to UTC."""
+    d = request.get_json() or {}
+    key = d.get('key', '')
+    time_kyiv = d.get('time', '')  # "HH:MM" Kyiv
+    if not key or not time_kyiv or ':' not in time_kyiv:
+        return jsonify({'error': 'invalid'}), 400
+
+    parts = time_kyiv.split(':')
+    hour_kyiv = int(parts[0])
+    minute = int(parts[1])
+    hour_utc = (hour_kyiv - 3) % 24  # Kyiv summer = UTC+3
+
+    # Mapping: notification key → cron job identifier (grep pattern in crontab)
+    CRON_MAP = {
+        'spec_briefing': ('appt_reminder.py --specialist --tomorrow', '{} {} * * *'.format(minute, hour_utc)),
+        'doc_briefing': ('appt_reminder.py --specialist --tomorrow', '{} {} * * *'.format(minute, hour_utc)),
+        'spec_photo': ('photo_reminder.py --create', '{} {} * * *'.format(minute, hour_utc)),
+        'doc_photo': ('photo_reminder.py --create', '{} {} * * *'.format(minute, hour_utc)),
+        'admin_report': ('sms_reminder.py --daily-summary', '{} {} * * *'.format(minute, hour_utc)),
+        'admin_sync': ('sync_with_notification.sh', None),  # two entries, complex
+        'admin_reviews': ('sync_reviews.py', '{} {} * * *'.format(minute, hour_utc)),
+    }
+
+    if key not in CRON_MAP:
+        return jsonify({'error': 'unsupported_key'}), 400
+
+    grep_pattern, new_schedule = CRON_MAP[key]
+    if not new_schedule:
+        return jsonify({'ok': True, 'note': 'manual update needed'})
+
+    try:
+        import subprocess
+        # Read current crontab
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, timeout=5)
+        lines = result.stdout.split('\n')
+
+        # Find and replace the matching line
+        updated = False
+        for i, line in enumerate(lines):
+            if grep_pattern in line and not line.strip().startswith('#'):
+                # Replace schedule part (first 5 fields)
+                parts_line = line.split()
+                # Find where the command starts (after 5 cron fields)
+                cmd_start = 0
+                field_count = 0
+                for j, ch in enumerate(line):
+                    if ch == ' ' and field_count < 5:
+                        while j < len(line) and line[j] == ' ':
+                            j += 1
+                        field_count += 1
+                        if field_count == 5:
+                            cmd_start = j
+                            break
+                if cmd_start:
+                    cmd_part = line[cmd_start:]
+                    lines[i] = '{}      {}'.format(new_schedule, cmd_part)
+                    updated = True
+                    break
+
+        if updated:
+            new_crontab = '\n'.join(lines)
+            proc = subprocess.run(['crontab', '-'], input=new_crontab, capture_output=True, text=True, timeout=5)
+            if proc.returncode == 0:
+                logger.info('Cron updated: {} → {} ({}:{} Kyiv)'.format(key, new_schedule, hour_kyiv, minute))
+                return jsonify({'ok': True, 'utc': '{}:{}'.format(hour_utc, minute)})
+            else:
+                return jsonify({'error': 'crontab_error', 'detail': proc.stderr[:100]}), 500
+        else:
+            return jsonify({'error': 'cron_entry_not_found'}), 404
+    except Exception as e:
+        logger.error('notif_schedule error: {}'.format(e))
+        return jsonify({'error': str(e)[:100]}), 500
+
+
 @app.route('/api/admin/sync-prices', methods=['POST'])
 @require_full_admin
 def admin_sync_prices():
