@@ -306,24 +306,35 @@ def check_uploads(date_str=None):
                 'url': url,
             })
 
-    if not uploaded:
-        logger.info('No photos uploaded for {}'.format(date_str))
-        return
-
-    # TG to admin
+    # TG to admin — both uploaded and missing
     import requests as _req
-    lines = ['Фото за {}:'.format(date_str), '']
-    for u in uploaded:
-        spec_icon = SPEC_NAMES.get(u['specialist'], '')
-        lines.append('{} — {} ({}) — {} фото'.format(
-            spec_icon, u['client'], u['procedure'], u['count']))
-        lines.append('   {}'.format(u['url']))
+    total_appts = len([a for a in appointments if a.get('drive_url')])
+
+    if uploaded:
+        lines = ['📷 Фото за {} ({}/{} завантажено):'.format(date_str, len(uploaded), total_appts), '']
+        for u in uploaded:
+            spec_name = SPEC_NAMES.get(u['specialist'], '')
+            lines.append('✅ {} — {} ({}) — {} фото'.format(
+                spec_name, u['client'], u['procedure'], u['count']))
+            lines.append('   {}'.format(u['url']))
+    else:
+        lines = ['📷 Фото за {} — не завантажено (0/{})'.format(date_str, total_appts)]
+
+    # List missing
+    uploaded_clients = {u['client'] for u in uploaded}
+    missing = [a for a in appointments if a.get('drive_url') and a['client_name'] not in uploaded_clients]
+    if missing:
+        lines.append('')
+        lines.append('❌ Без фото:')
+        for a in missing:
+            spec_name = SPEC_NAMES.get(a['specialist'], '')
+            lines.append('   {} — {} ({})'.format(spec_name, a['client_name'], a['procedure']))
 
     text = '\n'.join(lines)
     try:
         _req.post('https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN),
                    json={'chat_id': ADMIN_USER_ID, 'text': text}, timeout=10)
-        logger.info('Admin notified: {} appointments with photos'.format(len(uploaded)))
+        logger.info('Admin notified: {}/{} with photos'.format(len(uploaded), total_appts))
     except Exception as e:
         logger.error('Admin TG error: {}'.format(e))
 
