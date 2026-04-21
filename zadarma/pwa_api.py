@@ -772,6 +772,118 @@ def ig_message_webhook():
         return jsonify({'error': str(e)[:80]}), 500
 
 
+@app.route('/api/webhook/ig-ai-reply', methods=['POST'])
+def ig_ai_reply():
+    """Generate AI reply for Instagram DM and send via Graph API."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json() or {}
+    sender_id = data.get('sender_id', '')
+    text = data.get('text', '')
+    if not sender_id or not text:
+        return jsonify({'error': 'missing data'}), 400
+
+    try:
+        from config import ANTHROPIC_KEY, IG_FALLBACK_TOKEN
+
+        # Load system prompt
+        prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public_html', 'app', 'system_prompt.txt')
+        with open(prompt_path, 'r') as f:
+            system_prompt = f.read()
+        system_prompt += '\n\nТи спілкуєшся в Instagram Direct. Відповідай стисло і дружньо. Для запису направляй в Instagram Direct до лікаря @dr.gomon або в Telegram @DrGomonCosmetology.'
+
+        # Load prices
+        try:
+            with open(PRICES_PATH, 'r') as f:
+                prices_data = json.load(f)
+            prices_text = '\n\nАктуальний прайс:\n'
+            for cat in prices_data:
+                prices_text += '\n{}:\n'.format(cat.get('cat', ''))
+                for item in cat.get('items', []):
+                    prices_text += '  {} — {}\n'.format(item.get('name', ''), item.get('price', ''))
+            system_prompt += prices_text
+        except Exception:
+            pass
+
+        # Get conversation history from messages DB
+        messages = []
+        try:
+            conv_id = 'ig_{}'.format(sender_id)
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            rows = conn.execute(
+                "SELECT text, is_from_admin, sender_id FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 10",
+                (conv_id,)).fetchall()
+            conn.close()
+            for row_text, is_admin, sid in reversed(rows):
+                if row_text:
+                    role = 'assistant' if is_admin or sid == 'ai_bot' else 'user'
+                    messages.append({'role': role, 'content': row_text})
+        except Exception:
+            pass
+
+        # Add current message if not already in history
+        if not messages or messages[-1].get('content') != text:
+            messages.append({'role': 'user', 'content': text})
+
+        # Call Anthropic
+        import requests as ai_req
+        ai_resp = ai_req.post('https://api.anthropic.com/v1/messages', headers={
+            'x-api-key': ANTHROPIC_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+        }, json={
+            'model': 'claude-sonnet-4-6',
+            'max_tokens': 500,
+            'system': system_prompt,
+            'messages': messages[-20:],
+        }, timeout=20)
+
+        if ai_resp.status_code != 200:
+            logger.error('IG AI Anthropic error: {} {}'.format(ai_resp.status_code, ai_resp.text[:100]))
+            return jsonify({'error': 'ai_failed'}), 502
+
+        ai_data = ai_resp.json()
+        reply_text = ai_data.get('content', [{}])[0].get('text', '')
+        if not reply_text:
+            return jsonify({'error': 'empty_reply'}), 500
+
+        # Strip tags (<ESCALATE>, <CANCEL>, <PROCEDURE>)
+        import re
+        reply_clean = re.sub(r'<[A-Z]+[^>]*>', '', reply_text).strip()
+
+        # Send reply via IG Graph API
+        ig_resp = _req.post('https://graph.instagram.com/v25.0/me/messages', headers={
+            'Authorization': 'Bearer ' + IG_FALLBACK_TOKEN,
+            'Content-Type': 'application/json',
+        }, json={
+            'recipient': {'id': sender_id},
+            'message': {'text': reply_clean},
+        }, timeout=15)
+
+        if ig_resp.status_code == 200:
+            # Save AI reply to messages DB
+            try:
+                conn = sqlite3.connect(DB_PATH, timeout=5)
+                conv_id = 'ig_{}'.format(sender_id)
+                conn.execute(
+                    "INSERT INTO messages (conversation_id, sender_id, platform, text, media_type, is_from_admin, created_at) "
+                    "VALUES (?, 'ai_bot', 'ig', ?, 'text', 1, datetime('now'))",
+                    (conv_id, reply_clean))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            logger.info('IG AI reply sent to {}: {}'.format(sender_id, reply_clean[:50]))
+            return jsonify({'ok': True, 'reply': reply_clean[:100]})
+        else:
+            logger.error('IG send failed: {} {}'.format(ig_resp.status_code, ig_resp.text[:100]))
+            return jsonify({'error': 'ig_send_failed'}), 502
+
+    except Exception as e:
+        logger.error('ig_ai_reply error: {}'.format(e))
+        return jsonify({'error': str(e)[:80]}), 500
+
+
 @app.route('/api/webhook/wlaunch', methods=['POST'])
 def wlaunch_webhook():
     """Handle WLaunch webhook — send notification to client on appointment events."""

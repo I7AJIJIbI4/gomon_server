@@ -112,6 +112,27 @@ foreach ($data['entry'] as $entry) {
         curl_close($ch);
 
         file_put_contents($log_file, "[$ts] Forwarded: sender=$sender_id text=" . substr($text, 0, 50) . " resp=$resp\n", FILE_APPEND);
+
+        // AI auto-reply — same as TG Business bot but via IG Graph API
+        if ($text && $media_type === 'text' && $sender_id !== $recipient_id) {
+            // Call Flask AI endpoint for IG
+            $ai_payload = json_encode([
+                'sender_id'    => $sender_id,
+                'text'         => $text,
+                'platform'     => 'ig',
+            ]);
+            $ch2 = curl_init(FLASK_API . '/api/webhook/ig-ai-reply');
+            curl_setopt_array($ch2, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $ai_payload,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 25,
+            ]);
+            $ai_resp = curl_exec($ch2);
+            curl_close($ch2);
+            file_put_contents($log_file, "[$ts] AI reply: $ai_resp\n", FILE_APPEND);
+        }
     }
 }
 
