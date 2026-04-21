@@ -72,32 +72,40 @@ function writeLog($message) {
 }
 
 // Визначення тригерних дзвінків
+// Лікар extensions — все інше = callback request
+$DOCTOR_EXTENSIONS = ['104', '204', '304'];
+
 function isInternalTriggerCall($data) {
-    $called   = $data['called_did'] ?? '';
+    global $DOCTOR_EXTENSIONS;
     $internal = $data['internal'] ?? '';
 
-    $isCallbackTrigger = ($internal === '103' || strpos($called, '518196-103') !== false || strpos($called, '#518196-103') !== false);
+    if (!$internal) return ['is_trigger' => false, 'is_callback' => false, 'is_doctor' => false];
 
-    error_log("Trigger check: internal=$internal, Callback=$isCallbackTrigger");
+    $isDoctor = in_array($internal, $DOCTOR_EXTENSIONS);
+    $isCallback = !$isDoctor; // Все що не лікар = callback
+
+    writeLog("Trigger: internal=$internal, doctor=$isDoctor, callback=$isCallback");
 
     return [
-        'is_trigger'  => $isCallbackTrigger,
-        'is_callback' => $isCallbackTrigger,
+        'is_trigger'  => true,
+        'is_callback' => $isCallback,
+        'is_doctor'   => $isDoctor,
     ];
 }
 
-// Обробка тригерів (NOTIFY_START або NOTIFY_INTERNAL)
+// Обробка тригерів
 $triggerInfo = isInternalTriggerCall($data);
 $event = $data['event'] ?? '';
 
-if (($event === 'NOTIFY_START' || $event === 'NOTIFY_INTERNAL') && $triggerInfo['is_trigger']) {
-    error_log("=== TRIGGER DETECTED ===");
+if ($event === 'NOTIFY_INTERNAL' && $triggerInfo['is_trigger']) {
+    $caller_number = $data['caller_id'] ?? '';
 
     if ($triggerInfo['is_callback']) {
-        error_log("Callback handler (Telegram + SMS)");
-        $caller_number = $data['caller_id'] ?? '';
+        writeLog("=== CALLBACK TRIGGER: $caller_number → internal " . ($data['internal'] ?? '') . " ===");
         require_once __DIR__ . '/callback_request_handler.php';
         handleCallbackRequest($caller_number);
+    } elseif ($triggerInfo['is_doctor']) {
+        writeLog("Дзвінок лікарю від $caller_number → internal " . ($data['internal'] ?? ''));
     }
 
     echo json_encode(['status' => 'trigger_processed']);
@@ -183,27 +191,19 @@ function handleCallEnd($data) {
 }
 
 function handleNotifyInternal($data) {
-    global $config;
+    global $config, $DOCTOR_EXTENSIONS;
     $caller_id = $data['caller_id'] ?? 'Unknown';
     $internal  = $data['internal'] ?? '';
 
     writeLog("NOTIFY_INTERNAL: $caller_id → $internal");
 
-    switch ($internal) {
-        case '103':
-            writeLog("Кнопка 2 — callback handler від $caller_id");
-            require_once __DIR__ . '/callback_request_handler.php';
-            handleCallbackRequest($caller_id);
-            break;
-
-        case '104':
-            // Кнопка 1 — дзвінок переданий на лікаря
-            writeLog("Кнопка 1 — дзвінок переданий на лікаря (ext 104) від $caller_id");
-            break;
-
-        default:
-            writeLog("Невідомий internal: $internal");
-            break;
+    if (in_array($internal, $DOCTOR_EXTENSIONS)) {
+        writeLog("Дзвінок лікарю (ext $internal) від $caller_id");
+    } else if ($internal) {
+        // Все що не лікар = callback request (103, 203, 303, etc.)
+        writeLog("Callback request (ext $internal) від $caller_id");
+        require_once __DIR__ . '/callback_request_handler.php';
+        handleCallbackRequest($caller_id);
     }
 
     echo json_encode(['status' => 'internal_processed']);
