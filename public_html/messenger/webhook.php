@@ -54,6 +54,9 @@ if (!$data || !isset($data['entry'])) {
     exit;
 }
 
+// Our IG page IDs — messages FROM these are echoes (our own replies)
+$OUR_PAGE_IDS = ['17841406476100220', '17841407573527404'];
+
 // Process each entry
 foreach ($data['entry'] as $entry) {
     $messaging = $entry['messaging'] ?? [];
@@ -63,7 +66,12 @@ foreach ($data['entry'] as $entry) {
         $timestamp    = $event['timestamp'] ?? time();
         $message      = $event['message'] ?? null;
 
+        // Skip non-message events (read receipts, message_edit, reactions)
         if (!$message || !$sender_id) continue;
+        if (isset($event['read']) || isset($event['message_edit'])) continue;
+
+        // Detect echo (our page sending, or is_echo flag)
+        $is_echo = isset($message['is_echo']) ? (bool)$message['is_echo'] : in_array($sender_id, $OUR_PAGE_IDS);
 
         $text      = $message['text'] ?? '';
         $mid       = $message['mid'] ?? '';
@@ -96,7 +104,7 @@ foreach ($data['entry'] as $entry) {
             'text'         => $text,
             'media_type'   => $media_type,
             'media_url'    => $media_url,
-            'message_id'   => $mid,
+            'is_echo'      => $is_echo,
             'timestamp'    => $timestamp,
         ]);
 
@@ -113,8 +121,8 @@ foreach ($data['entry'] as $entry) {
 
         file_put_contents($log_file, "[$ts] Forwarded: sender=$sender_id text=" . substr($text, 0, 50) . " resp=$resp\n", FILE_APPEND);
 
-        // AI auto-reply — same as TG Business bot but via IG Graph API
-        if ($text && $media_type === 'text' && $sender_id !== $recipient_id) {
+        // AI auto-reply — only for incoming client messages (not echoes, not our page)
+        if ($text && $media_type === 'text' && !$is_echo) {
             // Call Flask AI endpoint for IG
             $ai_payload = json_encode([
                 'sender_id'    => $sender_id,

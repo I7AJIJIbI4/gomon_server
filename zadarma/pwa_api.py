@@ -764,17 +764,20 @@ def ig_message_webhook():
     if not sender_id:
         return jsonify({'error': 'missing sender'}), 400
 
+    # Detect if this is our own page sending (echo) — check recipient_id
+    recipient_id = data.get('recipient_id', '')
+    is_echo = (sender_id == recipient_id) or data.get('is_echo', False)
+
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
-        # Create IG conversation if not exists
-        conv_id = 'ig_{}'.format(sender_id)
+        conv_id = 'ig_{}'.format(recipient_id if is_echo else sender_id)
         conn.execute(
-            "INSERT OR IGNORE INTO messages (conversation_id, sender_id, platform, text, media_type, media_url, message_id, is_from_admin, created_at) "
-            "VALUES (?, ?, 'ig', ?, ?, ?, ?, 0, datetime('now'))",
-            (conv_id, sender_id, text, media_type, media_url, message_id))
+            "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
+            "VALUES (?, ?, ?, 'ig', ?, ?, ?, ?, datetime('now'))",
+            (conv_id, sender_id, '', text or '[медіа]' if media_url else text, media_type, media_url or '', 1 if is_echo else 0))
         conn.commit()
         conn.close()
-        logger.info('IG message stored: {} text={}'.format(sender_id, text[:50]))
+        logger.info('IG message stored: {} conv={} echo={} text={}'.format(sender_id, conv_id, is_echo, (text or '')[:50]))
         return jsonify({'ok': True})
     except Exception as e:
         logger.error('ig_message_webhook error: {}'.format(e))
@@ -854,7 +857,7 @@ def ig_ai_reply():
             conv_id = 'ig_{}'.format(sender_id)
             conn = sqlite3.connect(DB_PATH, timeout=5)
             rows = conn.execute(
-                "SELECT text, is_from_admin, sender_id FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 10",
+                "SELECT content, is_from_admin, sender_id FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 10",
                 (conv_id,)).fetchall()
             conn.close()
             for row_text, is_admin, sid in reversed(rows):
@@ -909,7 +912,7 @@ def ig_ai_reply():
                 conn = sqlite3.connect(DB_PATH, timeout=5)
                 conv_id = 'ig_{}'.format(sender_id)
                 conn.execute(
-                    "INSERT INTO messages (conversation_id, sender_id, platform, text, media_type, is_from_admin, created_at) "
+                    "INSERT INTO messages (conversation_id, sender_id, platform, content, media_type, is_from_admin, created_at) "
                     "VALUES (?, 'ai_bot', 'ig', ?, 'text', 1, datetime('now'))",
                     (conv_id, reply_clean))
                 conn.commit()
