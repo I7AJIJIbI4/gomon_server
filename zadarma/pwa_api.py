@@ -739,6 +739,39 @@ def get_me():
         return jsonify({'error': 'not_found'}), 404
     return jsonify(_client_payload(client, request.user_phone))
 
+@app.route('/api/webhook/ig-message', methods=['POST'])
+def ig_message_webhook():
+    """Receive Instagram DM forwarded from messenger/webhook.php. Store in messages DB."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json() or {}
+    sender_id = data.get('sender_id', '')
+    text = data.get('text', '')
+    media_type = data.get('media_type', 'text')
+    media_url = data.get('media_url', '')
+    message_id = data.get('message_id', '')
+    timestamp = data.get('timestamp', 0)
+
+    if not sender_id:
+        return jsonify({'error': 'missing sender'}), 400
+
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        # Create IG conversation if not exists
+        conv_id = 'ig_{}'.format(sender_id)
+        conn.execute(
+            "INSERT OR IGNORE INTO messages (conversation_id, sender_id, platform, text, media_type, media_url, message_id, is_from_admin, created_at) "
+            "VALUES (?, ?, 'ig', ?, ?, ?, ?, 0, datetime('now'))",
+            (conv_id, sender_id, text, media_type, media_url, message_id))
+        conn.commit()
+        conn.close()
+        logger.info('IG message stored: {} text={}'.format(sender_id, text[:50]))
+        return jsonify({'ok': True})
+    except Exception as e:
+        logger.error('ig_message_webhook error: {}'.format(e))
+        return jsonify({'error': str(e)[:80]}), 500
+
+
 @app.route('/api/webhook/wlaunch', methods=['POST'])
 def wlaunch_webhook():
     """Handle WLaunch webhook — send notification to client on appointment events."""
@@ -3921,12 +3954,18 @@ def admin_messages_send():
         except Exception as e:
             error_detail = str(e)
     elif platform == 'ig':
-        # TODO: Instagram Graph API media sending
-        # For now, only text is supported for IG
-        if media_type != 'text':
-            error_detail = 'instagram_media_not_implemented'
-        else:
-            error_detail = 'instagram_not_implemented'
+        # Instagram Graph API via send.php proxy
+        try:
+            from config import IG_FALLBACK_TOKEN
+            ig_payload = {'recipient_id': recipient_id, 'message_text': text or '', 'token': IG_FALLBACK_TOKEN}
+            ig_resp = _req.post('http://127.0.0.1/messenger/send.php', json=ig_payload, timeout=15,
+                                headers={'Host': 'drgomon.beauty'})
+            if ig_resp.status_code == 200:
+                sent = True
+            else:
+                error_detail = 'ig_send_failed: {} {}'.format(ig_resp.status_code, ig_resp.text[:80])
+        except Exception as e:
+            error_detail = 'ig_error: {}'.format(str(e)[:80])
     else:
         error_detail = 'unknown_platform'
 
