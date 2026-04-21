@@ -4600,22 +4600,24 @@ function _renderNotifScreen() {
       var togglePos = isOn ? '22px' : '2px';
       var statusText = isOn ? 'ON' : 'OFF';
       var statusColor = isOn ? '#1D9E75' : '#E24B4A';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+      html += '<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:10px;align-items:flex-start">';
+      // Left: info
       html += '<div style="flex:1;min-width:0">';
       var tplId = 'notif-tpl-' + item.key;
       html += '<div style="font-size:15px;color:var(--text);cursor:pointer" onclick="var e=document.getElementById(\''+tplId+'\');e.style.display=e.style.display===\'none\'?\'\':\'none\'">' + _esc(item.label) + ' <span style="font-size:11px;color:var(--text3)">▾</span></div>';
-      var channelText = item.channels;
-      if (item.time) channelText += ' · ' + _esc(item.time);
-      html += '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + channelText + '</div>';
-      html += '<div id="'+tplId+'" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--text3);white-space:pre-wrap;line-height:1.5;font-family:var(--sans)">' + _esc(item.tpl || '') + '</div>';
-      html += '</div>';
-      html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">';
-      // Time picker for scheduled notifications
+      var timeLabel = item.time ? (item.time === '*/5' ? 'кожні 5 хв' : item.time) : '';
+      html += '<div style="font-size:12px;color:var(--text3);margin-top:3px">' + _esc(item.channels) + (timeLabel ? ' · ' + _esc(timeLabel) : '') + '</div>';
+      html += '<div id="'+tplId+'" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--text3);line-height:1.5;font-family:var(--sans)">';
       if (item.time && item.time !== '*/5') {
         var savedTime = _getNotifTimes()[item.key] || item.time;
-        html += '<input type="time" value="'+_esc(savedTime.split(',')[0])+'" style="width:70px;padding:3px 4px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text);font-size:12px;font-family:var(--sans)" onchange="_setNotifTime(\''+item.key+'\',this.value)">';
+        html += '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px"><span style="color:var(--text2)">Час (Kyiv):</span><input type="time" value="'+_esc(savedTime.split(',')[0])+'" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--gold);font-size:13px;font-family:var(--sans)" onchange="_setNotifTime(\''+item.key+'\',this.value)"></div>';
       }
-      html += '<span style="font-size:11px;font-weight:500;color:'+statusColor+'">'+statusText+'</span>';
+      html += '<div style="white-space:pre-wrap">' + _esc(item.tpl || '') + '</div>';
+      html += '</div>';
+      html += '</div>';
+      // Right: ON/OFF label above toggle
+      html += '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">';
+      html += '<span style="font-size:10px;font-weight:600;color:'+statusColor+';letter-spacing:.5px">'+statusText+'</span>';
       html += '<div onclick="_toggleNotif(\''+item.key+'\')" style="width:42px;height:24px;border-radius:12px;background:'+toggleBg+';position:relative;cursor:pointer;transition:background .2s">';
       html += '<div style="width:20px;height:20px;border-radius:50%;background:'+toggleDot+';position:absolute;top:2px;left:'+togglePos+';transition:left .2s"></div>';
       html += '</div>';
