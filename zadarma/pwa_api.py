@@ -3919,6 +3919,9 @@ def admin_messages_list():
     if denied: return denied
     """List conversations with last message, unread count."""
     platform = request.args.get('platform', '').strip()
+    # Frontend sends 'instagram'/'telegram', DB stores 'ig'/'telegram'
+    if platform == 'instagram':
+        platform = 'ig'
     unread_only = request.args.get('unread_only', '') == '1'
 
     conn = sqlite3.connect(DB_PATH)
@@ -3955,7 +3958,7 @@ def admin_messages_list():
                 'client_phone':    r['client_phone'],
                 'client_name':     client_name,
                 'sender_name':     r['sender_name'],
-                'platform':        r['platform'],
+                'platform':        'instagram' if r['platform'] == 'ig' else r['platform'],
                 'last_message':    r['last_message'],
                 'last_at':         r['last_at'],
                 'media_type':      r['media_type'],

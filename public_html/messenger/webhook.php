@@ -54,10 +54,14 @@ if (!$data || !isset($data['entry'])) {
     exit;
 }
 
+// Primary IG page — only process webhooks from this page (ignore the second connected page to avoid duplicates)
+define('PRIMARY_IG_PAGE', '17841407573527404');
+
 // Process each entry
 foreach ($data['entry'] as $entry) {
     // entry.id = our IG page ID that received the webhook
     $page_id = $entry['id'] ?? '';
+    if ($page_id !== PRIMARY_IG_PAGE) continue;  // skip secondary page
     $messaging = $entry['messaging'] ?? [];
     foreach ($messaging as $event) {
         // Skip non-message events (read receipts, message_edit, reactions, delivery)
