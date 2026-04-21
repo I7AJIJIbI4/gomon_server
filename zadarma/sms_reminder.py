@@ -684,6 +684,12 @@ def send_daily_summary():
     lines = ['📊 <b>Повідомлення за {}</b>'.format(today_display), '']
 
     # Group notification_log by type
+    # Don't count push failures as errors if TG/SMS succeeded for same phone+type
+    sent_keys = set()  # (phone, type) where at least one channel succeeded
+    for e in notif_entries:
+        if e['status'] == 'sent':
+            sent_keys.add((e['phone'], e['type']))
+
     by_type = {}
     for e in notif_entries:
         t = e['type']
@@ -691,9 +697,13 @@ def send_daily_summary():
             by_type[t] = {'sent': 0, 'failed': 0, 'entries': []}
         if e['status'] == 'sent':
             by_type[t]['sent'] += 1
+            by_type[t]['entries'].append(e)
         else:
+            # Push fail with successful TG/SMS = not a real error
+            if e['channel'] == 'push' and (e['phone'], t) in sent_keys:
+                continue  # skip — delivery succeeded via other channel
             by_type[t]['failed'] += 1
-        by_type[t]['entries'].append(e)
+            by_type[t]['entries'].append(e)
 
     for ntype, data in by_type.items():
         label = TYPE_LABELS.get(ntype, ntype)
