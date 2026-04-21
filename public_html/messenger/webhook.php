@@ -76,6 +76,7 @@ foreach ($data['entry'] as $entry) {
 
         // Echo = message sent BY our page (sender = our page or entry page)
         $is_echo = !empty($message['is_echo']) || ($sender_id === $page_id);
+        if ($is_echo) continue;  // Skip echoes — AI replies saved by ig_ai_reply, admin replies saved by messenger send
 
         $text      = $message['text'] ?? '';
         $mid       = $message['mid'] ?? '';

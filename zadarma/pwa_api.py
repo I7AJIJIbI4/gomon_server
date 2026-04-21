@@ -764,20 +764,38 @@ def ig_message_webhook():
     if not sender_id:
         return jsonify({'error': 'missing sender'}), 400
 
-    # Detect echo (our page's own outgoing message reflected back)
-    recipient_id = data.get('recipient_id', '')
-    is_echo = bool(data.get('is_echo', False))
-
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
-        conv_id = 'ig_{}'.format(recipient_id if is_echo else sender_id)
+        conv_id = 'ig_{}'.format(sender_id)
+
+        # Resolve sender name: check if we already have it, otherwise fetch from IG Graph API
+        sender_name = ''
+        existing = conn.execute(
+            "SELECT sender_name FROM messages WHERE conversation_id=? AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
+            (conv_id,)).fetchone()
+        if existing:
+            sender_name = existing[0]
+        else:
+            try:
+                from config import IG_FALLBACK_TOKEN
+                name_resp = _req.get(
+                    'https://graph.instagram.com/v25.0/{}'.format(sender_id),
+                    params={'fields': 'name,username', 'access_token': IG_FALLBACK_TOKEN},
+                    timeout=5)
+                if name_resp.status_code == 200:
+                    nd = name_resp.json()
+                    sender_name = nd.get('name', '') or nd.get('username', '')
+                    logger.info('IG user resolved: {} = {}'.format(sender_id, sender_name))
+            except Exception as e:
+                logger.warning('IG name fetch failed: {}'.format(e))
+
         conn.execute(
             "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
-            "VALUES (?, ?, ?, 'ig', ?, ?, ?, ?, datetime('now'))",
-            (conv_id, sender_id, '', text or '[медіа]' if media_url else text, media_type, media_url or '', 1 if is_echo else 0))
+            "VALUES (?, ?, ?, 'ig', ?, ?, ?, 0, datetime('now'))",
+            (conv_id, sender_id, sender_name, text or ('[медіа]' if media_url else ''), media_type, media_url or ''))
         conn.commit()
         conn.close()
-        logger.info('IG message stored: {} conv={} echo={} text={}'.format(sender_id, conv_id, is_echo, (text or '')[:50]))
+        logger.info('IG message stored: {} conv={} name={} text={}'.format(sender_id, conv_id, sender_name, (text or '')[:50]))
         return jsonify({'ok': True})
     except Exception as e:
         logger.error('ig_message_webhook error: {}'.format(e))
