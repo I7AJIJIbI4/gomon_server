@@ -346,9 +346,33 @@ def _get_conversation_history(conv_id):
 
 
 def _check_ai_should_reply(conv_id, chat_id):
-    """Check if AI should auto-reply. Returns False if admin is active or rate limited."""
+    """Check if AI should auto-reply. Returns False if muted, admin active, cooldown, or rate limited."""
     conn = sqlite3.connect(DB_PATH, timeout=5)
     try:
+        # Check AI mute list
+        try:
+            muted = conn.execute(
+                "SELECT 1 FROM ai_mute WHERE user_id=? AND channel='tg' AND active=1 LIMIT 1",
+                (str(chat_id),)).fetchone()
+            if muted:
+                return False, 'muted'
+        except Exception:
+            pass  # Table may not exist yet
+
+        # 30s cooldown — don't reply more often than once per 30s
+        try:
+            last_ai = conn.execute(
+                "SELECT created_at FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
+                "ORDER BY id DESC LIMIT 1", (conv_id,)).fetchone()
+            if last_ai:
+                from datetime import datetime as _dt_cd
+                from tz_utils import kyiv_now as _kyiv_cd
+                last_ts = _dt_cd.strptime(last_ai[0], '%Y-%m-%d %H:%M:%S')
+                if (_kyiv_cd() - last_ts).total_seconds() < 30:
+                    return False, 'cooldown'
+        except Exception:
+            pass
+
         # Check if REAL human admin replied recently (not ai_bot)
         # Exclude auto-greetings: admin messages that have a client message within 5s
         from tz_utils import kyiv_now as _kyiv_now_pause
@@ -700,7 +724,10 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
         # Check if should reply
         should, reason = _check_ai_should_reply(conv_id, chat_id)
         if not should:
-            logger.debug('AI skip for {}: {}'.format(conv_id, reason))
+            if reason in ('muted', 'cooldown'):
+                logger.info('AI skip for {}: {}'.format(conv_id, reason))
+            else:
+                logger.debug('AI skip for {}: {}'.format(conv_id, reason))
             if reason == 'rate_limited':
                 # Try to create deposit and get payment URL
                 pay_url = None

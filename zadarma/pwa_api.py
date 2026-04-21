@@ -266,6 +266,15 @@ def init_messages_db():
         chat_id TEXT PRIMARY KEY,
         biz_conn_id TEXT NOT NULL
     )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS ai_mute (
+        channel TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT DEFAULT '',
+        reason TEXT DEFAULT '',
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (channel, user_id)
+    )''')
     conn.commit()
     conn.close()
 
@@ -782,6 +791,40 @@ def ig_ai_reply():
     text = data.get('text', '')
     if not sender_id or not text:
         return jsonify({'error': 'missing data'}), 400
+
+    # Check AI mute list — some users should never get auto-replies
+    try:
+        conn_mute = sqlite3.connect(DB_PATH, timeout=5)
+        muted = conn_mute.execute(
+            "SELECT 1 FROM ai_mute WHERE user_id=? AND channel='ig' AND active=1 LIMIT 1",
+            (sender_id,)).fetchone()
+        conn_mute.close()
+        if muted:
+            logger.info('IG AI skipped (muted): {}'.format(sender_id))
+            return jsonify({'skipped': True, 'reason': 'muted'})
+    except Exception:
+        pass  # Table may not exist yet — proceed
+
+    # 30s cooldown — don't reply more than once per 30s per user
+    try:
+        conn_cd = sqlite3.connect(DB_PATH, timeout=5)
+        conv_id_cd = 'ig_{}'.format(sender_id)
+        last_ai = conn_cd.execute(
+            "SELECT created_at FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
+            "ORDER BY id DESC LIMIT 1", (conv_id_cd,)).fetchone()
+        conn_cd.close()
+        if last_ai:
+            from datetime import datetime as _dt_cd
+            try:
+                last_ts = _dt_cd.strptime(last_ai[0], '%Y-%m-%d %H:%M:%S')
+                from tz_utils import kyiv_now as _kyiv_cd
+                if (_kyiv_cd() - last_ts).total_seconds() < 30:
+                    logger.info('IG AI cooldown for {}'.format(sender_id))
+                    return jsonify({'skipped': True, 'reason': 'cooldown'})
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     try:
         from config import ANTHROPIC_KEY, IG_FALLBACK_TOKEN
@@ -1812,6 +1855,54 @@ def admin_notif_history():
 
     entries.sort(key=lambda x: x.get('sent_at', ''), reverse=True)
     return jsonify({'entries': entries[:500]})
+
+
+@app.route('/api/admin/ai-mute', methods=['GET', 'POST', 'DELETE'])
+@require_admin
+def admin_ai_mute():
+    """Unified AI mute list for IG and TG.
+    GET ?channel=ig|tg — list muted users (all channels if no filter)
+    POST {channel, user_id, username?, reason?} — add to mute
+    DELETE {channel, user_id} — unmute
+    """
+    if request.method == 'GET':
+        ch = request.args.get('channel', '')
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        if ch in ('ig', 'tg'):
+            rows = conn.execute(
+                "SELECT channel, user_id, username, reason, created_at FROM ai_mute WHERE active=1 AND channel=?",
+                (ch,)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT channel, user_id, username, reason, created_at FROM ai_mute WHERE active=1").fetchall()
+        conn.close()
+        return jsonify({'muted': [{'channel': r[0], 'user_id': r[1], 'username': r[2], 'reason': r[3], 'created_at': r[4]} for r in rows]})
+    elif request.method == 'POST':
+        d = request.get_json() or {}
+        ch = d.get('channel', '').strip()
+        uid = d.get('user_id', '').strip()
+        if ch not in ('ig', 'tg') or not uid:
+            return jsonify({'error': 'missing channel (ig|tg) or user_id'}), 400
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn.execute(
+            "INSERT OR REPLACE INTO ai_mute (channel, user_id, username, reason, active, created_at) VALUES (?,?,?,?,1,datetime('now'))",
+            (ch, uid, d.get('username', ''), d.get('reason', '')))
+        conn.commit()
+        conn.close()
+        logger.info('AI muted {}/{} ({})'.format(ch, uid, d.get('username', '')))
+        return jsonify({'ok': True})
+    elif request.method == 'DELETE':
+        d = request.get_json() or {}
+        ch = d.get('channel', '').strip()
+        uid = d.get('user_id', '').strip()
+        if ch not in ('ig', 'tg') or not uid:
+            return jsonify({'error': 'missing channel or user_id'}), 400
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn.execute("UPDATE ai_mute SET active=0 WHERE channel=? AND user_id=?", (ch, uid))
+        conn.commit()
+        conn.close()
+        logger.info('AI unmuted {}/{}'.format(ch, uid))
+        return jsonify({'ok': True})
 
 
 @app.route('/api/admin/notifications/schedule', methods=['POST'])
