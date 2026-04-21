@@ -54,24 +54,24 @@ if (!$data || !isset($data['entry'])) {
     exit;
 }
 
-// Our IG page IDs — messages FROM these are echoes (our own replies)
-$OUR_PAGE_IDS = ['17841406476100220', '17841407573527404'];
-
 // Process each entry
 foreach ($data['entry'] as $entry) {
+    // entry.id = our IG page ID that received the webhook
+    $page_id = $entry['id'] ?? '';
     $messaging = $entry['messaging'] ?? [];
     foreach ($messaging as $event) {
+        // Skip non-message events (read receipts, message_edit, reactions, delivery)
+        if (isset($event['read']) || isset($event['message_edit']) || isset($event['delivery'])) continue;
+
         $sender_id    = $event['sender']['id'] ?? '';
         $recipient_id = $event['recipient']['id'] ?? '';
         $timestamp    = $event['timestamp'] ?? time();
         $message      = $event['message'] ?? null;
 
-        // Skip non-message events (read receipts, message_edit, reactions)
         if (!$message || !$sender_id) continue;
-        if (isset($event['read']) || isset($event['message_edit'])) continue;
 
-        // Detect echo (our page sending, or is_echo flag)
-        $is_echo = isset($message['is_echo']) ? (bool)$message['is_echo'] : in_array($sender_id, $OUR_PAGE_IDS);
+        // Echo = message sent BY our page (sender = our page or entry page)
+        $is_echo = !empty($message['is_echo']) || ($sender_id === $page_id);
 
         $text      = $message['text'] ?? '';
         $mid       = $message['mid'] ?? '';

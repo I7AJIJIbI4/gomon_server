@@ -764,9 +764,9 @@ def ig_message_webhook():
     if not sender_id:
         return jsonify({'error': 'missing sender'}), 400
 
-    # Detect if this is our own page sending (echo) — check recipient_id
+    # Detect echo (our page's own outgoing message reflected back)
     recipient_id = data.get('recipient_id', '')
-    is_echo = (sender_id == recipient_id) or data.get('is_echo', False)
+    is_echo = bool(data.get('is_echo', False))
 
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
