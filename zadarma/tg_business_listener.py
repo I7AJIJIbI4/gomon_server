@@ -360,30 +360,25 @@ def _check_ai_should_reply(conv_id, chat_id):
             pass  # Table may not exist yet
 
         # 30s cooldown — don't reply more often than once per 30s
+        # NOTE: created_at is UTC (datetime('now')), use SQLite datetime for comparisons
         try:
-            last_ai = conn.execute(
-                "SELECT created_at FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
-                "ORDER BY id DESC LIMIT 1", (conv_id,)).fetchone()
-            if last_ai:
-                from datetime import datetime as _dt_cd
-                from tz_utils import kyiv_now as _kyiv_cd
-                last_ts = _dt_cd.strptime(last_ai[0], '%Y-%m-%d %H:%M:%S')
-                if (_kyiv_cd() - last_ts).total_seconds() < 30:
-                    return False, 'cooldown'
+            cooldown_row = conn.execute(
+                "SELECT 1 FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
+                "AND created_at > datetime('now', '-30 seconds') LIMIT 1",
+                (conv_id,)).fetchone()
+            if cooldown_row:
+                return False, 'cooldown'
         except Exception:
             pass
 
         # Check if REAL human admin replied recently (not ai_bot)
         # Exclude auto-greetings: admin messages that have a client message within 5s
-        from tz_utils import kyiv_now as _kyiv_now_pause
-        from datetime import timedelta as _td_pause
-        _pause_cutoff = (_kyiv_now_pause() - _td_pause(seconds=AI_ADMIN_PAUSE)).strftime('%Y-%m-%d %H:%M:%S')
         rows = conn.execute(
             "SELECT created_at FROM messages WHERE conversation_id=? AND is_from_admin=1 "
             "AND sender_id != 'ai_bot' "
-            "AND created_at > ? "
-            "ORDER BY id DESC LIMIT 5",
-            (conv_id, _pause_cutoff)).fetchall()
+            "AND created_at > datetime('now', '-{} seconds') "
+            "ORDER BY id DESC LIMIT 5".format(AI_ADMIN_PAUSE),
+            (conv_id,)).fetchall()
         for (admin_ts,) in rows:
             # Check if this admin message has a client message within 5 seconds (= auto-greeting)
             nearby = conn.execute(

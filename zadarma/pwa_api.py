@@ -856,37 +856,30 @@ def ig_ai_reply():
         pass  # Table may not exist yet — proceed
 
     # Admin pause (30 min) + 30s cooldown
+    # NOTE: created_at in messages is UTC (datetime('now')), so use SQLite datetime('now') for comparisons
     try:
         conn_cd = sqlite3.connect(DB_PATH, timeout=5)
         conv_id_cd = 'ig_{}'.format(sender_id)
-        from datetime import datetime as _dt_cd, timedelta as _td_cd
-        from tz_utils import kyiv_now as _kyiv_cd
-        _now = _kyiv_cd()
 
         # Admin pause: if real admin replied within 30 min — AI stays silent
-        admin_pause_cutoff = (_now - _td_cd(seconds=1800)).strftime('%Y-%m-%d %H:%M:%S')
         admin_rows = conn_cd.execute(
             "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id != 'ai_bot' AND created_at > ? LIMIT 1",
-            (conv_id_cd, admin_pause_cutoff)).fetchone()
+            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-1800 seconds') LIMIT 1",
+            (conv_id_cd,)).fetchone()
         if admin_rows:
             conn_cd.close()
             logger.info('IG AI admin_pause for {}'.format(sender_id))
             return jsonify({'skipped': True, 'reason': 'admin_active'})
 
         # 30s cooldown
-        last_ai = conn_cd.execute(
-            "SELECT created_at FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
-            "ORDER BY id DESC LIMIT 1", (conv_id_cd,)).fetchone()
+        cooldown_row = conn_cd.execute(
+            "SELECT 1 FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
+            "AND created_at > datetime('now', '-30 seconds') LIMIT 1",
+            (conv_id_cd,)).fetchone()
         conn_cd.close()
-        if last_ai:
-            try:
-                last_ts = _dt_cd.strptime(last_ai[0], '%Y-%m-%d %H:%M:%S')
-                if (_now - last_ts).total_seconds() < 30:
-                    logger.info('IG AI cooldown for {}'.format(sender_id))
-                    return jsonify({'skipped': True, 'reason': 'cooldown'})
-            except Exception:
-                pass
+        if cooldown_row:
+            logger.info('IG AI cooldown for {}'.format(sender_id))
+            return jsonify({'skipped': True, 'reason': 'cooldown'})
     except Exception:
         pass
 

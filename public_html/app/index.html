@@ -3518,7 +3518,9 @@ function _msgPlatformIcon(platform, size) {
 function _fmtMsgTime(dateStr) {
   if (!dateStr) return '';
   try {
-    var d = new Date(dateStr.replace(' ', 'T'));
+    var s = dateStr.replace(' ', 'T');
+    if (!/[Z+\-]/.test(s.slice(-6))) s += 'Z';  // DB stores UTC — append Z so JS converts to local
+    var d = new Date(s);
     if (isNaN(d.getTime())) return dateStr.slice(11,16) || '';
     var now = new Date();
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
