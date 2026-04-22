@@ -764,8 +764,37 @@ def ig_message_webhook():
     if not sender_id:
         return jsonify({'error': 'missing sender'}), 400
 
+    # Detect echo (our page's own outgoing message reflected back)
+    recipient_id = data.get('recipient_id', '')
+    is_echo = bool(data.get('is_echo', False))
+
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
+
+        if is_echo:
+            # Echo = outgoing message from our page (could be AI bot or real doctor)
+            # Check if this text was already saved by ai_bot (to avoid duplicates)
+            conv_id = 'ig_{}'.format(recipient_id)
+            content_check = (text or '')[:80]
+            if content_check:
+                already = conn.execute(
+                    "SELECT 1 FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
+                    "AND substr(content,1,80)=? AND created_at > datetime('now','-2 minutes') LIMIT 1",
+                    (conv_id, content_check)).fetchone()
+                if already:
+                    conn.close()
+                    logger.debug('IG echo skipped (AI duplicate): conv={}'.format(conv_id))
+                    return jsonify({'ok': True, 'echo': True, 'skipped': 'ai_dup'})
+            # Real doctor reply from Instagram app — save for admin_pause tracking
+            conn.execute(
+                "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
+                "VALUES (?, ?, 'Admin', 'instagram', ?, ?, ?, 1, datetime('now'))",
+                (conv_id, 'admin_ig', text or ('[медіа]' if media_url else ''), media_type, media_url or ''))
+            conn.commit()
+            conn.close()
+            logger.info('IG echo (doctor reply) stored: conv={} text={}'.format(conv_id, (text or '')[:50]))
+            return jsonify({'ok': True, 'echo': True})
+
         conv_id = 'ig_{}'.format(sender_id)
 
         # Resolve sender name: check if we already have it, otherwise fetch from IG Graph API
@@ -826,20 +855,34 @@ def ig_ai_reply():
     except Exception:
         pass  # Table may not exist yet — proceed
 
-    # 30s cooldown — don't reply more than once per 30s per user
+    # Admin pause (30 min) + 30s cooldown
     try:
         conn_cd = sqlite3.connect(DB_PATH, timeout=5)
         conv_id_cd = 'ig_{}'.format(sender_id)
+        from datetime import datetime as _dt_cd, timedelta as _td_cd
+        from tz_utils import kyiv_now as _kyiv_cd
+        _now = _kyiv_cd()
+
+        # Admin pause: if real admin replied within 30 min — AI stays silent
+        admin_pause_cutoff = (_now - _td_cd(seconds=1800)).strftime('%Y-%m-%d %H:%M:%S')
+        admin_rows = conn_cd.execute(
+            "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
+            "AND sender_id != 'ai_bot' AND created_at > ? LIMIT 1",
+            (conv_id_cd, admin_pause_cutoff)).fetchone()
+        if admin_rows:
+            conn_cd.close()
+            logger.info('IG AI admin_pause for {}'.format(sender_id))
+            return jsonify({'skipped': True, 'reason': 'admin_active'})
+
+        # 30s cooldown
         last_ai = conn_cd.execute(
             "SELECT created_at FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
             "ORDER BY id DESC LIMIT 1", (conv_id_cd,)).fetchone()
         conn_cd.close()
         if last_ai:
-            from datetime import datetime as _dt_cd
             try:
                 last_ts = _dt_cd.strptime(last_ai[0], '%Y-%m-%d %H:%M:%S')
-                from tz_utils import kyiv_now as _kyiv_cd
-                if (_kyiv_cd() - last_ts).total_seconds() < 30:
+                if (_now - last_ts).total_seconds() < 30:
                     logger.info('IG AI cooldown for {}'.format(sender_id))
                     return jsonify({'skipped': True, 'reason': 'cooldown'})
             except Exception:
