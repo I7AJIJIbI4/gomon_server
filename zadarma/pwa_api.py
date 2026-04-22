@@ -4012,7 +4012,7 @@ def admin_messages_list():
                 'client_name':     client_name,
                 'sender_name':     r['sender_name'],
                 'platform':        r['platform'],
-                'last_message':    r['last_message'],
+                'last_message':    (r['last_message'] or '')[:100],
                 'last_at':         r['last_at'],
                 'media_type':      r['media_type'],
                 'is_from_admin':   r['is_from_admin'],
