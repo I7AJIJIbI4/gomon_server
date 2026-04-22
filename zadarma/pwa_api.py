@@ -4005,7 +4005,13 @@ def admin_messages_list():
             uc = r['unread_count']
             if unread_only and uc == 0:
                 continue
-            client_name = _get_client_name(conn, r['client_phone']) or r['sender_name']
+            # Get client name: from clients DB, or from first non-admin message in conversation
+            client_name = _get_client_name(conn, r['client_phone'])
+            if not client_name:
+                cn_row = conn.execute(
+                    "SELECT sender_name FROM messages WHERE conversation_id=? AND is_from_admin=0 AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
+                    (r['conversation_id'],)).fetchone()
+                client_name = cn_row[0] if cn_row else r['sender_name']
             result.append({
                 'conversation_id': r['conversation_id'],
                 'client_phone':    r['client_phone'],
