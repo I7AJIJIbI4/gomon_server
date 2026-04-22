@@ -1094,6 +1094,10 @@ def get_my_appointments():
 @app.route('/api/prices', methods=['GET'])
 def get_prices():
     """Повертає prices.json напряму з диску (оновлюється з сайтом)"""
+    # Block crawlers — only same-origin requests
+    fetch_site = request.headers.get('Sec-Fetch-Site', '')
+    if fetch_site and fetch_site not in ('same-origin', 'same-site', 'none'):
+        return jsonify([])
     try:
         with open(PRICES_PATH, 'r', encoding='utf-8') as f:
             data = json.load(f)
