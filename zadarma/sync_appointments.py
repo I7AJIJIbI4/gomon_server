@@ -40,8 +40,10 @@ def sync_recent_appointments(days_back=7, days_forward=90):
 
     url = f'{WLAUNCH_API_URL}/company/{COMPANY_ID}/branch/{branch_id}/appointment'
 
-    end_date = datetime.utcnow() + timedelta(days=days_forward)
-    start_date = datetime.utcnow() - timedelta(days=days_back)
+    from tz_utils import kyiv_now
+    now = kyiv_now()
+    end_date = now + timedelta(days=days_forward)
+    start_date = now - timedelta(days=days_back)
 
     clients_map = {}
     page = 0

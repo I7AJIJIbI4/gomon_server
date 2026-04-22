@@ -270,7 +270,10 @@ def create_folders_and_notify(date_str=None):
 
         # Send cashback drug selection buttons for each appointment
         try:
-            _send_drug_buttons(tg_id, appts, date_str or kyiv_now().strftime('%Y-%m-%d'))
+            if not date_str:
+                from tz_utils import kyiv_now as _kn
+                date_str = _kn().strftime('%Y-%m-%d')
+            _send_drug_buttons(tg_id, appts, date_str)
         except Exception as e:
             logger.error('Drug buttons error for {}: {}'.format(spec, e))
 

@@ -545,13 +545,9 @@ def _process_pending_cashback(dry_run=False):
                     body='Баланс {:.0f} грн. Оберіть процедуру і зверніться до лікаря'.format(total),
                     url='https://drgomon.beauty/app/#price',
                     tag='cashback_threshold')
-        except Exception:
-            pass
-
         except Exception as e:
-            logger.error('    pending cashback accrual error: {}'.format(e))
+            logger.error('    cashback threshold push error: {}'.format(e))
 
-    conn.close()
     return accrued
 
 # ─── Режим --specialist (сповіщення спеціалістам, о 20:00) ──────────────────
