@@ -3948,6 +3948,7 @@ async function sendMsgReply() {
 function _startMsgPoll() {
   if (_msgPollTimer) clearInterval(_msgPollTimer);
   _msgPollTimer = setInterval(function() {
+    if (_msgFilter === 'ai') return;  // Don't overwrite AI tab with messenger convos
     loadMsgConversations();
     // Auto-refresh active thread
     if (_msgActiveConv) _refreshActiveThread();
