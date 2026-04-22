@@ -3973,8 +3973,6 @@ def admin_messages_list():
     if denied: return denied
     """List conversations with last message, unread count."""
     platform = request.args.get('platform', '').strip()
-    # Normalize platform filter
-    # (DB now stores 'instagram'/'telegram' consistently)
     unread_only = request.args.get('unread_only', '') == '1'
 
     conn = sqlite3.connect(DB_PATH)
@@ -3996,15 +3994,15 @@ def admin_messages_list():
         if platform:
             query += " AND m.platform = ?"
             params.append(platform)
-        query += " ORDER BY m.created_at DESC LIMIT 50"
+        if unread_only:
+            query += " AND (SELECT COUNT(*) FROM messages mu WHERE mu.conversation_id = m.conversation_id AND mu.is_read = 0 AND mu.is_from_admin = 0) > 0"
+        query += " ORDER BY m.created_at DESC LIMIT 200"
 
         rows = conn.execute(query, params).fetchall()
 
         result = []
         for r in rows:
             uc = r['unread_count']
-            if unread_only and uc == 0:
-                continue
             # Get client name: from clients DB, or from first non-admin message in conversation
             client_name = _get_client_name(conn, r['client_phone'])
             if not client_name:

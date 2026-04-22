@@ -3485,15 +3485,18 @@ function admAiToggleMic() {
 }
 
 /* ── ADMIN MESSENGER ── */
-var _msgFilter = '';
+var _msgPlatform = '';     // '' = all, 'telegram', 'instagram'
+var _msgUnread = false;    // separate unread toggle
+var _msgFilter = '';       // legacy compat for AI tab
 var _msgActiveConv = null;
 var _msgPollTimer = null;
 var _msgConvs = [];
 
 function loadMsgConversations() {
-  var params = '';
-  if (_msgFilter === 'unread') params = '?unread_only=1';
-  else if (_msgFilter === 'telegram' || _msgFilter === 'instagram') params = '?platform=' + _msgFilter;
+  var parts = [];
+  if (_msgPlatform) parts.push('platform=' + _msgPlatform);
+  if (_msgUnread) parts.push('unread_only=1');
+  var params = parts.length ? '?' + parts.join('&') : '';
 
   var ctrl = new AbortController();
   setTimeout(function() { ctrl.abort(); }, 30000);
@@ -3564,13 +3567,32 @@ function renderMsgConvList() {
 }
 
 function filterMsgPlatform(f) {
-  _msgFilter = f;
-  document.querySelectorAll('.msg-filter').forEach(function(b) { b.classList.toggle('active', b.dataset.f === f); });
   if (f === 'ai') {
+    _msgFilter = 'ai';
+    document.querySelectorAll('.msg-filter-ch').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.msg-filter-ai').forEach(function(b) { b.classList.add('active'); });
     loadAiConversations();
-  } else {
-    loadMsgConversations();
+    return;
   }
+  _msgFilter = '';
+  // Channel filter (can combine with unread)
+  if (f === 'telegram' || f === 'instagram') {
+    _msgPlatform = (_msgPlatform === f) ? '' : f;  // toggle
+  } else {
+    _msgPlatform = '';
+  }
+  document.querySelectorAll('.msg-filter-ch').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.f === _msgPlatform || (!_msgPlatform && b.dataset.f === ''));
+  });
+  document.querySelectorAll('.msg-filter-ai').forEach(function(b) { b.classList.remove('active'); });
+  loadMsgConversations();
+}
+function toggleMsgUnread() {
+  _msgUnread = !_msgUnread;
+  _msgFilter = '';
+  document.querySelector('.msg-filter-unread').classList.toggle('active', _msgUnread);
+  document.querySelectorAll('.msg-filter-ai').forEach(function(b) { b.classList.remove('active'); });
+  loadMsgConversations();
 }
 
 // ── AI Conversations ──
@@ -3949,11 +3971,10 @@ async function sendMsgReply() {
 function _startMsgPoll() {
   if (_msgPollTimer) clearInterval(_msgPollTimer);
   _msgPollTimer = setInterval(function() {
-    if (_msgFilter === 'ai') return;  // Don't overwrite AI tab with messenger convos
+    if (_msgFilter === 'ai') return;
     loadMsgConversations();
-    // Auto-refresh active thread
     if (_msgActiveConv) _refreshActiveThread();
-  }, 10000);
+  }, 5000);
 }
 var _refreshAbort = null;
 function _refreshActiveThread() {
@@ -6332,11 +6353,13 @@ document.addEventListener('keydown', function(e) {
         <button onclick="if(window.GomonChat)GomonChat.open()" class="btn-sm" style="background:var(--gold);color:var(--btn-text);border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-family:var(--sans);cursor:pointer">AI Асистент</button>
       </div>
       <div class="msg-filters">
-        <button class="msg-filter active" onclick="filterMsgPlatform('')" data-f=""><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M5 8h6"/></svg>Всі</button>
-        <button class="msg-filter" onclick="filterMsgPlatform('unread')" data-f="unread"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><circle cx="8" cy="8" r="4"/></svg>Непрочитані</button>
-        <button class="msg-filter" onclick="filterMsgPlatform('telegram')" data-f="telegram"><svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M13.6 2.8L1.7 7.5c-.5.2-.5.5 0 .6l3 .9 1.2 3.8c.1.4.5.4.7.2l1.7-1.7 3.4 2.5c.4.2.7.1.8-.4L14.4 3.5c.2-.5-.2-.9-.8-.7zM5.8 9l5.4-3.3L7 9.6l-.4 2.2L5.8 9z"/></svg>TG</button>
-        <button class="msg-filter" onclick="filterMsgPlatform('instagram')" data-f="instagram"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="3.5"/><circle cx="8" cy="8" r="2.8"/><circle cx="11.5" cy="4.5" r=".7" fill="currentColor" stroke="none"/></svg>IG</button>
-        <button class="msg-filter" onclick="filterMsgPlatform('ai')" data-f="ai"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5.5 6.5h5M5.5 9.5h3"/></svg>AI</button>
+        <button class="msg-filter msg-filter-ch active" onclick="filterMsgPlatform('')" data-f="">Всі</button>
+        <button class="msg-filter msg-filter-ch" onclick="filterMsgPlatform('telegram')" data-f="telegram"><svg viewBox="0 0 16 16" width="14" height="14" fill="#2AABEE" stroke="none"><path d="M13.6 2.8L1.7 7.5c-.5.2-.5.5 0 .6l3 .9 1.2 3.8c.1.4.5.4.7.2l1.7-1.7 3.4 2.5c.4.2.7.1.8-.4L14.4 3.5c.2-.5-.2-.9-.8-.7zM5.8 9l5.4-3.3L7 9.6l-.4 2.2L5.8 9z"/></svg>TG</button>
+        <button class="msg-filter msg-filter-ch" onclick="filterMsgPlatform('instagram')" data-f="instagram"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#E4405F" stroke-width="1.3"><rect x="2" y="2" width="12" height="12" rx="3.5"/><circle cx="8" cy="8" r="2.8"/><circle cx="11.5" cy="4.5" r=".7" fill="#E4405F" stroke="none"/></svg>IG</button>
+        <span style="width:1px;background:var(--border);margin:2px 4px"></span>
+        <button class="msg-filter msg-filter-unread" onclick="toggleMsgUnread()"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" stroke="none"><circle cx="8" cy="8" r="4"/></svg>Непрочитані</button>
+        <span style="width:1px;background:var(--border);margin:2px 4px"></span>
+        <button class="msg-filter msg-filter-ai" onclick="filterMsgPlatform('ai')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5.5 6.5h5M5.5 9.5h3"/></svg>AI</button>
       </div>
       <div class="msg-conv-list" id="msgConvList"></div>
     </div>
