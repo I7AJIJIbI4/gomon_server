@@ -790,6 +790,8 @@ def ig_message_webhook():
                 "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
                 "VALUES (?, ?, 'Admin', 'instagram', ?, ?, ?, 1, datetime('now'))",
                 (conv_id, 'admin_ig', text or ('[медіа]' if media_url else ''), media_type, media_url or ''))
+            # Doctor replied → mark conversation as read
+            conn.execute("UPDATE messages SET is_read=1 WHERE conversation_id=? AND is_read=0 AND is_from_admin=0", (conv_id,))
             conn.commit()
             conn.close()
             logger.info('IG echo (doctor reply) stored: conv={} text={}'.format(conv_id, (text or '')[:50]))
@@ -4263,6 +4265,8 @@ def admin_messages_send():
             (platform, conv_id, 'admin_' + request.admin_phone,
              'Admin', client_phone, content_for_db, media_type,
              tg_file_id or file_id or '', 1, request.admin_phone))
+        # Admin replied → mark conversation as read
+        conn.execute("UPDATE messages SET is_read=1 WHERE conversation_id=? AND is_read=0 AND is_from_admin=0", (conv_id,))
         conn.commit()
     finally:
         conn.close()

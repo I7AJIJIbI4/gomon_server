@@ -148,6 +148,9 @@ def save_message(sender_id, sender_name, content, media_type='text', file_id=Non
             conn.execute(
                 "INSERT OR REPLACE INTO biz_connections (chat_id, biz_conn_id) VALUES (?,?)",
                 (str(chat_id), business_connection_id))
+        # Real admin replied (not bot) → mark conversation as read
+        if is_from_admin and str(sender_id) != 'ai_bot':
+            conn.execute("UPDATE messages SET is_read=1 WHERE conversation_id=? AND is_read=0 AND is_from_admin=0", (conv_id,))
         conn.commit()
         logger.info('Saved: {} from {} (admin={})'.format(
             (content or '')[:40], sender_name, is_from_admin))
