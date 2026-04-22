@@ -3500,6 +3500,7 @@ function loadMsgConversations() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       _msgConvs = data.conversations || [];
+      console.log('MSG loadConvs filter=' + _msgFilter + ' params=' + params + ' count=' + _msgConvs.length, _msgConvs.map(function(c){return c.conversation_id}));
       renderMsgConvList();
     })
     .catch(function(e) {
