@@ -46,6 +46,7 @@ SPEC_NAMES = {
 PRICES_PATH = '/home/gomoncli/private_data/prices.json'
 
 # Mapping: generic WLaunch procedure name → prices.json category names that contain drugs
+# WLaunch generic name → prices.json category (for drug button selection)
 PROCEDURE_TO_CATEGORIES = {
     'Ботулінотерапія': ['Ботулінотерапія Neuronox / Nabota', 'Ботулінотерапія Xeomin'],
     'Контурна пластика губ': ['Контурна пластика губ'],
@@ -55,13 +56,10 @@ PROCEDURE_TO_CATEGORIES = {
     'Мезотерапія': ['Мезотерапія'],
     'Ліполітики (обличчя, 4 мл)': ['Ферментотерапія'],
     'Ліполітики (тіло, 10 мл)': ['Ферментотерапія'],
-    'Ліполіз (ліполітики)': ['Ферментотерапія'],
     'Гіалуронідаза (розчинення філера)': ['Ферментотерапія'],
-    'Гіалуронідаза': ['Ферментотерапія'],
 }
-# For NEEDS_DRUG_SELECTION: keywords that trigger drug button flow (substring match in combo procedures)
-NEEDS_DRUG_KEYWORDS = ['ботулінотерапі', 'контурна пластика', 'біорепарація', 'біоревіталізація', 'мезотерапі',
-                       'ліполітик', 'ліполіз', 'гіалуронідаз']
+# Exact set of WLaunch service names that need doctor price confirmation (drug buttons)
+NEEDS_DRUG_SELECTION = set(PROCEDURE_TO_CATEGORIES.keys())
 
 
 def _get_drugs_for_procedure(procedure_name):

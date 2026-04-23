@@ -419,15 +419,15 @@ def run_feedback(dry_run=False, override_date=None):
         # Cashback: auto-accrue only for procedures without drug selection
         # (procedures not in PROCEDURE_TO_CATEGORIES use auto-accrual)
         procedure = appt.get('procedure_name', '')
-        # Shared with photo_reminder.py — procedures that need doctor drug/price confirmation
+        # Exact WLaunch service names that need doctor price confirmation
         try:
-            from photo_reminder import NEEDS_DRUG_KEYWORDS
+            from photo_reminder import NEEDS_DRUG_SELECTION
         except ImportError:
-            NEEDS_DRUG_KEYWORDS = ['ботулінотерапі', 'контурна пластика', 'біорепарація', 'біоревіталізація',
-                                   'мезотерапі', 'ліполітик', 'ліполіз', 'гіалуронідаз']
-        _proc_lower = procedure.lower()
-        _needs_drug = any(kw in _proc_lower for kw in NEEDS_DRUG_KEYWORDS)
-        if not _needs_drug:
+            NEEDS_DRUG_SELECTION = {'Ботулінотерапія', 'Контурна пластика губ', 'Контурна пластика обличчя',
+                                    'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія',
+                                    'Ліполітики (обличчя, 4 мл)', 'Ліполітики (тіло, 10 мл)',
+                                    'Гіалуронідаза (розчинення філера)'}
+        if procedure not in NEEDS_DRUG_SELECTION:
             try:
                 _accrue_cashback(appt)
                 cashback_ok += 1
