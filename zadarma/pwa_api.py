@@ -3392,6 +3392,78 @@ def _load_procs_for_ai():
         return []
 
 
+def _build_schedule_for_ai(today_str):
+    """Build schedule text from local DB: Sunday to next Sunday, busy slots per specialist."""
+    from datetime import date, timedelta
+    today = date.fromisoformat(today_str)
+    # Sunday of current week to next Sunday
+    days_since_sun = (today.weekday() + 1) % 7
+    start_sun = today - timedelta(days=days_since_sun)
+    end_sun = start_sun + timedelta(days=14)  # 2 weeks to cover next Sunday
+    wd_names = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд']
+
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        # WLaunch appointments from services_json
+        busy = {}  # {(specialist, date): [(HH:MM, duration_min, client, procedure)]}
+        rows = conn.execute("SELECT phone, first_name, last_name, services_json FROM clients WHERE services_json IS NOT NULL").fetchall()
+        for phone, fn, ln, sj in rows:
+            try:
+                items = json.loads(sj)
+            except Exception:
+                continue
+            name = ('{} {}'.format(fn or '', ln or '')).strip() or phone
+            for it in items:
+                d = it.get('date', '')
+                if not d or d < today_str or d > end_sun.isoformat():
+                    continue
+                st = (it.get('status') or '').upper()
+                if st in ('CANCELLED', 'NO_SHOW'):
+                    continue
+                spec = it.get('specialist', '')
+                h = it.get('hour')
+                m = it.get('minute', 0)
+                dur = it.get('duration_min', 60)
+                if h is None:
+                    continue
+                key = (spec, d)
+                if key not in busy:
+                    busy[key] = []
+                busy[key].append(('{:02d}:{:02d}'.format(h, m), dur, name, it.get('service', '')))
+        # Manual appointments
+        manual = conn.execute(
+            "SELECT client_name, procedure_name, specialist, date, time, duration FROM manual_appointments "
+            "WHERE date >= ? AND date <= ? AND status != 'CANCELLED'",
+            (today_str, end_sun.isoformat())).fetchall()
+        for cn, proc, spec, d, t, dur in manual:
+            key = (spec or '', d)
+            if key not in busy:
+                busy[key] = []
+            busy[key].append((t or '09:00', dur or 60, cn or '', proc or ''))
+    finally:
+        conn.close()
+
+    lines = []
+    for spec in ('victoria', 'anastasia'):
+        spec_name = 'Вікторія' if spec == 'victoria' else 'Анастасія'
+        lines.append(spec_name + ':')
+        d = start_sun
+        while d <= end_sun:
+            ds = d.isoformat()
+            wd = wd_names[d.weekday()]
+            appts = sorted(busy.get((spec, ds), []))
+            if d < today:
+                d += timedelta(days=1)
+                continue
+            if appts:
+                slots = ', '.join('{} {}хв ({})'.format(a[0], a[1], a[3][:30]) for a in appts)
+                lines.append('  {} {} — зайнято: {}'.format(ds, wd, slots))
+            else:
+                lines.append('  {} {} — вільний день'.format(ds, wd))
+            d += timedelta(days=1)
+    return '\n'.join(lines)
+
+
 _ai_rate = {}  # admin_phone -> last_request_ts
 AI_RATE_COOLDOWN = 5  # seconds between requests
 
@@ -3425,6 +3497,9 @@ def admin_ai_intent():
         for p in all_procs
     )
 
+    # Build schedule block from local DB (next 7 days)
+    schedule_block = _build_schedule_for_ai(today)
+
     system_prompt = (
         'Ти — асистент адміністратора студії краси Dr. Gómon.\n'
         'Сьогодні: {today} ({wd}).\n\n'
@@ -3433,6 +3508,8 @@ def admin_ai_intent():
         '{clients}\n\n'
         '== ПРОЦЕДУРИ ==\n'
         '{procs}\n\n'
+        '== РОЗКЛАД (найближчі 7 днів) ==\n'
+        '{schedule}\n\n'
         'Проаналізуй запит і поверни ТІЛЬКИ JSON (без markdown):\n'
         '{{\n'
         '  "action": "create|find|edit|delete|list|unknown",\n'
@@ -3452,8 +3529,10 @@ def admin_ai_intent():
         '- Дати "завтра","наступна середа" — конвертуй відносно {today}\n'
         '- "наступна X" = найближчий такий день тижня після сьогодні\n'
         '- Вікторія/Вика → "victoria"; Настя/Анастасія → "anastasia"; не вказано → null\n'
+        '- Якщо адмін просить записати на конкретний день — перевір РОЗКЛАД і підкажи вільні слоти\n'
+        '- Якщо час зайнятий — запропонуй найближчий вільний\n'
         '- reply: "Записую [ім\'я] на [процедуру], [дата] о [час]." або уточнення'
-    ).format(today=today, wd=today_wd, clients=clients_block, procs=procs_block)
+    ).format(today=today, wd=today_wd, clients=clients_block, procs=procs_block, schedule=schedule_block)
 
     payload = json.dumps({
         'model': 'claude-sonnet-4-6',
