@@ -3231,11 +3231,15 @@ def admin_prices_put():
         # Sync changes to WLaunch in background
         import threading
         new_prices = {}
+        new_specialists = {}
         for cat in data:
             for item in cat.get('items', []):
-                new_prices[item.get('name', '')] = item.get('price', '')
+                name = item.get('name', '')
+                new_prices[name] = item.get('price', '')
+                if item.get('specialists'):
+                    new_specialists[name] = item['specialists']
         if new_prices != old_prices:
-            threading.Thread(target=_sync_prices_to_wlaunch, args=(old_prices, new_prices), daemon=True).start()
+            threading.Thread(target=_sync_prices_to_wlaunch, args=(old_prices, new_prices, new_specialists), daemon=True).start()
 
         return jsonify({'ok': True})
     except Exception as e:
@@ -3254,8 +3258,9 @@ def _parse_price_uah(price_str):
     return int(m.group()) * 100 if m else None  # kopiyky
 
 
-def _sync_prices_to_wlaunch(old_prices, new_prices):
-    """Background sync: push price changes to WLaunch."""
+def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None):
+    """Background sync: push price changes and resource assignments to WLaunch."""
+    specialists_map = specialists_map or {}
     try:
         from config import WLAUNCH_API_URL, COMPANY_ID
         from wlaunch_api import get_branch_id, HEADERS as WL_HEADERS
@@ -3314,7 +3319,29 @@ def _sync_prices_to_wlaunch(old_prices, new_prices):
                 _req.post('{}/company/{}/service/{}'.format(WLAUNCH_API_URL, COMPANY_ID, sid),
                     headers=h, json={'company_service': {'active': False}}, timeout=10)
 
-        logger.info('WLaunch sync: prices_changed={} renamed={} new={}'.format(price_changed, renamed, added))
+        # Sync resource (specialist) assignments via /resource/attach
+        RESOURCE_MAP = {
+            'victoria': '56fce6a6-13e0-11ed-a923-055a0846b777',
+            'anastasia': '138cc61c-306f-11ee-b579-f36d472b6239',
+        }
+        attached = 0
+        for svc_name, spec_list in specialists_map.items():
+            if svc_name not in wl_by_name:
+                continue
+            res_ids = [RESOURCE_MAP[s] for s in spec_list if s in RESOURCE_MAP]
+            if not res_ids:
+                continue
+            sid = wl_by_name[svc_name]['id']
+            try:
+                attach_url = '{}/company/{}/branch/{}/service/{}/resource/attach'.format(
+                    WLAUNCH_API_URL, COMPANY_ID, bid, sid)
+                _req.post(attach_url, headers=h, json={'service': {'resources': res_ids}}, timeout=10)
+                attached += 1
+            except Exception:
+                pass
+
+        logger.info('WLaunch sync: prices_changed={} renamed={} new={} resources_attached={}'.format(
+            price_changed, renamed, added, attached))
     except Exception as e:
         logger.error('_sync_prices_to_wlaunch error: {}'.format(e))
 
