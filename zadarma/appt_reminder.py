@@ -629,9 +629,28 @@ def run_specialist_notifications(dry_run=False):
 
     sent = skipped = failed = 0
 
+    # Load per-specialist notification settings from DB
+    _spec_new_appt_enabled = {}
+    try:
+        _sc = _db()
+        for _row in _sc.execute("SELECT specialist, enabled FROM notification_settings WHERE type='spec_new_appt'").fetchall():
+            _spec_new_appt_enabled[_row['specialist']] = bool(_row['enabled'])
+        _sc.close()
+    except Exception:
+        pass  # Table may not exist — defaults apply
+    # Default: victoria=off (briefing only), anastasia=on
+    _spec_new_appt_enabled.setdefault('victoria', False)
+    _spec_new_appt_enabled.setdefault('anastasia', True)
+
     for appt in appts:
         if not appt.get('specialist'):
             logger.warning('  skip: немає спеціаліста для запису id={}'.format(appt.get('id')))
+            continue
+
+        # Check if spec_new_appt is enabled for this specialist
+        if not _spec_new_appt_enabled.get(appt.get('specialist'), True):
+            logger.info('  skip spec_new for {} (disabled)'.format(appt.get('specialist')))
+            skipped += 1
             continue
 
         logger.info('  → id={} | {} | {} | {} о {} | spec={}'.format(
@@ -706,8 +725,21 @@ def run_tomorrow_briefing(dry_run=False):
         return len(appts), 0, 0
 
     try:
+        # Load per-specialist briefing settings
+        _briefing_enabled = {}
+        try:
+            _bc = _db()
+            for _br in _bc.execute("SELECT specialist, enabled FROM notification_settings WHERE type='tomorrow_briefing'").fetchall():
+                _briefing_enabled[_br['specialist']] = bool(_br['enabled'])
+            _bc.close()
+        except Exception:
+            pass
+        _briefing_enabled.setdefault('victoria', True)
+        _briefing_enabled.setdefault('anastasia', True)
+        # Pass skip list to notifier — admin gets full digest, but individual specialist messages respect the toggle
+        skip_spec_msg = [s for s, en in _briefing_enabled.items() if not en]
         from notifier import send_tomorrow_briefing
-        results = send_tomorrow_briefing(by_spec)
+        results = send_tomorrow_briefing(by_spec, skip_specialist_msg=skip_spec_msg)
         logger.info('=== TOMORROW BRIEFING done: admin={} specialists={} ==='.format(
             results.get('admin'), results.get('specialists')))
         return len(appts), 1 if results.get('admin') else 0, 0

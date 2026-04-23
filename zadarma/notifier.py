@@ -534,7 +534,7 @@ def fmt_specialist_tomorrow(appt):
     ).format(price_part=price_part, **v)
 
 
-def send_tomorrow_briefing(appts_by_specialist, admin_phones=None):
+def send_tomorrow_briefing(appts_by_specialist, admin_phones=None, skip_specialist_msg=None):
     """
     Надсилає о 20:00 зведення завтрашніх записів:
     1. Адміну (Victoria) — повний список всіх записів
@@ -565,9 +565,13 @@ def send_tomorrow_briefing(appts_by_specialist, admin_phones=None):
         results['admin'] = _send_tg(tg_id, admin_text)
     logger.info('tomorrow_briefing admin → {}'.format(results['admin']))
 
-    # 2. Кожному спеціалісту — його записи
+    # 2. Кожному спеціалісту — його записи (skip if in skip list)
+    _skip = skip_specialist_msg or []
     for spec, appts in appts_by_specialist.items():
         if not appts:
+            continue
+        if spec in _skip:
+            logger.info('tomorrow_briefing {} skipped (disabled in settings)'.format(spec))
             continue
         appts_sorted = sorted(appts, key=lambda a: (a.get('time') or ''))
         lines = [fmt_specialist_tomorrow(a) for a in appts_sorted]

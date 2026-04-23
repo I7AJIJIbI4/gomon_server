@@ -4722,7 +4722,57 @@ function _renderNotifScreen() {
     });
     html += '</div>';
   });
+  // Specialist notification settings section
+  html += '<div style="margin-top:24px">';
+  html += '<div style="font-family:var(--serif);font-size:17px;color:var(--gold-pale);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Налаштування по спеціалістах</div>';
+  html += '<div id="spec-notif-settings" style="color:var(--text3);font-size:13px">Завантаження...</div>';
+  html += '</div>';
   el.innerHTML = html;
+  _loadSpecNotifSettings();
+}
+
+function _loadSpecNotifSettings() {
+  var el = document.getElementById('spec-notif-settings');
+  if (!el) return;
+  fetch('/api/admin/notifications/spec-settings', {headers:{Authorization:'Bearer '+token}})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var settings = d.settings || [];
+      var bySpec = {};
+      settings.forEach(function(s) {
+        if (!bySpec[s.specialist]) bySpec[s.specialist] = {};
+        bySpec[s.specialist][s.type] = s.enabled;
+      });
+      var specNames = {'victoria': 'Вікторія (лікар)', 'anastasia': 'Анастасія (спеціаліст)'};
+      var typeNames = {'spec_new_appt': 'Окремі сповіщення про нові записи', 'tomorrow_briefing': 'Зведений бріфінг на завтра'};
+      var html = '';
+      ['victoria', 'anastasia'].forEach(function(spec) {
+        html += '<div style="margin-bottom:14px">';
+        html += '<div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:6px">' + _esc(specNames[spec] || spec) + '</div>';
+        ['spec_new_appt', 'tomorrow_briefing'].forEach(function(t) {
+          var isOn = bySpec[spec] ? bySpec[spec][t] !== false : true;
+          var toggleBg = isOn ? 'rgba(29,158,117,.35)' : 'rgba(226,75,74,.2)';
+          var toggleDot = isOn ? 'rgba(29,158,117,1)' : 'rgba(226,75,74,.7)';
+          var togglePos = isOn ? '22px' : '2px';
+          html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">';
+          html += '<div onclick="_toggleSpecNotif(\'' + spec + '\',\'' + t + '\',' + (isOn?'false':'true') + ')" style="width:42px;height:24px;border-radius:12px;background:'+toggleBg+';position:relative;cursor:pointer;flex-shrink:0">';
+          html += '<div style="width:20px;height:20px;border-radius:50%;background:'+toggleDot+';position:absolute;top:2px;left:'+togglePos+'"></div></div>';
+          html += '<span style="font-size:13px;color:var(--text2)">' + _esc(typeNames[t] || t) + '</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      });
+      el.innerHTML = html;
+    }).catch(function() { el.innerHTML = 'Помилка завантаження'; });
+}
+
+function _toggleSpecNotif(spec, type, enabled) {
+  fetch('/api/admin/notifications/spec-settings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
+    body: JSON.stringify({specialist: spec, type: type, enabled: enabled})
+  }).then(function(r) { return r.json(); })
+    .then(function(d) { if (d.ok) _loadSpecNotifSettings(); });
 }
 
 var _notifHistoryData = [];

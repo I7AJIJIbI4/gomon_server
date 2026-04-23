@@ -2017,6 +2017,30 @@ def admin_ai_mute():
         return jsonify({'ok': True})
 
 
+@app.route('/api/admin/notifications/spec-settings', methods=['GET', 'POST'])
+@require_admin
+def admin_notif_spec_settings():
+    """GET: list specialist notification toggles. POST: update a toggle."""
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    if request.method == 'GET':
+        rows = conn.execute("SELECT specialist, type, enabled FROM notification_settings").fetchall()
+        conn.close()
+        return jsonify({'settings': [{'specialist': r[0], 'type': r[1], 'enabled': bool(r[2])} for r in rows]})
+    d = request.get_json() or {}
+    spec = d.get('specialist', '')
+    ntype = d.get('type', '')
+    enabled = d.get('enabled', True)
+    if spec not in ('victoria', 'anastasia') or not ntype:
+        conn.close()
+        return jsonify({'error': 'invalid params'}), 400
+    conn.execute("INSERT OR REPLACE INTO notification_settings (specialist, type, enabled) VALUES (?,?,?)",
+                 (spec, ntype, 1 if enabled else 0))
+    conn.commit()
+    conn.close()
+    logger.info('Notif setting: {}/{} = {}'.format(spec, ntype, enabled))
+    return jsonify({'ok': True})
+
+
 @app.route('/api/admin/notifications/schedule', methods=['POST'])
 @require_admin
 def admin_notif_schedule():
