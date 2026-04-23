@@ -726,19 +726,19 @@ def run_tomorrow_briefing(dry_run=False):
         return len(appts), 0, 0
 
     try:
-        # Load per-specialist briefing settings
-        _briefing_enabled = {}
+        # Skip per-specialist messages for those with spec_new_appt=OFF
+        # (they still get admin digest if they're the admin)
+        _spec_settings = {}
         try:
             _bc = _db()
-            for _br in _bc.execute("SELECT specialist, enabled FROM notification_settings WHERE type='tomorrow_briefing'").fetchall():
-                _briefing_enabled[_br['specialist']] = bool(_br['enabled'])
+            for _br in _bc.execute("SELECT specialist, enabled FROM notification_settings WHERE type='spec_new_appt'").fetchall():
+                _spec_settings[_br['specialist']] = bool(_br['enabled'])
             _bc.close()
         except Exception:
             pass
-        _briefing_enabled.setdefault('victoria', True)
-        _briefing_enabled.setdefault('anastasia', True)
-        # Pass skip list to notifier — admin gets full digest, but individual specialist messages respect the toggle
-        skip_spec_msg = [s for s, en in _briefing_enabled.items() if not en]
+        _spec_settings.setdefault('victoria', False)
+        _spec_settings.setdefault('anastasia', True)
+        skip_spec_msg = [s for s, en in _spec_settings.items() if not en]
         from notifier import send_tomorrow_briefing
         results = send_tomorrow_briefing(by_spec, skip_specialist_msg=skip_spec_msg)
         logger.info('=== TOMORROW BRIEFING done: admin={} specialists={} ==='.format(

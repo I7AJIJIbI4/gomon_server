@@ -54,9 +54,9 @@ PROCEDURE_TO_CATEGORIES = {
     'Біорепарація шкіри': ['Біорепарація шкіри'],
     'Біоревіталізація шкіри': ['Біоревіталізація шкіри'],
     'Мезотерапія': ['Мезотерапія'],
-    'Ліполітики (обличчя, 4 мл)': ['Ферментотерапія'],
-    'Ліполітики (тіло, 10 мл)': ['Ферментотерапія'],
-    'Гіалуронідаза (розчинення філера)': ['Ферментотерапія'],
+    'Ліполітики (обличчя, 4 мл)': ['_ліполітики'],
+    'Ліполітики (тіло, 10 мл)': ['_ліполітики'],
+    'Гіалуронідаза (розчинення філера)': ['_гіалуронідаза'],
 }
 # Exact set of WLaunch service names that need doctor price confirmation (drug buttons)
 NEEDS_DRUG_SELECTION = set(PROCEDURE_TO_CATEGORIES.keys())
@@ -75,17 +75,32 @@ def _get_drugs_for_procedure(procedure_name):
     drugs = []
     for cat in prices:
         cat_name = cat.get('cat', '')
-        if cat_name not in cats:
-            continue
-        for item in cat.get('items', []):
-            name = item.get('name', '')
-            price_str = item.get('price', '')
-            if not name or 'безкоштовно' in price_str.lower():
-                continue
-            p = re.search(r'\d+', str(price_str).replace(' ', ''))
-            price_val = int(p.group()) if p else 0
-            if price_val > 0:
-                drugs.append({'name': name, 'price': price_val})
+        # Virtual categories: _ліполітики, _гіалуронідаза — filter by keyword in item name
+        for target_cat in cats:
+            if target_cat.startswith('_'):
+                keyword = target_cat[1:]
+                if cat_name == 'Ферментотерапія':
+                    for item in cat.get('items', []):
+                        name = item.get('name', '')
+                        if keyword.lower() not in name.lower():
+                            continue
+                        price_str = item.get('price', '')
+                        if 'безкоштовно' in price_str.lower():
+                            continue
+                        p = re.search(r'\d+', str(price_str).replace(' ', ''))
+                        price_val = int(p.group()) if p else 0
+                        if price_val > 0:
+                            drugs.append({'name': name, 'price': price_val})
+            elif cat_name == target_cat:
+                for item in cat.get('items', []):
+                    name = item.get('name', '')
+                    price_str = item.get('price', '')
+                    if not name or 'безкоштовно' in price_str.lower():
+                        continue
+                    p = re.search(r'\d+', str(price_str).replace(' ', ''))
+                    price_val = int(p.group()) if p else 0
+                    if price_val > 0:
+                        drugs.append({'name': name, 'price': price_val})
     return drugs
 
 
