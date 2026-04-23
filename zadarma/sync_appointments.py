@@ -169,13 +169,55 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 aid = e.get('appt_id')
                 if aid:
                     by_id[aid] = e
+            # Audit: detect changes
+            _audit_conn = sqlite3.connect(DB_PATH, timeout=10)
+            from tz_utils import kyiv_now as _audit_now
+            _now_str = _audit_now().strftime('%Y-%m-%d %H:%M:%S')
             for e in new_entries:
                 aid = e.get('appt_id')
-                if aid:
-                    by_id[aid] = e  # new data overwrites old for same appt
-                else:
+                if not aid:
                     synthetic_key = '{}|{}|{}'.format(e.get('date',''), e.get('service',''), e.get('hour',''))
                     by_id[synthetic_key] = e
+                    continue
+                old = by_id.get(aid)
+                if not old:
+                    action = 'created'
+                    prev_status = None
+                elif old.get('status') != e.get('status'):
+                    action = 'status_changed'
+                    prev_status = old.get('status')
+                else:
+                    by_id[aid] = e
+                    continue
+                by_id[aid] = e
+                try:
+                    _audit_conn.execute(
+                        "INSERT INTO appointment_audit_log (appt_id, phone, client_name, procedure_name, specialist, date, time, status, prev_status, action, source, created_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (aid, phone_norm, '{} {}'.format(c['first_name'], c['last_name']).strip(),
+                         e.get('service',''), e.get('specialist',''), e.get('date',''),
+                         '{}:{}'.format(e.get('hour',''), str(e.get('minute',0)).zfill(2)),
+                         e.get('status',''), prev_status, action, 'wlaunch_sync', _now_str))
+                except Exception:
+                    pass
+            # Detect disappeared appointments (in existing but not in new_entries for recent dates)
+            new_ids = {e.get('appt_id') for e in new_entries if e.get('appt_id')}
+            for e in existing:
+                aid = e.get('appt_id')
+                if aid and aid not in new_ids and e.get('date', '') >= _audit_now().strftime('%Y-%m-%d'):
+                    if e.get('status') not in ('CANCELLED',):
+                        try:
+                            _audit_conn.execute(
+                                "INSERT INTO appointment_audit_log (appt_id, phone, client_name, procedure_name, specialist, date, time, status, prev_status, action, source, created_at) "
+                                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (aid, phone_norm, '{} {}'.format(c['first_name'], c['last_name']).strip(),
+                                 e.get('service',''), e.get('specialist',''), e.get('date',''),
+                                 '{}:{}'.format(e.get('hour',''), str(e.get('minute',0)).zfill(2)),
+                                 'DISAPPEARED', e.get('status',''), 'disappeared', 'wlaunch_sync', _now_str))
+                        except Exception:
+                            pass
+            _audit_conn.commit()
+            _audit_conn.close()
 
             merged = list(by_id.values())
             merged.sort(key=lambda x: x.get('date', ''), reverse=True)

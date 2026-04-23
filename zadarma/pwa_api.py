@@ -281,6 +281,20 @@ def init_messages_db():
 init_messages_db()
 
 
+def _audit_appointment(appt_id, phone, client_name, procedure, specialist, date, time_str, status, prev_status, action, source):
+    """Log appointment change to audit table (fire-and-forget)."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn.execute(
+            "INSERT INTO appointment_audit_log (appt_id, phone, client_name, procedure_name, specialist, date, time, status, prev_status, action, source, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+            (str(appt_id), phone or '', client_name or '', procedure or '', specialist or '', date or '', time_str or '', status or '', prev_status or '', action, source))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
 def _time_to_min(t):
     """Convert 'HH:MM' string to minutes since midnight."""
     try:
@@ -799,31 +813,34 @@ def ig_message_webhook():
 
         conv_id = 'ig_{}'.format(sender_id)
 
-        # Resolve sender name: check if we already have it, otherwise fetch from IG Graph API
+        # Resolve sender name + avatar: check if we already have it, otherwise fetch from IG Graph API
         sender_name = ''
+        avatar_url = ''
         existing = conn.execute(
-            "SELECT sender_name FROM messages WHERE conversation_id=? AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
+            "SELECT sender_name, avatar_url FROM messages WHERE conversation_id=? AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
             (conv_id,)).fetchone()
         if existing:
             sender_name = existing[0]
-        else:
+            avatar_url = existing[1] or ''
+        if not sender_name or not avatar_url:
             try:
                 from config import IG_FALLBACK_TOKEN
                 name_resp = _req.get(
                     'https://graph.instagram.com/v25.0/{}'.format(sender_id),
-                    params={'fields': 'name,username', 'access_token': IG_FALLBACK_TOKEN},
+                    params={'fields': 'name,username,profile_pic', 'access_token': IG_FALLBACK_TOKEN},
                     timeout=5)
                 if name_resp.status_code == 200:
                     nd = name_resp.json()
-                    sender_name = nd.get('name', '') or nd.get('username', '')
-                    logger.info('IG user resolved: {} = {}'.format(sender_id, sender_name))
+                    sender_name = sender_name or nd.get('name', '') or nd.get('username', '')
+                    avatar_url = nd.get('profile_pic', '') or avatar_url
+                    logger.info('IG user resolved: {} = {} avatar={}'.format(sender_id, sender_name, bool(avatar_url)))
             except Exception as e:
                 logger.warning('IG name fetch failed: {}'.format(e))
 
         conn.execute(
-            "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, created_at) "
-            "VALUES (?, ?, ?, 'instagram', ?, ?, ?, 0, datetime('now'))",
-            (conv_id, sender_id, sender_name, text or ('[медіа]' if media_url else ''), media_type, media_url or ''))
+            "INSERT INTO messages (conversation_id, sender_id, sender_name, platform, content, media_type, file_id, is_from_admin, avatar_url, created_at) "
+            "VALUES (?, ?, ?, 'instagram', ?, ?, ?, 0, ?, datetime('now'))",
+            (conv_id, sender_id, sender_name, text or ('[медіа]' if media_url else ''), media_type, media_url or '', avatar_url))
         conn.commit()
         conn.close()
         logger.info('IG message stored: {} conv={} name={} text={}'.format(sender_id, conv_id, sender_name, (text or '')[:50]))
@@ -2906,6 +2923,7 @@ def admin_cal_create():
         )
         new_id = c.lastrowid
         conn.commit()
+        _audit_appointment(wl_id or new_id, client_phone, client_name, procedure_name, specialist, date, appt_time, 'CONFIRMED', None, 'created', 'admin_app')
     except Exception as _db_err:
         conn.rollback()
         conn.close()
@@ -3039,6 +3057,7 @@ def admin_cal_delete(appt_id):
     conn.execute("UPDATE manual_appointments SET status='CANCELLED' WHERE id=?", (appt_id,))
     conn.commit()
     conn.close()
+    _audit_appointment(wl_id or appt_id, row['client_phone'], row['client_name'], row['procedure_name'], row['specialist'], row['date'], row['time'], 'CANCELLED', row['status'], 'cancelled', 'admin_app')
 
     # Push клієнту + TG спеціалісту (SMS/TG клієнту — WLaunch)
     try:
@@ -3906,6 +3925,7 @@ def chat_cancel_appointment():
         logger.error('chat cancel notification error: {}'.format(_e))
 
     logger.info('Chat AI cancelled: {} {} {}'.format(phone, date, service))
+    _audit_appointment(appt_id or '', phone, '', service, '', date, '', 'CANCELLED', 'CONFIRMED', 'cancelled', 'ai_chat')
     return jsonify({'ok': True, 'message': 'Запис на {} ({}) скасовано.'.format(date, service or 'процедура')})
 
 
@@ -3969,6 +3989,7 @@ def cancel_my_appointment():
 
     # Оновлюємо локальну БД
     _update_local_appt_cancelled(phone, date, service)
+    _audit_appointment(appt_id, phone, _client_name, service, _specialist, date, '', 'CANCELLED', 'CONFIRMED', 'cancelled', 'client_app')
 
     # Push клієнту + TG спеціалісту (SMS/TG клієнту — WLaunch)
     try:
