@@ -139,7 +139,7 @@ foreach ($data['entry'] as $entry) {
                 CURLOPT_POSTFIELDS     => $ai_payload,
                 CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 25,
+                CURLOPT_TIMEOUT        => 5,  // Returns immediately (queued, 30s delayed)
             ]);
             $ai_resp = curl_exec($ch2);
             curl_close($ch2);

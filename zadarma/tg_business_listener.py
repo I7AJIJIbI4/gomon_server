@@ -32,7 +32,7 @@ PRICES_FILE = '/home/gomoncli/private_data/prices.json'
 PROMOS_FILE = '/home/gomoncli/private_data/promos.json'
 POLL_TIMEOUT = 30
 AI_RATE_LIMIT = 10       # max AI replies per client per day
-AI_ADMIN_PAUSE = 1800    # 30 min — don't reply if admin replied recently
+AI_ADMIN_PAUSE = 129600  # 36 hours — don't reply if admin replied recently
 AI_MAX_HISTORY = 20      # max messages in context
 AI_MODEL = 'claude-sonnet-4-5'
 
@@ -715,10 +715,26 @@ def _cancel_client_appointment(client_phone, target_date=None):
 
 
 def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, image_b64=None, image_media_type=None):
-    """Process AI auto-reply in a separate thread."""
+    """Process AI auto-reply in a separate thread. Waits 30s for user to finish typing."""
     conv_id = 'tg_{}'.format(chat_id)
 
     try:
+        # Wait 30s for user to finish sending multiple messages
+        time.sleep(30)
+
+        # Check if user sent more messages during the wait — skip if so (next thread handles it)
+        try:
+            _cc = sqlite3.connect(DB_PATH, timeout=5)
+            _recent = _cc.execute(
+                "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
+                "AND created_at > datetime('now', '-28 seconds')", (conv_id,)).fetchone()
+            _cc.close()
+            if _recent and _recent[0] > 0:
+                logger.info('AI skip for {} (user still typing)'.format(conv_id))
+                return
+        except Exception:
+            pass
+
         # Check if should reply
         should, reason = _check_ai_should_reply(conv_id, chat_id)
         if not should:

@@ -835,7 +835,7 @@ def ig_message_webhook():
 
 @app.route('/api/webhook/ig-ai-reply', methods=['POST'])
 def ig_ai_reply():
-    """Generate AI reply for Instagram DM and send via Graph API."""
+    """Queue delayed AI reply for Instagram DM. Returns immediately, processes in background after 30s."""
     if request.remote_addr not in ('127.0.0.1', '::1'):
         return jsonify({'error': 'forbidden'}), 403
     data = request.get_json() or {}
@@ -844,7 +844,8 @@ def ig_ai_reply():
     if not sender_id or not text:
         return jsonify({'error': 'missing data'}), 400
 
-    # Check AI mute list — some users should never get auto-replies
+    # Quick checks before launching background thread
+    # Check AI mute list
     try:
         conn_mute = sqlite3.connect(DB_PATH, timeout=5)
         muted = conn_mute.execute(
@@ -855,33 +856,66 @@ def ig_ai_reply():
             logger.info('IG AI skipped (muted): {}'.format(sender_id))
             return jsonify({'skipped': True, 'reason': 'muted'})
     except Exception:
-        pass  # Table may not exist yet — proceed
+        pass
 
-    # Admin pause (30 min) + 30s cooldown
-    # NOTE: created_at in messages is UTC (datetime('now')), so use SQLite datetime('now') for comparisons
+    # Admin pause (36h)
     try:
         conn_cd = sqlite3.connect(DB_PATH, timeout=5)
         conv_id_cd = 'ig_{}'.format(sender_id)
-
-        # Admin pause: if real admin replied within 30 min — AI stays silent
         admin_rows = conn_cd.execute(
             "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-1800 seconds') LIMIT 1",
-            (conv_id_cd,)).fetchone()
-        if admin_rows:
-            conn_cd.close()
-            logger.info('IG AI admin_pause for {}'.format(sender_id))
-            return jsonify({'skipped': True, 'reason': 'admin_active'})
-
-        # 30s cooldown
-        cooldown_row = conn_cd.execute(
-            "SELECT 1 FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
-            "AND created_at > datetime('now', '-30 seconds') LIMIT 1",
+            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-129600 seconds') LIMIT 1",
             (conv_id_cd,)).fetchone()
         conn_cd.close()
-        if cooldown_row:
-            logger.info('IG AI cooldown for {}'.format(sender_id))
-            return jsonify({'skipped': True, 'reason': 'cooldown'})
+        if admin_rows:
+            logger.info('IG AI admin_pause for {}'.format(sender_id))
+            return jsonify({'skipped': True, 'reason': 'admin_active'})
+    except Exception:
+        pass
+
+    # Launch delayed reply in background thread (30s wait for user to finish typing)
+    import threading
+    def _ig_delayed_reply(sid):
+        import time as _time
+        _time.sleep(30)
+        try:
+            _ig_process_reply(sid)
+        except Exception as e:
+            logger.error('IG delayed reply error for {}: {}'.format(sid, e))
+    t = threading.Thread(target=_ig_delayed_reply, args=(sender_id,), daemon=True)
+    t.start()
+    return jsonify({'ok': True, 'queued': True})
+
+
+def _ig_process_reply(sender_id):
+    """Process IG AI reply after 30s delay. Checks for newer messages before responding."""
+    conv_id = 'ig_{}'.format(sender_id)
+
+    # Check if user sent more messages during the 30s wait — if so, skip (next webhook will trigger)
+    try:
+        conn_check = sqlite3.connect(DB_PATH, timeout=5)
+        recent = conn_check.execute(
+            "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
+            "AND created_at > datetime('now', '-28 seconds')",
+            (conv_id,)).fetchone()
+        conn_check.close()
+        if recent and recent[0] > 0:
+            logger.info('IG AI skipped (user still typing): {}'.format(sender_id))
+            return
+    except Exception:
+        pass
+
+    # Re-check admin pause (admin might have replied during 30s wait)
+    try:
+        conn_ap = sqlite3.connect(DB_PATH, timeout=5)
+        admin_rows = conn_ap.execute(
+            "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
+            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-129600 seconds') LIMIT 1",
+            (conv_id,)).fetchone()
+        conn_ap.close()
+        if admin_rows:
+            logger.info('IG AI admin_pause (post-delay) for {}'.format(sender_id))
+            return
     except Exception:
         pass
 
@@ -907,13 +941,12 @@ def ig_ai_reply():
         except Exception:
             pass
 
-        # Get conversation history from messages DB
+        # Get conversation history — includes ALL recent messages (user may have sent multiple)
         messages = []
         try:
-            conv_id = 'ig_{}'.format(sender_id)
             conn = sqlite3.connect(DB_PATH, timeout=5)
             rows = conn.execute(
-                "SELECT content, is_from_admin, sender_id FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 10",
+                "SELECT content, is_from_admin, sender_id FROM messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 20",
                 (conv_id,)).fetchall()
             conn.close()
             for row_text, is_admin, sid in reversed(rows):
@@ -923,9 +956,8 @@ def ig_ai_reply():
         except Exception:
             pass
 
-        # Add current message if not already in history
-        if not messages or messages[-1].get('content') != text:
-            messages.append({'role': 'user', 'content': text})
+        if not messages:
+            return
 
         # Call Anthropic
         import requests as ai_req
