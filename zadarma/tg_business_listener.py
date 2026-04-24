@@ -859,28 +859,12 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
             logger.info('AI escalated conversation {} to admin'.format(conv_id))
             return
 
-        # Send reply with "Записатись" callback button if procedure detected
+        # Send reply with "Записатись" URL button if procedure detected
+        # Note: callback_data buttons don't work via business_connection — only URL buttons
         if _procedure_name:
-            # 1. Send AI reply with inline "Записатись" button (callback, not URL)
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            import hashlib as _hl
-            _cb_id = 'proc_' + _hl.md5('{}_{}'.format(chat_id, int(time.time())).encode()).hexdigest()[:8]
-            # Store procedure data for callback
-            # Prune stale entries older than 30 minutes
-            _now_ts = time.time()
-            _pending_procedures_clean = {k: v for k, v in _pending_procedures.items()
-                                         if _now_ts - v.get('ts', 0) < 1800}
-            _pending_procedures.clear()
-            _pending_procedures.update(_pending_procedures_clean)
-            _pending_procedures[_cb_id] = {
-                'chat_id': chat_id,
-                'biz_conn_id': biz_conn_id,
-                'procedure': _procedure_name,
-                'client_name': client_name,
-                'conv_id': conv_id,
-                'ts': _now_ts,
-            }
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton('Записатись', callback_data=_cb_id)]])
+            ig_url = 'https://ig.me/m/dr.gomon'
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton('Записатись', url=ig_url)]])
             try:
                 payload = {'chat_id': int(chat_id), 'text': reply, 'reply_markup': kb.to_dict()}
                 if biz_conn_id:
