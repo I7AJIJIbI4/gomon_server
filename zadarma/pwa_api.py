@@ -1636,7 +1636,6 @@ def admin_clients_list():
                         last_visit, visits_count, services_json
                  FROM clients ORDER BY last_visit DESC""")
     rows = c.fetchall()
-    conn.close()
     result = []
     # Pre-load balances and photo counts in bulk
     dep_map = {}
@@ -1655,6 +1654,7 @@ def admin_clients_list():
             photo_map[pr['client_phone']] = pr['cnt']
     except Exception as _bulk_err:
         logger.warning('clients-list bulk load error: {}'.format(_bulk_err))
+    conn.close()
 
     for r in rows:
         name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip()
