@@ -1650,8 +1650,22 @@ def admin_clients_list():
             cb_map[cr['phone']] = cr['s']
         for cd in conn.execute("SELECT phone, COALESCE(SUM(amount),0) as s FROM deposit_deductions WHERE reason LIKE '%кешбек%' GROUP BY phone").fetchall():
             cb_map[cd['phone']] = cb_map.get(cd['phone'], 0) - cd['s']
-        for pr in conn.execute("SELECT client_phone, COUNT(*) as cnt FROM manual_appointments WHERE drive_folder_url IS NOT NULL AND drive_folder_url != '' GROUP BY client_phone").fetchall():
-            photo_map[pr['client_phone']] = pr['cnt']
+        # Photo counts from photo_cache.db (actual uploaded photos, not just folders)
+        try:
+            pconn = sqlite3.connect('/home/gomoncli/zadarma/photo_cache.db', timeout=5)
+            # photo_cache has client_name, need to map back to phone
+            name_to_phone = {}
+            for nr in conn.execute("SELECT phone, first_name, last_name FROM clients").fetchall():
+                n = ('{} {}'.format(nr['first_name'] or '', nr['last_name'] or '')).strip()
+                if n:
+                    name_to_phone[n] = nr['phone']
+            for pr in pconn.execute("SELECT client_name, COUNT(*) as cnt FROM photo_cache GROUP BY client_name").fetchall():
+                ph = name_to_phone.get(pr[0])
+                if ph:
+                    photo_map[ph] = pr[1]
+            pconn.close()
+        except Exception:
+            pass
     except Exception as _bulk_err:
         logger.warning('clients-list bulk load error: {}'.format(_bulk_err))
     conn.close()
