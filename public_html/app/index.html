@@ -448,7 +448,7 @@ nav{
 #appt-detail-modal{position:fixed;inset:0;z-index:10400;background:var(--overlay);display:none;align-items:center;justify-content:center;padding:20px}
 #appt-detail-modal.show{display:flex}
 .appt-detail-sheet{background:var(--bg2);border-radius:16px;width:100%;max-width:380px;padding:24px;position:relative}
-.appt-detail-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer;line-height:1}
+.modal-close,.appt-detail-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer;line-height:1;padding:4px;z-index:1}
 .appt-detail-proc{font-family:var(--serif);font-size:22px;font-weight:400;color:var(--text);margin-bottom:16px;padding-right:30px}
 .appt-detail-rows{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
 .appt-detail-row{display:flex;align-items:center;gap:10px}
@@ -1275,7 +1275,8 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
 </div>
 
 <div id="confirm-modal">
-  <div class="confirm-sheet">
+  <div class="confirm-sheet" style="position:relative">
+    <button class="modal-close" onclick="document.getElementById('confirm-modal').classList.remove('show')">&times;</button>
     <div class="sheet-handle"></div>
     <div class="confirm-sheet-title" id="confirm-modal-title"></div>
     <div class="confirm-sheet-text" id="confirm-modal-text"></div>
@@ -4277,7 +4278,7 @@ function _showFilteredClients(type) {
   var sheet = document.createElement('div');
   sheet.style.cssText = 'background:var(--bg2);border-radius:16px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;padding:20px;position:relative';
   var title = type === 'balance' ? 'Клієнти з балансом' : 'Клієнти з фото';
-  sheet.innerHTML = '<button onclick="this.parentElement.parentElement.remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;line-height:1">&times;</button><h3 style="font-family:var(--serif);color:var(--gold-pale);margin:0 0 16px">' + title + '</h3><div id="_fc_list" style="text-align:center;color:var(--text3)">Завантаження...</div>';
+  sheet.innerHTML = '<button class="modal-close" onclick="this.closest(\'[style*=fixed]\').remove()">&times;</button><h3 style="font-family:var(--serif);color:var(--gold-pale);margin:0 0 16px">' + title + '</h3><div id="_fc_list" style="text-align:center;color:var(--text3)">Завантаження...</div>';
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
   var el = sheet.querySelector('#_fc_list');
@@ -4310,7 +4311,7 @@ function _renderFilteredClients(el, clients, type, overlay) {
     } else {
       right = '<div style="font-size:14px;color:var(--text3)">📷 ' + c.photo_count + '</div>';
     }
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="this.closest(\'[style*=fixed]\').remove();openClientCard(\'' + _esc(c.phone) + '\',\'' + _esc((c.name||'').replace(/'/g,"\\'")) + '\')"><div class="adm-client-name">' + _esc(c.name) + '</div>' + right + '</div>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="this.closest(\'[style*=fixed]\').remove();openClientCard(\'' + _esc(c.phone) + '\',\'' + _esc((c.name||'').replace(/'/g,"\\'")) + '\')"><div style="min-width:0"><div class="adm-client-name">' + _esc(c.name) + '</div><div style="font-size:11px;color:var(--text3)">' + _esc((c.phone||'').replace(/^380/,'0')) + '</div></div>' + right + '</div>';
   }).join('');
 }
 function _showClientsWithBalance() { _showFilteredClients('balance'); }
@@ -6643,7 +6644,7 @@ document.addEventListener('keydown', function(e) {
 <!-- ══ APPT ACTION SHEET ══ -->
 <div id="adm-appt-action">
   <div class="adm-action-sheet" style="position:relative">
-    <button onclick="closeApptAction()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer;padding:4px;line-height:1">&times;</button>
+    <button class="modal-close" onclick="closeApptAction()">&times;</button>
     <div class="adm-action-title" id="adm-action-title">Запис</div>
     <div class="adm-action-sub" id="adm-action-sub"></div>
     <div class="adm-action-detail" id="adm-action-detail"></div>
