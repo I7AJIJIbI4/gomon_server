@@ -2622,11 +2622,17 @@ function renderCalMonth() {
 
 function _openRecentAppt(date, phone, service) {
   adminGo('admin-appts');
-  setTimeout(function() {
+  // Wait for calendar data to load, then navigate to date and open appointment
+  var _tries = 0;
+  function _tryOpen() {
+    _tries++;
+    if (!calAppointments || !calAppointments.length) {
+      if (_tries < 20) { setTimeout(_tryOpen, 300); return; }
+      return;
+    }
     calDate = new Date(date + 'T00:00:00');
     calView = 'day';
     renderCalendar();
-    // Find the appointment by phone+service and open action sheet
     setTimeout(function() {
       var found = calAppointments.find(function(a) {
         var aPhone = (a.client_phone || '').replace(/\D/g, '');
@@ -2634,8 +2640,9 @@ function _openRecentAppt(date, phone, service) {
         return aPhone.slice(-9) === pPhone.slice(-9) && a.date === date;
       });
       if (found) openApptAction(String(found.id));
-    }, 500);
-  }, 400);
+    }, 200);
+  }
+  setTimeout(_tryOpen, 300);
 }
 
 /* ─────────────────────────────────── APPT ACTION SHEET ── */
