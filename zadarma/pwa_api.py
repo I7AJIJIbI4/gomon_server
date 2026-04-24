@@ -1638,15 +1638,40 @@ def admin_clients_list():
     rows = c.fetchall()
     conn.close()
     result = []
+    # Pre-load balances and photo counts in bulk
+    dep_map = {}
+    cb_map = {}
+    photo_map = {}
+    try:
+        for dr in conn.execute("SELECT phone, COALESCE(SUM(amount_uah),0) as s FROM deposits WHERE status='Approved' GROUP BY phone").fetchall():
+            dep_map[dr['phone']] = dr['s']
+        for dd in conn.execute("SELECT phone, COALESCE(SUM(amount),0) as s FROM deposit_deductions GROUP BY phone").fetchall():
+            dep_map[dd['phone']] = dep_map.get(dd['phone'], 0) - dd['s']
+        for cr in conn.execute("SELECT phone, COALESCE(SUM(amount),0) as s FROM cashback GROUP BY phone").fetchall():
+            cb_map[cr['phone']] = cr['s']
+        for cd in conn.execute("SELECT phone, COALESCE(SUM(amount),0) as s FROM deposit_deductions WHERE reason LIKE '%кешбек%' GROUP BY phone").fetchall():
+            cb_map[cd['phone']] = cb_map.get(cd['phone'], 0) - cd['s']
+        for pr in conn.execute("SELECT client_phone, COUNT(*) as cnt FROM manual_appointments WHERE drive_folder_url IS NOT NULL AND drive_folder_url != '' GROUP BY client_phone").fetchall():
+            photo_map[pr['client_phone']] = pr['cnt']
+    except Exception:
+        pass
+
     for r in rows:
         name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip()
+        ph = r['phone']
+        dep = round(dep_map.get(ph, 0), 2)
+        cb = round(cb_map.get(ph, 0), 2)
         result.append({
-            'phone':        r['phone'],
-            'name':         name or r['phone'],
+            'phone':        ph,
+            'name':         name or ph,
             'last_service': r['last_service'] or '',
             'last_visit':   r['last_visit'] or '',
             'visits_count': r['visits_count'] or 0,
             'appointments': _client_appts(r['services_json']),
+            'deposit':      dep,
+            'cashback':     cb,
+            'balance':      dep + cb,
+            'photo_count':  photo_map.get(ph, 0),
         })
     return jsonify({'clients': result})
 
