@@ -1653,8 +1653,8 @@ def admin_clients_list():
             cb_map[cd['phone']] = cb_map.get(cd['phone'], 0) - cd['s']
         for pr in conn.execute("SELECT client_phone, COUNT(*) as cnt FROM manual_appointments WHERE drive_folder_url IS NOT NULL AND drive_folder_url != '' GROUP BY client_phone").fetchall():
             photo_map[pr['client_phone']] = pr['cnt']
-    except Exception:
-        pass
+    except Exception as _bulk_err:
+        logger.warning('clients-list bulk load error: {}'.format(_bulk_err))
 
     for r in rows:
         name = ((r['first_name'] or '') + ' ' + (r['last_name'] or '')).strip()
