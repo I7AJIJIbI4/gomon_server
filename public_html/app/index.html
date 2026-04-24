@@ -2622,17 +2622,20 @@ function renderCalMonth() {
 }
 
 function _openRecentAppt(date, phone, service) {
+  // Force reload calendar data for the target date
+  calDate = new Date(date + 'T00:00:00');
+  calView = 'day';
+  _calLoaded = false;
+  calAppointments = [];
   adminGo('admin-appts');
-  // Wait for calendar data to load, then navigate to date and open appointment
+  // Wait for fresh calendar data
   var _tries = 0;
   function _tryOpen() {
     _tries++;
     if (!calAppointments || !calAppointments.length) {
-      if (_tries < 20) { setTimeout(_tryOpen, 300); return; }
+      if (_tries < 30) { setTimeout(_tryOpen, 200); return; }
       return;
     }
-    calDate = new Date(date + 'T00:00:00');
-    calView = 'day';
     renderCalendar();
     setTimeout(function() {
       var found = calAppointments.find(function(a) {
@@ -2643,7 +2646,7 @@ function _openRecentAppt(date, phone, service) {
       if (found) openApptAction(String(found.id));
     }, 200);
   }
-  setTimeout(_tryOpen, 300);
+  setTimeout(_tryOpen, 200);
 }
 
 /* ─────────────────────────────────── APPT ACTION SHEET ── */
