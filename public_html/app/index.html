@@ -4302,14 +4302,14 @@ function _renderFilteredClients(el, clients, type, overlay) {
     filtered = clients.filter(function(c) { return (c.photo_count || 0) > 0; });
     filtered.sort(function(a,b) { return (b.photo_count||0) - (a.photo_count||0); });
   }
-  if (!filtered.length) { el.textContent = type === 'balance' ? 'Немає клієнтів з балансом' : 'Немає клієнтів з фото'; return; }
+  if (!filtered.length) { el.textContent = type === 'balance' ? 'Немає клієнтів з балансом' : 'Немає клієнтів з фото до/після'; return; }
   el.innerHTML = filtered.map(function(c) {
     var right = '';
     if (type === 'balance') {
       right = '<div style="text-align:right"><div style="font-size:15px;font-weight:600;color:var(--gold)">' + (c.balance||0).toFixed(0) + ' грн</div>' +
         '<div style="font-size:11px;color:var(--text3)">' + (c.deposit>0?'Д:'+c.deposit.toFixed(0)+' ':'') + (c.cashback>0?'К:'+c.cashback.toFixed(0):'') + '</div></div>';
     } else {
-      right = '<div style="font-size:14px;color:var(--text3)">📷 ' + c.photo_count + '</div>';
+      right = '<div style="font-size:14px;color:var(--text3);display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M9 5l1-2h4l1 2"/></svg>' + c.photo_count + '</div>';
     }
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="this.closest(\'[style*=fixed]\').remove();openClientCard(\'' + _esc(c.phone) + '\',\'' + _esc((c.name||'').replace(/'/g,"\\'")) + '\')"><div style="min-width:0"><div class="adm-client-name">' + _esc(c.name) + '</div><div style="font-size:11px;color:var(--text3)">' + _esc((c.phone||'').replace(/^380/,'0')) + '</div></div>' + right + '</div>';
   }).join('');
@@ -6432,7 +6432,6 @@ document.addEventListener('keydown', function(e) {
   <div class="screen-header-row">
     <h2>Клієнти</h2>
     <div style="display:flex;gap:6px">
-      <button class="adm-header-btn" onclick="_showClientsWithPhotos()" title="Клієнти з фото"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M9 5l1-2h4l1 2"/></svg></button>
       <button class="adm-header-btn" onclick="_showClientsWithBalance()" title="Клієнти з балансом"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.5-1.3 2.5-3 2.5-3 1.1-3 2.5 1.3 2.5 3 2.5"/></svg></button>
       <button class="adm-header-btn" onclick="showAddClientModal()">+ Новий</button>
     </div>
