@@ -775,7 +775,7 @@ nav{
 #adm-appt-action{position:fixed;inset:0;z-index:10300;background:var(--overlay);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
 #client-card-modal{position:fixed;inset:0;z-index:10400;background:var(--overlay);display:none;align-items:center;justify-content:center;padding:16px}
 #client-card-modal.show{display:flex}
-.client-card-sheet{background:var(--bg2);border-radius:16px;border:1px solid var(--border-gold);width:100%;max-width:420px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column}
+.client-card-sheet{background:var(--bg2);border-radius:16px;border:1px solid var(--border-gold);width:100%;max-width:420px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;position:relative}
 .client-card-header{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
 .client-card-name{font-size:20px;font-weight:500;color:var(--text)}
 .client-card-phone{font-size:15px;margin-top:4px}
@@ -872,7 +872,7 @@ nav{
 #confirm-modal.show{display:flex}
 .confirm-sheet{
   background:var(--bg2);border-radius:20px 20px 0 0;
-  border-top:1px solid var(--border-gold);
+  border-top:1px solid var(--border-gold);position:relative;
   padding:24px 20px 32px;
   width:100%;max-width:480px;
   animation:sheetUp .3s ease;
