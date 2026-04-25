@@ -892,12 +892,12 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Resolve full phone and date
-    year = str(kyiv_now().year) if len(dt_short) == 4 else '2026'
+    import sqlite3
+    from tz_utils import kyiv_now as _kn
+    year = str(_kn().year) if len(dt_short) == 4 else '2026'
     appt_date = '{}-{}-{}'.format(year, dt_short[:2], dt_short[2:4])
 
     # Find full phone by last 10 digits
-    import sqlite3
-    from tz_utils import kyiv_now as _kn
     DB_PATH = '/home/gomoncli/zadarma/users.db'
     conn = sqlite3.connect(DB_PATH, timeout=10)
     row = conn.execute("SELECT phone FROM clients WHERE phone LIKE ?", ('%' + ph_short[-9:],)).fetchone()
