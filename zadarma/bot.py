@@ -929,13 +929,18 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
             "(phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
             (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S')))
+        # Also update photo_tasks if exists
+        conn.execute(
+            "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
+            "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','pending')",
+            (drug_name, price, _kn().strftime('%Y-%m-%d %H:%M:%S'), phone, appt_date))
         conn.commit()
         conn.close()
 
         cashback_amount = round(price * 0.03, 2)
         phone_display = ('+' + phone) if phone.startswith('380') else phone
         await query.edit_message_text(
-            '✅ {} — {} (₴{})\nКешбек +{:.0f} грн буде нараховано через 24 год'.format(
+            '✅ {} — {} (₴{})\nКешбек +{:.0f} грн — клієнт отримає повідомлення наступного дня'.format(
                 phone_display, drug_name, int(price), cashback_amount))
         logger.info('Cashback confirmed: {} {} {} ₴{} by {}'.format(phone, appt_date, drug_name, price, confirmer))
     except Exception as e:

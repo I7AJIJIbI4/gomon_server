@@ -252,6 +252,25 @@ def create_folders_and_notify(date_str=None):
 
         by_spec[spec].append(a)
 
+        # Save to photo_tasks for tracking
+        if a['drive_url']:
+            try:
+                _pt_conn = sqlite3.connect(DB_PATH, timeout=5)
+                import re as _re_pt
+                _fid_m = _re_pt.search(r'/folders/([a-zA-Z0-9_-]+)', a['drive_url'])
+                _fid = _fid_m.group(1) if _fid_m else ''
+                _needs = a['procedure'] in NEEDS_DRUG_SELECTION
+                _pt_conn.execute(
+                    "INSERT OR IGNORE INTO photo_tasks (appt_id, client_phone, client_name, procedure_name, specialist, appt_date, appt_time, drive_folder_url, drive_folder_id, cashback_status) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (a.get('id',''), a.get('client_phone',''), a['client_name'], a['procedure'], spec,
+                     date_str, a.get('time',''), a['drive_url'], _fid,
+                     'needs_drug' if _needs else 'auto'))
+                _pt_conn.commit()
+                _pt_conn.close()
+            except Exception as _pt_e:
+                logger.warning('photo_tasks insert error: {}'.format(_pt_e))
+
     logger.info('Created {} new folders for {} appointments'.format(created, len(appointments)))
 
     # Send TG to each specialist
@@ -363,10 +382,130 @@ def check_uploads(date_str=None):
         logger.error('Admin TG error: {}'.format(e))
 
 
+def check_pending_photos():
+    """Re-remind specialists about missing photos older than 2 days but within 7 days."""
+    from tz_utils import kyiv_now
+    from datetime import timedelta
+    now = kyiv_now()
+    cutoff_old = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+    cutoff_recent = (now - timedelta(days=2)).strftime('%Y-%m-%d')
+
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    # Find photo_tasks without photos, 2-7 days old
+    rows = conn.execute(
+        "SELECT id, client_phone, client_name, procedure_name, specialist, appt_date, appt_time, drive_folder_url, drive_folder_id "
+        "FROM photo_tasks WHERE photos_uploaded=0 AND appt_date >= ? AND appt_date <= ? AND drive_folder_id != ''",
+        (cutoff_old, cutoff_recent)).fetchall()
+    conn.close()
+
+    if not rows:
+        logger.info('check_pending_photos: no pending photos')
+        return
+
+    # Re-check Drive and update
+    from gdrive import count_files_in_folder
+    from notifier import _get_tg_id, _send_tg
+    from tz_utils import kyiv_now as _kn
+
+    by_spec = {}
+    updated = 0
+    for r in rows:
+        rid, phone, name, proc, spec, date, time_str, url, fid = r
+        try:
+            count = count_files_in_folder(fid)
+        except Exception:
+            count = 0
+        conn2 = sqlite3.connect(DB_PATH, timeout=5)
+        conn2.execute("UPDATE photo_tasks SET photos_uploaded=?, photos_checked_at=datetime('now') WHERE id=?",
+                       (count, rid))
+        conn2.commit()
+        conn2.close()
+        if count > 0:
+            updated += 1
+        else:
+            if spec not in by_spec:
+                by_spec[spec] = []
+            by_spec[spec].append({'name': name, 'proc': proc, 'date': date, 'time': time_str, 'url': url})
+
+    # Send reminders per specialist
+    for spec, missing in by_spec.items():
+        spec_phone = SPEC_PHONES.get(spec)
+        if not spec_phone:
+            continue
+        tg_id = _get_tg_id(spec_phone)
+        if not tg_id:
+            continue
+        spec_name = SPEC_NAMES.get(spec, spec)
+        lines = ['⚠️ {}, є незавантажені фото ({} шт):'.format(spec_name, len(missing)), '']
+        for m in missing:
+            lines.append('{} {} — {} ({})'.format(m['date'], m['time'][:5] if m['time'] else '', m['name'], m['proc']))
+            if m['url']:
+                lines.append('   {}'.format(m['url']))
+        try:
+            _send_tg(tg_id, '\n'.join(lines))
+        except Exception as e:
+            logger.error('Pending photo TG error: {}'.format(e))
+
+    logger.info('check_pending_photos: {} total, {} now have photos, {} still missing'.format(
+        len(rows), updated, sum(len(v) for v in by_spec.values())))
+
+
+def check_pending_cashback_reminders():
+    """Notify clients about cashback that was confirmed — next day at their visit time."""
+    from tz_utils import kyiv_now
+    now = kyiv_now()
+    today = now.strftime('%Y-%m-%d')
+    current_time = now.strftime('%H:%M')
+
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    # Find confirmed cashback where notification not yet sent, and it's next day at visit time
+    rows = conn.execute(
+        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time "
+        "FROM photo_tasks "
+        "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL "
+        "AND date(appt_date, '+1 day') <= ? "
+        "AND (appt_time IS NULL OR appt_time <= ?)",
+        (today, current_time)).fetchall()
+    conn.close()
+
+    if not rows:
+        return
+
+    from notifier import send_push_to_phone, _send_tg, _get_tg_id
+
+    for r in rows:
+        rid, phone, name, proc, drug, price, date, time_str = r
+        amount = round(price * 0.03, 2) if price else 0
+        if amount <= 0:
+            continue
+        text = 'Вам нараховано {:.0f} грн кешбеку за процедуру {}. Перегляньте баланс у додатку.'.format(amount, drug or proc)
+        try:
+            # Push
+            try:
+                from push_sender import send_push_to_phone as _push
+                _push(phone, 'Кешбек нараховано! 💰', text, url='/app/#home')
+            except Exception:
+                pass
+            # TG
+            tg_id = _get_tg_id(phone)
+            if tg_id:
+                _send_tg(tg_id, '💰 ' + text)
+            # Mark notified
+            conn2 = sqlite3.connect(DB_PATH, timeout=5)
+            conn2.execute("UPDATE photo_tasks SET cashback_notified_at=datetime('now') WHERE id=?", (rid,))
+            conn2.commit()
+            conn2.close()
+            logger.info('Cashback notification sent: {} {} {:.0f}'.format(phone, drug or proc, amount))
+        except Exception as e:
+            logger.error('Cashback notification error: {}'.format(e))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--create', action='store_true', help='Create folders + notify specialists')
     parser.add_argument('--check', action='store_true', help='Check uploads + notify admin')
+    parser.add_argument('--check-pending', action='store_true', help='Re-remind about missing photos (2-7 days old)')
+    parser.add_argument('--cashback-notify', action='store_true', help='Notify clients about confirmed cashback')
     parser.add_argument('--date', type=str, help='Override date (YYYY-MM-DD)')
     args = parser.parse_args()
 
@@ -376,5 +515,9 @@ if __name__ == '__main__':
         create_folders_and_notify(target_date)
     elif args.check:
         check_uploads(target_date)
+    elif args.check_pending:
+        check_pending_photos()
+    elif args.cashback_notify:
+        check_pending_cashback_reminders()
     else:
-        print('Usage: --create or --check')
+        print('Usage: --create | --check | --check-pending | --cashback-notify')
