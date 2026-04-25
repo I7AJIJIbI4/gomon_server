@@ -389,10 +389,14 @@ def get_wlaunch_services(branch_id=None):
         resp.raise_for_status()
         result = {}
         for s in resp.json().get("content", []):
+            if not s.get("active"):
+                continue
+            if s.get("type") == "GROUP":
+                continue
             sname = (s.get("name") or "").strip()
             if sname:
                 result[sname.lower()] = {"id": s.get("id"), "name": sname}
-        logger.info("WLaunch services loaded: {} items".format(len(result)))
+        logger.info("WLaunch services loaded: {} active items".format(len(result)))
         return result
     except Exception as e:
         logger.error("WLaunch services error: {}".format(e))
@@ -499,6 +503,8 @@ def create_wlaunch_appointment(client_phone, client_name, procedure_name,
         }
         srs.append(srs_item)
 
+    if service_match:
+        logger.info("WLaunch service matched: '{}' → '{}' ({})".format(procedure_name, service_match.get('name',''), service_match.get('id','')))
     if not srs:
         logger.warning("WLaunch: no matching service for '{}', skipping WLaunch".format(procedure_name))
         return None, "service_not_found"
