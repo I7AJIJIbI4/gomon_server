@@ -4089,26 +4089,25 @@ function selectClientAppt(phone, name) {
 
 let _procSearchT = null;
 let _pricesCache = [];
+let _wlServicesCache = [];
 async function searchProcsAppt(q) {
   clearTimeout(_procSearchT);
   const dd = document.getElementById('appt-proc-dd');
   if (q.length < 1) { dd.style.display='none'; return; }
   _procSearchT = setTimeout(async () => {
-    if (!_pricesCache.length) {
-      try {
-        const r = await fetch('/api/prices',{headers:{Authorization:'Bearer '+token}});
-        _pricesCache = await r.json();
-      } catch(e) { return; }
-    }
     const ql = q.toLowerCase();
     const matches = [];
-    (_pricesCache||[]).forEach(cat => {
-      const catMatch = (cat.cat||'').toLowerCase().includes(ql);
-      (cat.items||[]).forEach(it => {
-        if (!catMatch && !(it.name||'').toLowerCase().includes(ql)) return;
-        if (adminRole==='specialist' && it.specialists && it.specialists.length && !it.specialists.includes(adminSpecialist)) return;
-        matches.push({...it, _cat: cat.cat||''});
-      });
+    // Show only WLaunch-level services (generic names for booking, not specific drugs)
+    if (!_wlServicesCache.length) {
+      try {
+        var wr = await fetch('/api/admin/wlaunch-services', {headers:{Authorization:'Bearer '+token}});
+        _wlServicesCache = (await wr.json()).services || [];
+      } catch(e) { _wlServicesCache = []; }
+    }
+    _wlServicesCache.forEach(function(s) {
+      if (!(s.name||'').toLowerCase().includes(ql)) return;
+      if (adminRole==='specialist' && s.specialists && s.specialists.length && !s.specialists.includes(adminSpecialist)) return;
+      matches.push({name: s.name, price: s.price || '', _cat: s.category || ''});
     });
     if (!matches.length) { dd.style.display='none'; return; }
     const procSlice = matches.slice(0,10);

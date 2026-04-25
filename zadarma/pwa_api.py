@@ -3194,6 +3194,42 @@ def admin_client_add():
 
 # (Photo albums: see gdrive.py + photo_reminder.py)
 
+@app.route('/api/admin/wlaunch-services', methods=['GET'])
+@require_admin
+def admin_wlaunch_services():
+    """Return active WLaunch branch services for appointment form (not full prices.json)."""
+    try:
+        from wlaunch_api import get_wlaunch_services, get_branch_id
+        bid = get_branch_id()
+        wl = get_wlaunch_services(bid)
+        # Match with prices.json to get price and category
+        prices_map = {}
+        try:
+            with open(PRICES_PATH, 'r') as f:
+                for cat in json.load(f):
+                    for item in cat.get('items', []):
+                        prices_map[item.get('name', '').lower()] = {
+                            'price': item.get('price', ''),
+                            'category': cat.get('cat', ''),
+                            'specialists': item.get('specialists', []),
+                        }
+        except Exception:
+            pass
+        services = []
+        for name_lower, data in sorted(wl.items()):
+            pi = prices_map.get(name_lower, {})
+            services.append({
+                'name': data['name'],
+                'price': pi.get('price', ''),
+                'category': pi.get('category', ''),
+                'specialists': pi.get('specialists', []),
+            })
+        return jsonify({'services': services})
+    except Exception as e:
+        logger.error('wlaunch-services error: {}'.format(e))
+        return jsonify({'services': []})
+
+
 @app.route('/api/admin/prices/edit', methods=['GET'])
 @require_full_admin
 def admin_prices_get():
