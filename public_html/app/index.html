@@ -3359,9 +3359,8 @@ function admAiFill() {
     selectClientAppt(sel.client.phone, sel.client.name || '');
   } else if (d.client_name) {
     document.getElementById('appt-client-q').value = d.client_name;
-    // Try to extract phone from notes or AI result
-    var aiPhone = '';
-    if (d.client && d.client.phone) aiPhone = d.client.phone;
+    // Use client_phone from AI response, or extract from notes
+    var aiPhone = d.client_phone || '';
     if (!aiPhone && d.notes) {
       var pm = (d.notes || '').match(/(\+?3?8?0?\d{9,12})/);
       if (pm) { aiPhone = pm[1]; d.notes = d.notes.replace(aiPhone, '').replace(/^\s*[,;:\-]\s*/, '').trim(); }
