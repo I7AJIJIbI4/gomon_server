@@ -2147,6 +2147,11 @@ function calGoToday() {
   calDate = new Date();
   loadCalendarData();
 }
+function calGoToDate(dateStr) {
+  if (!dateStr) return;
+  calDate = new Date(dateStr + 'T00:00:00');
+  loadCalendarData();
+}
 
 /* Swipe navigation for calendar */
 (function() {
@@ -2211,6 +2216,9 @@ function updateCalNavTitle() {
   } else {
     el.textContent = CAL_MONTHS[calDate.getMonth()] + ' ' + calDate.getFullYear();
   }
+  // Sync date picker value
+  var dp = document.getElementById('cal-date-picker');
+  if (dp) dp.value = calDate.getFullYear() + '-' + String(calDate.getMonth()+1).padStart(2,'0') + '-' + String(calDate.getDate()).padStart(2,'0');
 }
 
 function renderCalendar() {
@@ -6389,7 +6397,8 @@ document.addEventListener('keydown', function(e) {
   <div class="admin-cal-header">
     <div class="cal-nav-row">
       <button class="cal-nav-btn" onclick="calNavPrev()">‹</button>
-      <span class="cal-nav-title" id="cal-nav-title">Календар</span>
+      <span class="cal-nav-title" id="cal-nav-title" onclick="document.getElementById('cal-date-picker').showPicker()" style="cursor:pointer">Календар</span>
+      <input type="date" id="cal-date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none" onchange="calGoToDate(this.value)">
       <button class="cal-nav-btn" onclick="calNavNext()">›</button>
       <button class="adm-cal-today-btn" onclick="calGoToday()">Сьогодні</button>
     </div>
