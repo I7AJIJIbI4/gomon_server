@@ -451,19 +451,20 @@ def check_pending_photos():
 
 
 def check_pending_cashback_reminders():
-    """Notify clients about cashback that was confirmed — next day at their visit time."""
+    """Send post_visit (cashback + review) for confirmed drug-selection cashback.
+    Sends next day after doctor confirmed, at the client's original visit time.
+    Uses same notifier.send_post_visit as fixed-price procedures."""
     from tz_utils import kyiv_now
     now = kyiv_now()
     today = now.strftime('%Y-%m-%d')
     current_time = now.strftime('%H:%M')
 
     conn = sqlite3.connect(DB_PATH, timeout=5)
-    # Find confirmed cashback where notification not yet sent, and it's next day at visit time
     rows = conn.execute(
-        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time "
+        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist "
         "FROM photo_tasks "
         "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL "
-        "AND date(appt_date, '+1 day') <= ? "
+        "AND date(cashback_confirmed_at, '+1 day') <= ? "
         "AND (appt_time IS NULL OR appt_time <= ?)",
         (today, current_time)).fetchall()
     conn.close()
@@ -471,33 +472,47 @@ def check_pending_cashback_reminders():
     if not rows:
         return
 
-    from notifier import send_push_to_phone, _send_tg, _get_tg_id
-
     for r in rows:
-        rid, phone, name, proc, drug, price, date, time_str = r
-        amount = round(price * 0.03, 2) if price else 0
-        if amount <= 0:
+        rid, phone, name, proc, drug, price, date, time_str, specialist = r
+        if not phone or not price:
             continue
-        text = 'Вам нараховано {:.0f} грн кешбеку за процедуру {}. Перегляньте баланс у додатку.'.format(amount, drug or proc)
+        # Accrue cashback first (INSERT OR IGNORE — dedup by UNIQUE)
+        amount = round(price * 0.03, 2)
         try:
-            # Push
-            try:
-                from push_sender import send_push_to_phone as _push
-                _push(phone, 'Кешбек нараховано! 💰', text, url='/app/#home')
-            except Exception:
-                pass
-            # TG
-            tg_id = _get_tg_id(phone)
-            if tg_id:
-                _send_tg(tg_id, '💰 ' + text)
-            # Mark notified
             conn2 = sqlite3.connect(DB_PATH, timeout=5)
-            conn2.execute("UPDATE photo_tasks SET cashback_notified_at=datetime('now') WHERE id=?", (rid,))
+            conn2.execute(
+                "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
+                (phone, amount, drug or proc, price, date))
             conn2.commit()
             conn2.close()
-            logger.info('Cashback notification sent: {} {} {:.0f}'.format(phone, drug or proc, amount))
-        except Exception as e:
-            logger.error('Cashback notification error: {}'.format(e))
+        except Exception as _ce:
+            logger.warning('cashback accrue error: {}'.format(_ce))
+
+        # Send post_visit via notifier (same as fixed-price: thank + review + cashback info)
+        try:
+            from notifier import send_post_visit
+            appt = {
+                'client_phone': phone,
+                'client_name': name or '',
+                'procedure_name': drug or proc,
+                'specialist': specialist or '',
+                'date': date,
+                'time': time_str or '',
+                'duration_min': 60,
+            }
+            send_post_visit(appt)
+        except Exception as _nf:
+            logger.warning('post_visit for confirmed cashback error: {}'.format(_nf))
+
+        # Mark notified
+        try:
+            conn3 = sqlite3.connect(DB_PATH, timeout=5)
+            conn3.execute("UPDATE photo_tasks SET cashback_status='notified', cashback_notified_at=datetime('now') WHERE id=?", (rid,))
+            conn3.commit()
+            conn3.close()
+            logger.info('Post-visit (drug cashback) sent: {} {} ₴{:.0f} cb={:.0f}'.format(phone, drug or proc, price, amount))
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
