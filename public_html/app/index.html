@@ -4097,17 +4097,37 @@ async function searchProcsAppt(q) {
   _procSearchT = setTimeout(async () => {
     const ql = q.toLowerCase();
     const matches = [];
-    // Show only WLaunch-level services (generic names for booking, not specific drugs)
+    // Show WLaunch services + prices.json categories (one entry per category, not per drug)
     if (!_wlServicesCache.length) {
       try {
         var wr = await fetch('/api/admin/wlaunch-services', {headers:{Authorization:'Bearer '+token}});
         _wlServicesCache = (await wr.json()).services || [];
       } catch(e) { _wlServicesCache = []; }
     }
+    // WLaunch services first
+    var _seen = {};
     _wlServicesCache.forEach(function(s) {
       if (!(s.name||'').toLowerCase().includes(ql)) return;
       if (adminRole==='specialist' && s.specialists && s.specialists.length && !s.specialists.includes(adminSpecialist)) return;
       matches.push({name: s.name, price: s.price || '', _cat: s.category || ''});
+      _seen[(s.name||'').toLowerCase()] = true;
+    });
+    // Then prices.json categories as generic entries (for procedures not in WLaunch like Ботулінотерапія)
+    if (!_pricesCache.length) {
+      try {
+        var pr = await fetch('/api/prices', {headers:{Authorization:'Bearer '+token}});
+        _pricesCache = await pr.json();
+      } catch(e) {}
+    }
+    (_pricesCache||[]).forEach(function(cat) {
+      var cn = (cat.cat||'');
+      if (!cn.toLowerCase().includes(ql)) return;
+      if (_seen[cn.toLowerCase()]) return;
+      // Use first item's price as "від X" and specialists
+      var first = (cat.items||[])[0] || {};
+      if (adminRole==='specialist' && first.specialists && first.specialists.length && !first.specialists.includes(adminSpecialist)) return;
+      matches.push({name: cn, price: first.price || '', _cat: ''});
+      _seen[cn.toLowerCase()] = true;
     });
     if (!matches.length) { dd.style.display='none'; return; }
     const procSlice = matches.slice(0,10);
