@@ -385,17 +385,24 @@ def get_wlaunch_services(branch_id=None):
         return {}
     url = "{}/company/{}/branch/{}/service".format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
     try:
-        resp = requests.get(url, headers=HEADERS, params={"page": 0, "size": 200}, timeout=10)
-        resp.raise_for_status()
         result = {}
-        for s in resp.json().get("content", []):
-            if not s.get("active"):
-                continue
-            if s.get("type") == "GROUP":
-                continue
-            sname = (s.get("name") or "").strip()
-            if sname:
-                result[sname.lower()] = {"id": s.get("id"), "name": sname}
+        page = 0
+        while True:
+            resp = requests.get(url, headers=HEADERS, params={"page": page, "size": 100}, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            for s in data.get("content", []):
+                if not s.get("active"):
+                    continue
+                if s.get("type") == "GROUP":
+                    continue
+                sname = (s.get("name") or "").strip()
+                if sname:
+                    result[sname.lower()] = {"id": s.get("id"), "name": sname}
+            total_pages = data.get("page", {}).get("total_pages", 1)
+            page += 1
+            if page >= total_pages:
+                break
         logger.info("WLaunch services loaded: {} active items".format(len(result)))
         return result
     except Exception as e:
