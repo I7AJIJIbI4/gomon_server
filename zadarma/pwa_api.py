@@ -3223,6 +3223,7 @@ def admin_wlaunch_services():
                 'price': pi.get('price', ''),
                 'category': pi.get('category', ''),
                 'specialists': pi.get('specialists', []),
+                'duration': data.get('duration', 60),
             })
         return jsonify({'services': services})
     except Exception as e:

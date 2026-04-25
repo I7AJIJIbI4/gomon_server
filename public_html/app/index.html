@@ -671,7 +671,7 @@ nav{
 #adm-cal-scroll.adm-cal-fill #adm-cal-container{height:100%;display:flex;flex-direction:column}
 .adm-cal-fill .adm-month-grid{flex:1;height:0;grid-template-rows:22px;grid-auto-rows:1fr;padding-bottom:0}
 /* ── Timeline day view ── */
-.adm-timeline-wrap{display:flex;flex-direction:row;overflow-y:auto}
+.adm-timeline-wrap{display:flex;flex-direction:row}
 .adm-tl-labels{width:44px;flex-shrink:0}
 .adm-tl-label{display:flex;align-items:flex-start;justify-content:flex-end;padding-right:8px;font-size:13px;color:var(--text3);line-height:1;flex-shrink:0}
 .adm-tl-label-hour{display:flex;flex-direction:column;position:relative;box-sizing:border-box}
@@ -4115,7 +4115,7 @@ async function searchProcsAppt(q) {
     _wlServicesCache.forEach(function(s) {
       if (!(s.name||'').toLowerCase().includes(ql)) return;
       if (adminRole==='specialist' && s.specialists && s.specialists.length && !s.specialists.includes(adminSpecialist)) return;
-      matches.push({name: s.name, price: s.price || '', _cat: s.category || ''});
+      matches.push({name: s.name, price: s.price || '', _cat: s.category || '', duration: s.duration || 60});
     });
     if (!matches.length) { dd.style.display='none'; return; }
     const procSlice = matches.slice(0,10);
@@ -4127,18 +4127,31 @@ async function searchProcsAppt(q) {
       </div>`
     ).join('');
     procSlice.forEach((p,i) => {
-      dd.children[i].addEventListener('click', () => selectProcAppt(p.name, p.price||''));
+      dd.children[i].addEventListener('click', () => selectProcAppt(p.name, p.price||'', p.duration||60));
     });
     dd.style.display='';
   }, 200);
 }
-function selectProcAppt(name, price) {
+function selectProcAppt(name, price, duration) {
   _apptProc = {name, price};
   document.getElementById('appt-proc-q').value = '';
   document.getElementById('appt-proc-dd').style.display='none';
   const chip = document.getElementById('appt-proc-chip');
   chip.style.display = '';
   chip.innerHTML = `<span class="adm-chip">${_esc(name)}<span style="color:var(--gold);margin-left:6px">${_esc(price)}</span> <button onclick="_apptProc=null;document.getElementById('appt-proc-chip').style.display='none'">✕</button></span>`;
+  // Set duration from WLaunch service default
+  if (duration && duration > 0) {
+    var durSel = document.getElementById('appt-duration');
+    if (durSel) {
+      // Find matching option or closest
+      var best = '60';
+      for (var i = 0; i < durSel.options.length; i++) {
+        if (parseInt(durSel.options[i].value) === duration) { best = durSel.options[i].value; break; }
+        if (parseInt(durSel.options[i].value) >= duration) { best = durSel.options[i].value; break; }
+      }
+      durSel.value = best;
+    }
+  }
 }
 
 async function deleteBreak(breakId) {

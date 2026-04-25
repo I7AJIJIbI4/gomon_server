@@ -397,8 +397,8 @@ def get_wlaunch_services(branch_id=None):
                 if s.get("type") == "GROUP":
                     continue
                 sname = (s.get("name") or "").strip()
-                if sname:
-                    result[sname.lower()] = {"id": s.get("id"), "name": sname}
+                if sname and sname.lower() not in result:
+                    result[sname.lower()] = {"id": s.get("id"), "name": sname, "duration": (s.get("duration") or 3600) // 60}
             total_pages = data.get("page", {}).get("total_pages", 1)
             page += 1
             if page >= total_pages:
