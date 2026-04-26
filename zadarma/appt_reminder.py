@@ -643,41 +643,57 @@ def run_specialist_notifications(dry_run=False):
     _spec_new_appt_enabled.setdefault('victoria', False)
     _spec_new_appt_enabled.setdefault('anastasia', True)
 
+    # Group new (not yet notified) appointments by specialist, send one message per specialist
+    from notifier import _already_sent, _log, _get_tg_id, _send_tg, SPECIALIST_INFO
+    new_by_spec = {}
     for appt in appts:
-        if not appt.get('specialist'):
-            logger.warning('  skip: немає спеціаліста для запису id={}'.format(appt.get('id')))
+        spec = appt.get('specialist', '')
+        if not spec:
             continue
-
-        # Check if spec_new_appt is enabled for this specialist
-        if not _spec_new_appt_enabled.get(appt.get('specialist'), True):
-            logger.info('  skip spec_new for {} (disabled)'.format(appt.get('specialist')))
+        if not _spec_new_appt_enabled.get(spec, True):
             skipped += 1
             continue
-
-        logger.info('  → id={} | {} | {} | {} о {} | spec={}'.format(
-            appt.get('id'), appt.get('client_phone'), appt.get('client_name'),
-            appt.get('procedure_name'), appt.get('time'), appt.get('specialist')
-        ))
-
-        if dry_run:
-            logger.info('    [DRY-RUN] пропускаємо відправку')
+        ref = appt.get('id', '')
+        if not ref:
+            continue
+        spec_info = SPECIALIST_INFO.get(spec)
+        if not spec_info:
+            continue
+        spec_phone = spec_info['phone_norm']
+        if _already_sent(spec_phone, 'spec_new', ref, 'tg'):
             skipped += 1
             continue
+        if spec not in new_by_spec:
+            new_by_spec[spec] = []
+        new_by_spec[spec].append(appt)
 
-        try:
-            from notifier import send_specialist_new_appt
-            results = send_specialist_new_appt(appt)
-            if results.get('skipped'):
-                logger.info('    вже відправлено раніше — пропускаємо')
-                skipped += 1
-            elif results.get('ok'):
-                sent += 1
+    if dry_run:
+        for spec, spec_appts in new_by_spec.items():
+            logger.info('  [DRY-RUN] {} — {} нових записів'.format(spec, len(spec_appts)))
+            skipped += len(spec_appts)
+    else:
+        for spec, spec_appts in new_by_spec.items():
+            spec_info = SPECIALIST_INFO.get(spec, {})
+            spec_phone = spec_info.get('phone_norm', '')
+            spec_name = spec_info.get('short_name', spec)
+            tg_id = _get_tg_id(spec_phone)
+            if not tg_id:
+                failed += len(spec_appts)
+                continue
+            # Build one grouped message
+            lines = ['📋 {} нових записів:'.format(len(spec_appts)), '']
+            for a in sorted(spec_appts, key=lambda x: (x.get('date',''), x.get('time',''))):
+                lines.append('{} о {} — {} ({})'.format(
+                    a.get('date',''), (a.get('time','') or '?')[:5],
+                    a.get('client_name',''), a.get('procedure_name','')))
+            ok = _send_tg(tg_id, '\n'.join(lines))
+            if ok:
+                for a in spec_appts:
+                    _log(spec_phone, 'spec_new', a.get('id',''), 'tg', 'sent', '')
+                sent += len(spec_appts)
+                logger.info('  {} — {} нових записів відправлено одним повідомленням'.format(spec, len(spec_appts)))
             else:
-                failed += 1
-                logger.warning('    відправка не вдалась: {}'.format(results))
-        except Exception as e:
-            logger.error('    помилка send_specialist_new_appt: {}'.format(e))
-            failed += 1
+                failed += len(spec_appts)
 
     logger.info('=== SPECIALIST done: sent={} skipped={} failed={} ==='.format(
         sent, skipped, failed))
