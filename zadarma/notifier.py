@@ -563,6 +563,8 @@ def send_tomorrow_briefing(appts_by_specialist, admin_phones=None, skip_speciali
     tg_id = _get_tg_id(admin_phone)
     if tg_id:
         results['admin'] = _send_tg(tg_id, admin_text)
+        if results['admin']:
+            _log(admin_phone, 'tomorrow_briefing', 'admin', 'tg', 'sent', admin_text[:100])
     logger.info('tomorrow_briefing admin → {}'.format(results['admin']))
 
     # 2. Кожному спеціалісту — його записи (skip if in skip list)
