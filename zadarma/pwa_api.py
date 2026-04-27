@@ -3087,6 +3087,58 @@ def admin_cal_update(appt_id):
     conn.execute('UPDATE manual_appointments SET {} WHERE id=?'.format(', '.join(updates)), params)
     conn.commit()
     conn.close()
+
+    # Sync changes to WLaunch if appointment has wlaunch_id
+    wl_id = row['wlaunch_id']
+    if not wl_id:
+        m = re.search(r'wl:([a-f0-9-]+)', row['notes'] or '', re.IGNORECASE)
+        if m:
+            wl_id = m.group(1)
+    if wl_id and any(k in d for k in ('date', 'time', 'duration', 'specialist', 'status')):
+        try:
+            import threading
+            def _sync_wl_update():
+                try:
+                    from wlaunch_api import get_branch_id, get_wlaunch_resources, HEADERS as WL_HEADERS
+                    from config import WLAUNCH_API_URL, COMPANY_ID
+                    from tz_utils import kyiv_offset
+                    bid = get_branch_id()
+                    if not bid:
+                        return
+                    eff_date = d.get('date', row['date'])
+                    eff_time = d.get('time', row['time']) or '09:00'
+                    eff_duration = int(d.get('duration', row['duration'] or 60) or 60)
+                    # Convert Kyiv → UTC
+                    kyiv_dt = datetime.strptime('{} {}'.format(eff_date, eff_time), '%Y-%m-%d %H:%M')
+                    utc_dt = kyiv_dt - timedelta(hours=kyiv_offset(kyiv_dt))
+                    wl_body = {
+                        'appointment': {
+                            'id': wl_id,
+                            'start_time': utc_dt.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                            'duration': eff_duration * 60,
+                        }
+                    }
+                    if 'specialist' in d:
+                        resources = get_wlaunch_resources(bid)
+                        rid = resources.get(d['specialist'])
+                        if rid:
+                            wl_body['appointment']['service_resource_settings'] = [{
+                                'resources': [rid],
+                                'auto_selected_resources': False,
+                                'duration': eff_duration * 60,
+                            }]
+                    if 'status' in d and d['status'] == 'CANCELLED':
+                        wl_body['appointment']['status'] = 'CANCELLED'
+                    h = dict(WL_HEADERS, **{'Content-Type': 'application/json'})
+                    url = '{}/company/{}/branch/{}/appointment/{}'.format(WLAUNCH_API_URL, COMPANY_ID, bid, wl_id)
+                    resp = _req.post(url, headers=h, json=wl_body, timeout=10)
+                    logger.info('WLaunch update {}: {} {}'.format(wl_id, resp.status_code, resp.text[:100]))
+                except Exception as e:
+                    logger.error('WLaunch update error for {}: {}'.format(wl_id, e))
+            threading.Thread(target=_sync_wl_update, daemon=True).start()
+        except Exception:
+            pass
+
     return jsonify({'ok': True})
 
 @app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['DELETE'])
