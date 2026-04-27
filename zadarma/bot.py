@@ -524,6 +524,7 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
                 "Команди:\n\n"
                 "/my_services - Мої записи\n"
                 "/balance - Мій баланс (депозит + кешбек)\n"
+                "/price - Актуальний прайс\n"
                 "/app - Мобільний додаток\n"
                 "/map - Як нас знайти\n"
                 "/scheme - Фото локації\n"
@@ -542,6 +543,7 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
                 "Команди:\n\n"
                 "/my_services - Мої записи\n"
                 "/balance - Мій баланс (депозит + кешбек)\n"
+                "/price - Актуальний прайс\n"
                 "/app - Мобільний додаток\n"
                 "/map - Як нас знайти\n"
                 "/scheme - Фото локації\n"
@@ -553,6 +555,7 @@ async def help_command(update, context: ContextTypes.DEFAULT_TYPE):
             help_message = (
                 "Ви не авторизовані.\n\n"
                 "/start - Авторизуватись для отримання сповіщень\n"
+                "/price - Актуальний прайс\n"
                 "/app - Наш застосунок, який точно Вам допоможе\n"
                 "/map - Знайти нас на мапі\n"
                 "/scheme - Побачити будівлю на фото\n"
@@ -1192,6 +1195,41 @@ async def save_channel_post(update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f'Feed save error: {e}')
 
 
+async def price_command(update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current prices from prices.json."""
+    try:
+        import json
+        with open('/home/gomoncli/private_data/prices.json', 'r', encoding='utf-8') as f:
+            prices = json.load(f)
+        lines = ['💰 *Актуальний прайс Dr. Gomon Cosmetology*\n']
+        for cat in prices:
+            cat_name = cat.get('cat', '')
+            items = cat.get('items', [])
+            if not items:
+                continue
+            lines.append('\n*{}*'.format(cat_name.replace('*', '')))
+            for item in items:
+                name = item.get('name', '')
+                price = item.get('price', '')
+                if name and price:
+                    lines.append('  {} — {}'.format(name, price))
+        lines.append('\n📱 Додаток: drgomon.beauty/app')
+        lines.append('📞 Запис: @dr.gomon (Instagram)')
+        text = '\n'.join(lines)
+        # TG message limit 4096 chars — split if needed
+        if len(text) > 4000:
+            mid = len(lines) // 2
+            part1 = '\n'.join(lines[:mid])
+            part2 = '\n'.join(lines[mid:])
+            await update.message.reply_text(part1, parse_mode='Markdown')
+            await update.message.reply_text(part2, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        logger.error('price_command error: {}'.format(e))
+        await update.message.reply_text('Помилка завантаження прайсу. Спробуйте пізніше.')
+
+
 async def balance_command(update, context: ContextTypes.DEFAULT_TYPE):
     """Show client's deposit + cashback balance."""
     user_id = update.effective_user.id
@@ -1453,6 +1491,8 @@ def main():
     application.add_handler(CommandHandler("sync", sync_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("price", price_command))
+    application.add_handler(CommandHandler("prices", price_command))
     application.add_handler(CommandHandler("my_services", my_services_command))
     application.add_handler(CommandHandler("services", my_services_command))
     application.add_handler(CommandHandler("monitor", monitor_command))
