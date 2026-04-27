@@ -367,7 +367,7 @@ def _check_ai_should_reply(conv_id, chat_id):
         try:
             cooldown_row = conn.execute(
                 "SELECT 1 FROM messages WHERE conversation_id=? AND sender_id='ai_bot' "
-                "AND created_at > datetime('now', '-30 seconds') LIMIT 1",
+                "AND created_at > datetime('now', '-60 seconds') LIMIT 1",
                 (conv_id,)).fetchone()
             if cooldown_row:
                 return False, 'cooldown'
@@ -720,14 +720,14 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
 
     try:
         # Wait 30s for user to finish sending multiple messages
-        time.sleep(30)
+        time.sleep(60)
 
         # Check if user sent more messages during the wait — skip if so (next thread handles it)
         try:
             _cc = sqlite3.connect(DB_PATH, timeout=5)
             _recent = _cc.execute(
                 "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
-                "AND created_at > datetime('now', '-28 seconds')", (conv_id,)).fetchone()
+                "AND created_at > datetime('now', '-58 seconds')", (conv_id,)).fetchone()
             _cc.close()
             if _recent and _recent[0] > 0:
                 logger.info('AI skip for {} (user still typing)'.format(conv_id))

@@ -894,7 +894,7 @@ def ig_ai_reply():
     import threading
     def _ig_delayed_reply(sid):
         import time as _time
-        _time.sleep(30)
+        _time.sleep(60)
         try:
             _ig_process_reply(sid)
         except Exception as e:
@@ -913,7 +913,7 @@ def _ig_process_reply(sender_id):
         conn_check = sqlite3.connect(DB_PATH, timeout=5)
         recent = conn_check.execute(
             "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
-            "AND created_at > datetime('now', '-28 seconds')",
+            "AND created_at > datetime('now', '-58 seconds')",
             (conv_id,)).fetchone()
         conn_check.close()
         if recent and recent[0] > 0:
