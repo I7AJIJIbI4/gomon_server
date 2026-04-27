@@ -3118,15 +3118,6 @@ def admin_cal_update(appt_id):
                             'duration': eff_duration * 60,
                         }
                     }
-                    if 'specialist' in d:
-                        resources = get_wlaunch_resources(bid)
-                        rid = resources.get(d['specialist'])
-                        if rid:
-                            wl_body['appointment']['service_resource_settings'] = [{
-                                'resources': [rid],
-                                'auto_selected_resources': False,
-                                'duration': eff_duration * 60,
-                            }]
                     if 'status' in d and d['status'] == 'CANCELLED':
                         wl_body['appointment']['status'] = 'CANCELLED'
                     h = dict(WL_HEADERS, **{'Content-Type': 'application/json'})
