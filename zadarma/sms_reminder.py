@@ -710,13 +710,13 @@ def send_daily_summary():
         lines.append('<b>{}</b>: {} відпр.{}'.format(
             label, data['sent'],
             ' ({} помилок)'.format(data['failed']) if data['failed'] else ''))
-        # Show details (max 5 per type)
-        for e in data['entries'][:5]:
+        for e in data['entries']:
             ch = '💬' if e['channel'] == 'tg' else '📱' if e['channel'] == 'sms' else '🔔'
             phone_display = e['phone'].replace('380', '+380', 1) if e['phone'].startswith('380') else e['phone']
-            lines.append('  {} {} {}'.format(e['time'], ch, phone_display))
-        if len(data['entries']) > 5:
-            lines.append('  ... і ще {}'.format(len(data['entries']) - 5))
+            preview = ''
+            if e.get('preview'):
+                preview = ' · ' + e['preview'][:50].replace('<','&lt;').replace('\n',' ')
+            lines.append('  {} {} {}{}'.format(e['time'], ch, phone_display, preview))
         lines.append('')
 
     # Repeat procedure reminders
@@ -724,13 +724,14 @@ def send_daily_summary():
         tg_r = sum(1 for e in reminder_entries if e.get('channel') == 'tg' and e.get('status') == 'sent')
         sms_r = sum(1 for e in reminder_entries if e.get('channel') == 'sms' and e.get('status') == 'sent')
         lines.append('<b>🔄 Повторні процедури</b>: {} відпр. (💬{} 📱{})'.format(total_remind, tg_r, sms_r))
-        for e in reminder_entries[:5]:
+        for e in reminder_entries:
             if e.get('status') != 'sent':
                 continue
             ch = '💬' if e.get('channel') == 'tg' else '📱'
-            lines.append('  {} {} {} ({})'.format(e.get('time', ''), ch, e.get('phone', ''), e.get('name', '')))
-        if total_remind > 5:
-            lines.append('  ... і ще {}'.format(total_remind - 5))
+            preview = ''
+            if e.get('procedure'):
+                preview = ' · ' + (e.get('procedure',''))[:40]
+            lines.append('  {} {} {} ({}){}'.format(e.get('time', ''), ch, e.get('phone', ''), e.get('name', ''), preview))
         if total_remind_err:
             lines.append('  ⚠️ Помилок: {}'.format(total_remind_err))
         lines.append('')
