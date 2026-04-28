@@ -460,14 +460,30 @@ def check_pending_cashback_reminders():
     current_time = now.strftime('%H:%M')
 
     conn = sqlite3.connect(DB_PATH, timeout=5)
+    # Send when: confirmed AND current time >= visit time AND (confirmed before visit time today OR confirmed yesterday+)
+    # Simply: confirmed AND now >= appt_time AND confirmed_at < today's appt_time (or confirmed yesterday)
     rows = conn.execute(
-        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist "
+        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist, cashback_confirmed_at "
         "FROM photo_tasks "
         "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL "
-        "AND date(cashback_confirmed_at, '+1 day') <= ? "
         "AND (appt_time IS NULL OR appt_time <= ?)",
-        (today, current_time)).fetchall()
+        (current_time,)).fetchall()
     conn.close()
+    # Filter: only send if confirmed at least 1 hour before current time (give doctor time, avoid instant send)
+    filtered = []
+    for r in rows:
+        confirmed_at = r[9] or ''
+        if not confirmed_at:
+            continue
+        # Confirmed more than 1 hour ago → send
+        from datetime import datetime as _dt
+        try:
+            conf_dt = _dt.strptime(confirmed_at, '%Y-%m-%d %H:%M:%S')
+            if (now - conf_dt).total_seconds() >= 3600:
+                filtered.append(r)
+        except Exception:
+            filtered.append(r)
+    rows = filtered
 
     if not rows:
         return
