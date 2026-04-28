@@ -695,8 +695,9 @@ def run_specialist_notifications(dry_run=False):
                     a.get('client_name',''), a.get('procedure_name','')))
             ok = _send_tg(tg_id, '\n'.join(lines))
             if ok:
+                _grouped_text = '\n'.join(lines)
                 for a in spec_appts:
-                    _log(spec_phone, 'spec_new', a.get('id',''), 'tg', 'sent', '')
+                    _log(spec_phone, 'spec_new', a.get('id',''), 'tg', 'sent', _grouped_text[:100])
                 sent += len(spec_appts)
                 logger.info('  {} — {} нових записів відправлено одним повідомленням'.format(spec, len(spec_appts)))
             else:

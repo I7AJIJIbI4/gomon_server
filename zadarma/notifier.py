@@ -564,7 +564,10 @@ def send_tomorrow_briefing(appts_by_specialist, admin_phones=None, skip_speciali
     if tg_id:
         results['admin'] = _send_tg(tg_id, admin_text)
         if results['admin']:
-            _log(admin_phone, 'tomorrow_briefing', 'admin', 'tg', 'sent', admin_text[:100])
+            # Use date in reference to avoid dedup blocking daily briefings
+            from tz_utils import kyiv_now as _kn_br
+            _br_ref = 'briefing_' + _kn_br().strftime('%Y-%m-%d')
+            _log(admin_phone, 'tomorrow_briefing', _br_ref, 'tg', 'sent', admin_text[:100])
     logger.info('tomorrow_briefing admin → {}'.format(results['admin']))
 
     # 2. Кожному спеціалісту — його записи (skip if in skip list)

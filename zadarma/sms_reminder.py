@@ -678,7 +678,8 @@ def send_daily_summary():
     TYPE_LABELS = {
         'feedback': '💬 Відгук', 'cancel': '❌ Скасування',
         'appt_reminder': '🔔 Нагадування', 'appt_confirm': '✅ Підтвердження',
-        'spec_new': '👩‍⚕️ Спеціалісту', 'cashback_redeem': '💰 Кешбек',
+        'spec_new': '👩‍⚕️ Спеціалісту (нові записи)', 'cashback_redeem': '💰 Кешбек',
+        'tomorrow_briefing': '📋 Бріфінг на завтра',
     }
 
     lines = ['📊 <b>Повідомлення за {}</b>'.format(today_display), '']
