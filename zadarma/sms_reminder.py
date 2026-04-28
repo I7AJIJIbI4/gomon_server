@@ -690,8 +690,23 @@ def send_daily_summary():
         if e['status'] == 'sent':
             sent_keys.add((e['phone'], e['type']))
 
-    by_type = {}
+    # Dedup: show best channel per phone+type (tg > sms > push)
+    CHAN_PRIO = {'tg': 0, 'sms': 1, 'push': 2}
+    best_per_key = {}  # (phone, type) → entry with best channel
     for e in notif_entries:
+        if e['status'] != 'sent':
+            # Push fail with successful TG/SMS = not a real error
+            if e['channel'] == 'push' and (e['phone'], e['type']) in sent_keys:
+                continue
+            key = (e['phone'], e['type'], 'fail')
+            best_per_key[key] = e
+            continue
+        key = (e['phone'], e['type'])
+        if key not in best_per_key or CHAN_PRIO.get(e['channel'], 9) < CHAN_PRIO.get(best_per_key[key].get('channel'), 9):
+            best_per_key[key] = e
+
+    by_type = {}
+    for key, e in best_per_key.items():
         t = e['type']
         if t not in by_type:
             by_type[t] = {'sent': 0, 'failed': 0, 'entries': []}
@@ -699,9 +714,6 @@ def send_daily_summary():
             by_type[t]['sent'] += 1
             by_type[t]['entries'].append(e)
         else:
-            # Push fail with successful TG/SMS = not a real error
-            if e['channel'] == 'push' and (e['phone'], t) in sent_keys:
-                continue  # skip — delivery succeeded via other channel
             by_type[t]['failed'] += 1
             by_type[t]['entries'].append(e)
 
