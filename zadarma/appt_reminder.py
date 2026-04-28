@@ -427,7 +427,8 @@ def run_feedback(dry_run=False, override_date=None):
                                     'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія',
                                     'Ліполітики (обличчя, 4 мл)', 'Ліполітики (тіло, 10 мл)',
                                     'Гіалуронідаза (розчинення філера)'}
-        if procedure not in NEEDS_DRUG_SELECTION:
+        _is_drug = procedure in NEEDS_DRUG_SELECTION
+        if not _is_drug:
             try:
                 _accrue_cashback(appt)
                 cashback_ok += 1
@@ -436,6 +437,12 @@ def run_feedback(dry_run=False, override_date=None):
 
         if dry_run:
             logger.info('    [DRY-RUN] пропускаємо відправку')
+            skipped += 1
+            continue
+
+        # Drug selection procedures: skip post_visit now — will be sent after doctor confirms price
+        if _is_drug:
+            logger.info('    skip post_visit (needs_drug) — will send after cashback confirmation')
             skipped += 1
             continue
 
