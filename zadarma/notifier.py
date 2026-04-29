@@ -76,9 +76,23 @@ def _fmt_time(time_str):
     """'11:30:00' або '11:30' → '11:30'"""
     return (time_str or '').strip()[:5] or '—'
 
-def _first_name(client_name):
-    """'Іванна Петренко' → 'Іванна', None → 'клієнт'"""
-    return (client_name or '').split()[0] if client_name else 'клієнт'
+def _first_name(client_name, phone=None):
+    """Get first name. Tries clients DB first (reliable), falls back to first word of client_name."""
+    if phone:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            row = conn.execute("SELECT first_name FROM clients WHERE phone=?", (phone,)).fetchone()
+            conn.close()
+            if row and row[0]:
+                return row[0]
+        except Exception:
+            pass
+    # Fallback: second word if 3+ words (Прізвище Ім'я По-батькові), else first word
+    parts = (client_name or '').split()
+    if len(parts) >= 3:
+        return parts[1]  # "Колісник Олексій Миколайович" → "Олексій"
+    return parts[0] if parts else 'клієнт'
 
 # ─── БД helpers ──────────────────────────────────────────────────────────────
 
@@ -307,7 +321,7 @@ def _appt_vars(appt):
     )
     date_str = appt.get('date', '')
     return {
-        'first_name':  _first_name(appt.get('client_name') or appt.get('client_phone')),
+        'first_name':  _first_name(appt.get('client_name') or appt.get('client_phone'), phone=appt.get('client_phone')),
         'service':     appt.get('procedure_name') or appt.get('service') or '—',
         'date':        _fmt_date(date_str),
         'date_short':  _fmt_date_short(date_str),

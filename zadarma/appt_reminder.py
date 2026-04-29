@@ -215,7 +215,7 @@ def _get_manual_appts(for_date_str):
     conn = _db()
     rows = conn.execute(
         "SELECT id, client_phone, client_name, procedure_name, specialist, "
-        "date, time, duration, notes FROM manual_appointments "
+        "date, time, duration, notes, wlaunch_id FROM manual_appointments "
         "WHERE date=? AND status='CONFIRMED'",
         (for_date_str,)
     ).fetchall()
@@ -232,6 +232,7 @@ def _get_manual_appts(for_date_str):
             'time':           r['time'] or '',
             'duration_min':   r['duration'] or 60,
             'notes':          r['notes'] or '',
+            'wlaunch_id':     r['wlaunch_id'] or '',
             'source':         'manual',
         })
     return result
@@ -303,7 +304,9 @@ def run_reminder(dry_run=False):
     tomorrow = (kyiv_now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
     logger.info('=== REMINDER 24h: перевіряємо manual записи на {} ==='.format(tomorrow))
 
-    appts = _get_manual_appts(tomorrow)  # тільки наші записи, WLaunch сам шле SMS
+    all_manual = _get_manual_appts(tomorrow)
+    # Skip manual appointments that have wlaunch_id — WLaunch sends its own reminders
+    appts = [a for a in all_manual if not a.get('wlaunch_id')]
     logger.info('Знайдено {} записів'.format(len(appts)))
 
     sent = skipped = failed = 0
