@@ -418,6 +418,16 @@ def check_and_send_reminders(dry_run=False):
     Кожен SMS відправляється тільки в ту годину, о якій був оригінальний запис.
     """
     stats = {'sent': 0, 'skipped': 0, 'errors': 0, 'dry_run': dry_run}
+    # Max 1 reminder per phone per day — check what was already sent today
+    _sent_today_phones = set()
+    try:
+        _stc = sqlite3.connect(DB_PATH, timeout=5)
+        _today_str = kyiv_now().date().isoformat()
+        for _sr in _stc.execute("SELECT DISTINCT phone FROM sms_reminders WHERE sent_date=?", (_today_str,)).fetchall():
+            _sent_today_phones.add(_sr[0])
+        _stc.close()
+    except Exception:
+        pass
     sent_details = []    # (phone, name, sms_text) — для Telegram звіту
     error_details = []   # (phone, name, sms_text) — тільки адміну
     today = kyiv_now().date()
@@ -577,9 +587,15 @@ def check_and_send_reminders(dry_run=False):
                 stats['skipped'] += 1
                 continue
 
-            # Перевіряємо чи вже відправляли
+            # Перевіряємо чи вже відправляли цю процедуру
             if is_reminder_already_sent(client_id, service, visit_date_str, phone=phone):
                 logger.debug('⏭️  Вже відправлено: {} | {}'.format(phone, service))
+                stats['skipped'] += 1
+                continue
+
+            # Max 1 reminder per phone per day (avoid spam if multiple procedures due same day)
+            if phone in _sent_today_phones:
+                logger.info('⏭️  Вже відправлено іншу процедуру сьогодні: {}'.format(phone))
                 stats['skipped'] += 1
                 continue
 
@@ -605,6 +621,7 @@ def check_and_send_reminders(dry_run=False):
                     mark_reminder_sent(client_id, phone, service, visit_date_str, category,
                                        status='sent_{}'.format(channel))
                     stats['sent'] += 1
+                    _sent_today_phones.add(phone)
                     sent_details.append((phone, first_name or '', message, channel))
                     logger.info('{} відправлено ({}) | {}'.format(ch_icon, channel, phone))
                 else:
