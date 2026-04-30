@@ -356,13 +356,18 @@ def init_reminders_table():
     init_db_tables()
 
 
-def is_reminder_already_sent(client_id, service, visit_date):
+def is_reminder_already_sent(client_id, service, visit_date, phone=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute(
-        'SELECT id FROM sms_reminders WHERE client_id=? AND service=? AND visit_date=?',
-        (client_id, service, visit_date)
-    )
+    # Dedup by phone if client_id is empty (some clients synced without WLaunch ID)
+    if phone and (not client_id or client_id == ''):
+        cursor.execute(
+            'SELECT id FROM sms_reminders WHERE phone=? AND service=? AND visit_date=?',
+            (phone, service, visit_date))
+    else:
+        cursor.execute(
+            'SELECT id FROM sms_reminders WHERE client_id=? AND service=? AND visit_date=?',
+            (client_id, service, visit_date))
     row = cursor.fetchone()
     conn.close()
     return row is not None
@@ -573,7 +578,7 @@ def check_and_send_reminders(dry_run=False):
                 continue
 
             # Перевіряємо чи вже відправляли
-            if is_reminder_already_sent(client_id, service, visit_date_str):
+            if is_reminder_already_sent(client_id, service, visit_date_str, phone=phone):
                 logger.debug('⏭️  Вже відправлено: {} | {}'.format(phone, service))
                 stats['skipped'] += 1
                 continue
