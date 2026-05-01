@@ -954,7 +954,8 @@ def ig_ai_reply():
         import time as _time
         _time.sleep(60)
         try:
-            _ig_process_reply(sid)
+            with app.app_context():
+                _ig_process_reply(sid)
         except Exception as e:
             logger.error('IG delayed reply error for {}: {}'.format(sid, e))
     t = threading.Thread(target=_ig_delayed_reply, args=(sender_id,), daemon=True)
