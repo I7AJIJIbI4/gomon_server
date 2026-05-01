@@ -380,7 +380,7 @@ def mark_reminder_sent(client_id, phone, service, visit_date, category, status='
             'INSERT OR IGNORE INTO sms_reminders '
             '(client_id, phone, service, visit_date, sent_date, status, template_category) '
             'VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (client_id, phone, service, visit_date, kyiv_now().date().isoformat(), status, category)
+            (client_id or phone or '', phone, service, visit_date, kyiv_now().date().isoformat(), status, category)
         )
         conn.commit()
     except Exception as e:
