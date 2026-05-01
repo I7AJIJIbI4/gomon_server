@@ -73,7 +73,7 @@ def check_endpoint(check):
     name = check['name']
     url = check['url']
     try:
-        r = requests.get(url, timeout=TIMEOUT, headers={'User-Agent': 'GomonHealthCheck/1.0'})
+        r = requests.get(url, timeout=TIMEOUT, headers={'User-Agent': 'GomonHealthCheck/1.0', 'Sec-Fetch-Site': 'same-origin'})
         if r.status_code != check.get('expect', 200):
             return False, '{}: HTTP {} (очікувався {})'.format(name, r.status_code, check['expect'])
         if 'contains' in check and check['contains'] not in r.text:
