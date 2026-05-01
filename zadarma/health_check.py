@@ -31,6 +31,7 @@ CHECKS = [
     {'name': 'Додаток', 'url': 'https://drgomon.beauty/app/', 'expect': 200, 'contains': 'gomon'},
     {'name': 'API', 'url': 'https://drgomon.beauty/api/health', 'expect': 200, 'json_key': 'ok'},
     {'name': 'SW', 'url': 'https://drgomon.beauty/app/sw.js', 'expect': 200, 'contains': 'CACHE'},
+    {'name': 'Прайс', 'url': 'https://drgomon.beauty/sitepro/prices.php', 'expect': 200, 'contains': 'cat'},
 ]
 
 TIMEOUT = 15
