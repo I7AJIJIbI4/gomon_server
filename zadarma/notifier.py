@@ -31,6 +31,7 @@ SPECIALIST_INFO = {
         'phone':      '073-310-31-10',   # загальний номер клініки
         'phone_norm': '380996093860',    # для TG lookup у таблиці users
         'instagram':  '@dr.gomon',
+        'ig_user_id': '1453130765349790',  # IG scoped ID for DM notifications
     },
     'anastasia': {
         'short_name': 'Анастасія',
@@ -238,6 +239,25 @@ def _send_tg(tg_id, text, parse_mode=None):
         logger.error('_send_tg exception tg_id={}: {}'.format(tg_id, e))
         return False
 
+
+def _send_ig(ig_user_id, text):
+    """Send IG DM to a user (requires 24h window — user must have messaged recently)."""
+    try:
+        from config import IG_FALLBACK_TOKEN
+        r = requests.post('https://graph.instagram.com/v25.0/me/messages',
+            headers={'Authorization': 'Bearer ' + IG_FALLBACK_TOKEN, 'Content-Type': 'application/json'},
+            json={'recipient': {'id': ig_user_id}, 'message': {'text': text}},
+            timeout=15)
+        if r.status_code == 200:
+            logger.info('IG DM sent to {}'.format(ig_user_id))
+            return True
+        logger.warning('IG DM failed {}: {} {}'.format(ig_user_id, r.status_code, r.text[:100]))
+        return False
+    except Exception as e:
+        logger.error('_send_ig exception: {}'.format(e))
+        return False
+
+
 # ─── Push ────────────────────────────────────────────────────────────────────
 
 def _send_push(phone, title, body, tag='gomon', url='/app/'):
@@ -297,18 +317,22 @@ def notify_client(phone, tg_text, sms_text=None,
 
 def notify_specialist(specialist, tg_text):
     """
-    Надіслати внутрішнє сповіщення спеціалісту через TG.
-    Без SMS fallback — внутрішні повідомлення, не критичні.
+    Надіслати внутрішнє сповіщення спеціалісту через TG + IG (if available).
+    IG is best-effort (24h window). TG is primary.
     """
     info = SPECIALIST_INFO.get(specialist)
     if not info:
         logger.warning('notify_specialist: unknown specialist "{}"'.format(specialist))
         return False
+    tg_ok = False
     tg_id = _get_tg_id(info['phone_norm'])
-    if not tg_id:
-        logger.warning('notify_specialist: no TG ID for {}'.format(specialist))
-        return False
-    return _send_tg(tg_id, tg_text)
+    if tg_id:
+        tg_ok = _send_tg(tg_id, tg_text)
+    # Also try IG DM (best-effort, may fail if 24h window expired)
+    ig_uid = info.get('ig_user_id')
+    if ig_uid:
+        _send_ig(ig_uid, tg_text)
+    return tg_ok
 
 # ─── Шаблони повідомлень ─────────────────────────────────────────────────────
 
@@ -572,16 +596,19 @@ def send_tomorrow_briefing(appts_by_specialist, admin_phones=None, skip_speciali
     admin_text = 'Записи на завтра ({}):\n\n{}'.format(
         len(all_appts), '\n'.join(lines))
 
-    # Надіслати адміну (Victoria = головний лікар)
+    # Надіслати адміну (Victoria = головний лікар) — TG + IG
     admin_phone = (admin_phones or [SPECIALIST_INFO['victoria']['phone_norm']])[0]
     tg_id = _get_tg_id(admin_phone)
     if tg_id:
         results['admin'] = _send_tg(tg_id, admin_text)
         if results['admin']:
-            # Use date in reference to avoid dedup blocking daily briefings
             from tz_utils import kyiv_now as _kn_br
             _br_ref = 'briefing_' + _kn_br().strftime('%Y-%m-%d')
             _log(admin_phone, 'tomorrow_briefing', _br_ref, 'tg', 'sent', admin_text[:100])
+    # Also IG (best-effort)
+    victoria_ig = SPECIALIST_INFO.get('victoria', {}).get('ig_user_id')
+    if victoria_ig:
+        _send_ig(victoria_ig, admin_text)
     logger.info('tomorrow_briefing admin → {}'.format(results['admin']))
 
     # 2. Кожному спеціалісту — його записи (skip if in skip list)
