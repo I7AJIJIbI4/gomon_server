@@ -154,6 +154,13 @@ def save_message(sender_id, sender_name, content, media_type='text', file_id=Non
         conn.commit()
         logger.info('Saved: {} from {} (admin={})'.format(
             (content or '')[:40], sender_name, is_from_admin))
+
+        # Notify admin via IG about new client message (not from admin, not sticker/media-only)
+        if not is_from_admin and content and media_type == 'text':
+            try:
+                _notify_admin_new_message(sender_name, chat_id, content)
+            except Exception:
+                pass
     except Exception as e:
         logger.error('save_message error: {}'.format(e))
     finally:
@@ -566,15 +573,15 @@ def _send_media_notice(chat_id, biz_conn_id, text):
 
 
 def _notify_admin_escalation(conv_id, chat_id, client_name):
-    """Send escalation notification to admin via main bot."""
+    """Send escalation notification to admin via main bot + IG."""
+    text = ('🔔 Ескалація з Telegram\n\n'
+            'Клієнт: {}\n'
+            'Chat ID: {}\n\n'
+            'GomonAI передав розмову вам. '
+            'Відповідайте через адмін-месенджер у додатку.').format(
+                client_name or chat_id, chat_id)
     try:
         from config import TELEGRAM_TOKEN, ADMIN_USER_ID
-        text = ('🔔 Ескалація з Telegram\n\n'
-                'Клієнт: {}\n'
-                'Chat ID: {}\n\n'
-                'GomonAI передав розмову вам. '
-                'Відповідайте через адмін-месенджер у додатку.').format(
-                    client_name or chat_id, chat_id)
         requests.post(
             'https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN),
             json={'chat_id': ADMIN_USER_ID, 'text': text},
@@ -582,6 +589,28 @@ def _notify_admin_escalation(conv_id, chat_id, client_name):
         logger.info('Escalation notification sent for {}'.format(conv_id))
     except Exception as e:
         logger.error('Escalation notify error: {}'.format(e))
+    # Also IG
+    try:
+        from notifier import SPECIALIST_INFO, _send_ig
+        ig_uid = SPECIALIST_INFO.get('victoria', {}).get('ig_user_id')
+        if ig_uid:
+            _send_ig(ig_uid, text)
+    except Exception:
+        pass
+
+
+def _notify_admin_new_message(client_name, chat_id, message_text):
+    """Notify admin via IG that a new TG Business message arrived."""
+    try:
+        from notifier import SPECIALIST_INFO, _send_ig
+        ig_uid = SPECIALIST_INFO.get('victoria', {}).get('ig_user_id')
+        if not ig_uid:
+            return
+        text = '💬 Нове повідомлення в Telegram\n\n{}: "{}"\n\nВідповідайте в Telegram або додатку.'.format(
+            client_name or chat_id, (message_text or '')[:200])
+        _send_ig(ig_uid, text)
+    except Exception as e:
+        logger.debug('IG new msg notify skip: {}'.format(e))
 
 
 def _cancel_client_appointment(client_phone, target_date=None):
