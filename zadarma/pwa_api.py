@@ -786,6 +786,64 @@ def ig_message_webhook():
         conn = sqlite3.connect(DB_PATH, timeout=10)
 
         if is_echo:
+            # Check if this is a cashback price reply from doctor in IG
+            if text and text.strip().isdigit() and int(text.strip()) >= 100:
+                _price_val = int(text.strip())
+                # Look for recent #cashback tag in this conversation
+                _ig_conv = 'ig_{}'.format(recipient_id)
+                _cb_msg = conn.execute(
+                    "SELECT content FROM messages WHERE conversation_id=? AND content LIKE '%#cashback|%' "
+                    "ORDER BY id DESC LIMIT 1", (_ig_conv,)).fetchone()
+                if _cb_msg:
+                    import re as _re_cb
+                    _cb_match = _re_cb.search(r'#cashback\|(\d+)\|(\d+)', _cb_msg[0])
+                    if _cb_match:
+                        _ph_short = _cb_match.group(1)
+                        _dt_short = _cb_match.group(2)
+                        # Resolve phone and date
+                        _ph_row = conn.execute("SELECT phone FROM clients WHERE phone LIKE ?", ('%' + _ph_short[-9:],)).fetchone()
+                        _full_phone = _ph_row[0] if _ph_row else _ph_short
+                        from tz_utils import kyiv_now as _kn_cb
+                        _year = str(_kn_cb().year)
+                        _appt_date = '{}-{}-{}'.format(_year, _dt_short[:2], _dt_short[2:4])
+                        # Find drug name by price match
+                        _drug_name = ''
+                        try:
+                            _cb_proc = _cb_msg[0].split('(')[-1].split(')')[0] if '(' in _cb_msg[0] else ''
+                            from photo_reminder import _get_drugs_for_procedure
+                            _drugs = _get_drugs_for_procedure(_cb_proc)
+                            for _dr in _drugs:
+                                if _dr['price'] == _price_val:
+                                    _drug_name = _dr['name']
+                                    break
+                            if not _drug_name:
+                                _drug_name = _cb_proc
+                        except Exception:
+                            _drug_name = 'процедура'
+                        # Save to cashback_pending + photo_tasks
+                        try:
+                            _kn_str = _kn_cb().strftime('%Y-%m-%d %H:%M:%S')
+                            conn.execute(
+                                "INSERT OR REPLACE INTO cashback_pending (phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
+                                "VALUES (?,?,?,?,?,?,?,?,0)",
+                                (_full_phone, '', _cb_proc, _drug_name, _price_val, _appt_date, 'ig_doctor', _kn_str))
+                            conn.execute(
+                                "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
+                                "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','pending')",
+                                (_drug_name, _price_val, _kn_str, _full_phone, _appt_date))
+                            conn.commit()
+                            # Reply confirmation via IG
+                            try:
+                                from notifier import _send_ig
+                                _cb_amount = round(_price_val * 0.03, 2)
+                                _send_ig(recipient_id, '✅ {} — {} (₴{})\nКешбек +{:.0f} грн'.format(_full_phone, _drug_name, _price_val, _cb_amount))
+                            except Exception:
+                                pass
+                            logger.info('IG cashback confirmed: {} {} ₴{}'.format(_full_phone, _drug_name, _price_val))
+                        except Exception as _cb_e:
+                            logger.error('IG cashback save error: {}'.format(_cb_e))
+                        conn.close()
+                        return jsonify({'ok': True, 'cashback': True})
             # Echo = outgoing message from our page (could be AI bot or real doctor)
             # Check if this text was already saved by ai_bot (to avoid duplicates)
             conv_id = 'ig_{}'.format(recipient_id)

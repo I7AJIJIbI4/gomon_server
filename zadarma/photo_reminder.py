@@ -148,6 +148,21 @@ def _send_drug_buttons(tg_id, appts, date_str):
         except Exception as e:
             logger.error('Drug buttons send error: {}'.format(e))
 
+        # Also send to IG (text-only, no buttons — doctor replies with price number)
+        try:
+            from notifier import SPECIALIST_INFO, _send_ig
+            spec = a.get('specialist', '')
+            ig_uid = SPECIALIST_INFO.get(spec, {}).get('ig_user_id')
+            if ig_uid:
+                drug_lines = '\n'.join('  {} — ₴{}'.format(d['name'], d['price']) for d in drugs)
+                ig_text = '💰 Кешбек: {} ({})\n\n{}\n\nВідправте ціну числом (наприклад: {})'.format(
+                    client_name, procedure, drug_lines, drugs[0]['price'])
+                # Tag message for price input parsing: #cashback|phone|MMDD
+                ig_text += '\n#cashback|{}|{}'.format(ph_short, dt_short)
+                _send_ig(ig_uid, ig_text)
+        except Exception as _ig_e:
+            logger.debug('IG drug msg skip: {}'.format(_ig_e))
+
 
 def _get_today_str():
     """Today's date in Kyiv timezone."""
