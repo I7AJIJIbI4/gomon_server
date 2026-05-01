@@ -624,6 +624,11 @@ def send_tomorrow_briefing(appts_by_specialist, admin_phones=None, skip_speciali
         spec_text = '\n\n'.join(lines)
         ok = notify_specialist(spec, spec_text)
         results['specialists'][spec] = ok
+        if ok:
+            from tz_utils import kyiv_now as _kn_sp
+            _sp_ref = 'briefing_{}_{}'.format(spec, _kn_sp().strftime('%Y-%m-%d'))
+            spec_info = SPECIALIST_INFO.get(spec, {})
+            _log(spec_info.get('phone_norm', ''), 'tomorrow_briefing', _sp_ref, 'tg', 'sent', spec_text[:100])
         logger.info('tomorrow_briefing {} ({} appts) → {}'.format(spec, len(appts), ok))
 
     return results
