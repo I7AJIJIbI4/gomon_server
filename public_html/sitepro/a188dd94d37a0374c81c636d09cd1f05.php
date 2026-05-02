@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="preload" as="image" href="logo-340.webp" type="image/webp">
 <!-- SEO Meta -->
-<meta name="description" content="Dr. Gomon Cosmetology - професійна косметологія у Черкасах. Чистка обличчя, біоревіталізація, контурна пластика, мезотерапія, пілінги, корекція фігури DrumRoll, відбілювання зубів Magic Smile. Працюємо без вихідних, тільки за записом.">
+<meta name="description" content="Косметолог Черкаси ⭐ Dr. Gomon Cosmetology — чистка обличчя, збільшення губ, біоревіталізація, ботулінотерапія, масаж обличчя та тіла DrumRoll, пілінги, відбілювання зубів. Консультація косметолога, ціни на сайті. Працюємо 7/7 за записом.">
 <meta name="keywords" content="косметолог Черкаси, косметологія Черкаси, Dr Gomon, ін'єкційна косметологія, апаратна косметологія, відбілювання зубів, корекція фігури, чистка обличчя, біоревіталізація, контурна пластика, мезотерапія, пілінг обличчя, догляд за шкірою, WOW чистка, карбокситерапія, DrumRoll масаж, Magic Smile, ліфтинг обличчя, омолодження шкіри, дермапен, косметолог центр Черкаси">
 <meta name="author" content="Dr. Gomon Cosmetology">
 <meta name="robots" content="index, follow">
@@ -153,6 +153,70 @@
   "priceRange": "$$"
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Скільки коштує консультація косметолога в Черкасах?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Консультація лікаря-косметолога в Dr. Gomon Cosmetology коштує 500 грн (офлайн або онлайн). На консультації лікар Вікторія оцінить стан шкіри, підбере індивідуальний план процедур та відповість на всі ваші запитання."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Яка ціна збільшення губ (контурної пластики) в Черкасах?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Контурна пластика губ в Dr. Gomon Cosmetology від 4000 грн. Ціна залежить від препарату: Neuramis Deep — 4000 грн, Saypha Filler — 4900 грн, Perfecta — 4900 грн, Genyal/Xcelence 3 — 5500 грн, Neauvia Intense Lips — 6000 грн. Препарат підбирається індивідуально лікарем."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Скільки коштує чистка обличчя в Черкасах?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "WOW-чистка обличчя в Dr. Gomon Cosmetology — 1400 грн (80 хв), WOW-чистка «Сяяння» — 1800 грн (90 хв), підліткова делікатна чистка — 1800 грн. Процедура включає глибоке очищення комбінацією апаратних та мануальних технік."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Де знаходиться косметолог Dr. Gomon в Черкасах?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Dr. Gomon Cosmetology знаходиться за адресою: м. Черкаси, вул. Смілянська, 23, БЦ «Галерея», 6 поверх. Лівий вхід із написом «Ліфт» (поряд із кафе «Шарлотка»). Працюємо без вихідних з 9:00 до 20:00, тільки за записом."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Скільки коштує відбілювання зубів в Черкасах?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Косметичне відбілювання зубів Magic Smile в Dr. Gomon Cosmetology: Light (1 засвічування) — 1400 грн, Medium (2 засвічування) — 1800 грн, Maximum (3 засвічування) — 2200 грн. Безпечна система без болю та пошкодження емалі."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Яка ціна біоревіталізації обличчя?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Біоревіталізація в Dr. Gomon Cosmetology: Neauvia Hydro Deluxe — 3200 грн, Skin Booster — 3200 грн, Vitaran Tox & Eye — 3500 грн. Біорепарація шкіри: Rejuran I — 3500 грн, Rejuran S — 3500 грн, Rejuran HB — 4200 грн, Екзосоми (Exoxe) — 4500 грн."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Чи є масаж обличчя та тіла в Dr. Gomon?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Так! DrumRoll — апаратний масаж з ударно-імпульсним вакуумом та інфрачервоним теплом. Моделювання окремої ділянки — 600 грн, всього тіла — 900 грн, релакс-масаж — 1200 грн. Також пресотерапія «Легкість тіла» — 600 грн. Ефективно при болях у спині, м'язовій втомі та набряках."
+      }
+    }
+  ]
+}
+</script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=AW-719653819"></script>
 <script>
@@ -169,9 +233,11 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/app/icons/icon-192-gomon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/icon-180.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dr. Gomon Cosmetology - Професійна косметологія у Черкасах</title>
+<title>Косметолог Черкаси — Dr. Gomon Cosmetology | Чистка обличчя, губи, біоревіталізація</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.googletagmanager.com">
+<link rel="dns-prefetch" href="https://static.elfsight.com">
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap"></noscript>
 <style>
@@ -597,6 +663,7 @@
   <div class="hero-line-top"></div>
   <div class="hero-ornament"><svg viewBox="0 0 56 56" fill="none"><circle class="orn-outer" cx="28" cy="28" r="27"/><circle class="orn-mid" cx="28" cy="28" r="23.5"/></svg></div>
   <div class="hero-content">
+    <h1 style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Косметолог Черкаси — Dr. Gomon Cosmetology | Ін'єкційна та апаратна косметологія, чистка обличчя, контурна пластика губ, біоревіталізація, масаж обличчя та тіла, відбілювання зубів</h1>
     <p class="hero-tagline">Краса — коли відчуваєш себе собою.</p>
     <p class="hero-eyebrow">Лікар-косметолог · Черкаси<span class="mob-br"></span> · 7+ років досвіду</p>
     <picture><source srcset="logo-340.webp" type="image/webp"><img src="logo.png" alt="Dr. Gómon Cosmetology" class="hero-logo" width="340" height="340" fetchpriority="high"></picture>
@@ -1416,6 +1483,6 @@ window.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<script src="/gomon-widget.js?v=20260417a"></script>
+<script src="/gomon-widget.js?v=20260502a" defer></script>
 </body>
 </html>
