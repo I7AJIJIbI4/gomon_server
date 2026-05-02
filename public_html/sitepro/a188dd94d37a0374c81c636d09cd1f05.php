@@ -8,20 +8,20 @@
 <meta name="keywords" content="косметолог Черкаси, косметологія Черкаси, Dr Gomon, ін'єкційна косметологія, апаратна косметологія, відбілювання зубів, корекція фігури, чистка обличчя, біоревіталізація, контурна пластика, мезотерапія, пілінг обличчя, догляд за шкірою, WOW чистка, карбокситерапія, DrumRoll масаж, Magic Smile, ліфтинг обличчя, омолодження шкіри, дермапен, косметолог центр Черкаси">
 <meta name="author" content="Dr. Gomon Cosmetology">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://gomonclinic.com/">
+<link rel="canonical" href="https://drgomon.beauty/">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Dr. Gomon Cosmetology - Професійна косметологія у Черкасах">
 <meta property="og:description" content="Простір краси та здоров'я. Апаратна косметологія, ін'єкційні процедури, відбілювання зубів та корекція фігури з медичним підходом. Працюємо без вихідних.">
-<meta property="og:url" content="https://gomonclinic.com/">
-<meta property="og:image" content="https://gomonclinic.com/og-image.jpg">
+<meta property="og:url" content="https://drgomon.beauty/">
+<meta property="og:image" content="https://drgomon.beauty/og-image.jpg">
 <meta property="og:locale" content="uk_UA">
 <meta property="og:site_name" content="Dr. Gomon Cosmetology">
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Dr. Gomon Cosmetology - Косметологія у Черкасах">
 <meta name="twitter:description" content="Простір краси та здоров'я. Апаратна косметологія, ін'єкції, відбілювання зубів, корекція фігури.">
-<meta name="twitter:image" content="https://gomonclinic.com/og-image.jpg">
+<meta name="twitter:image" content="https://drgomon.beauty/og-image.jpg">
 <!-- Structured Data -->
 <script type="application/ld+json">
 {
@@ -29,8 +29,8 @@
   "@type": "BeautySalon",
   "name": "Dr. Gomon Cosmetology",
   "alternateName": "GomonClinic",
-  "url": "https://gomonclinic.com/",
-  "image": "https://gomonclinic.com/og-image.jpg",
+  "url": "https://drgomon.beauty/",
+  "image": "https://drgomon.beauty/og-image.jpg",
   "description": "Професійна косметологія у Черкасах. Апаратна та ін'єкційна косметологія, корекція фігури, відбілювання зубів. WOW-чистка, біоревіталізація, контурна пластика, мезотерапія, пілінги, DrumRoll масаж.",
   "address": {
     "@type": "PostalAddress",
@@ -586,7 +586,7 @@
     <a href="tel:+380733103110">073-310-31-10</a>
     <a href="//ig.me/m/dr.gomon" target="_blank" rel="noopener">Instagram</a>
     <a href="https://t.me/DrGomonCosmetology" target="_blank" rel="noopener">Telegram</a>
-    <a href="https://www.gomonclinic.com/go.html" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Мій кабінет</a>
+    <a href="https://drgomon.beauty/go" target="_blank" rel="noopener" onclick="typeof gtag==='function'&&gtag('event','conversion',{'send_to':'AW-719653819/EjWcCL7qyY0cELuXlNcC'})">Мій кабінет</a>
   </div>
 </div>
 
