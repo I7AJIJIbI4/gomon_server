@@ -57,6 +57,10 @@ PROCEDURE_TO_CATEGORIES = {
     'Ліполітики (обличчя, 4 мл)': ['_ліполітики'],
     'Ліполітики (тіло, 10 мл)': ['_ліполітики'],
     'Гіалуронідаза (розчинення філера)': ['_гіалуронідаза'],
+    'Моделювання всього тіла': ['_drumroll'],
+    'Моделювання окремої ді��янки': ['_drumroll'],
+    'Загальний релакс-масаж всього тіла': ['_drumroll'],
+    'Пресотерапія «Легкість тіла»': ['_пресотерапія'],
 }
 # Exact set of WLaunch service names that need doctor price confirmation (drug buttons)
 NEEDS_DRUG_SELECTION = set(PROCEDURE_TO_CATEGORIES.keys())
@@ -79,6 +83,20 @@ def _get_drugs_for_procedure(procedure_name):
         for target_cat in cats:
             if target_cat.startswith('_'):
                 keyword = target_cat[1:]
+                # Special handling for body procedures — show base price + course options
+                if keyword in ('drumroll', 'пресотерапія'):
+                    # Find base price from prices.json
+                    for pcat in prices:
+                        for item in pcat.get('items', []):
+                            if item.get('name', '').lower() == procedure_name.lower():
+                                p = re.search(r'\d+', str(item.get('price', '')).replace(' ', ''))
+                                base = int(p.group()) if p else 0
+                                if base > 0:
+                                    drugs.append({'name': '1 сеанс', 'price': base})
+                                    drugs.append({'name': 'Курс 5 сеансів (-20%)', 'price': int(base * 5 * 0.8)})
+                                    drugs.append({'name': 'Курс 10 сеансів (-30%)', 'price': int(base * 10 * 0.7)})
+                                break
+                    continue
                 if cat_name == 'Ферментотерапія':
                     for item in cat.get('items', []):
                         name = item.get('name', '')
