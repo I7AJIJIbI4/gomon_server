@@ -5047,6 +5047,36 @@ def admin_deposit_deduct():
     conn.close()
     return jsonify({'ok': True, 'new_balance': round(balance - amount, 2)})
 
+@app.route('/api/admin/deposit/add-cash', methods=['POST'])
+@require_admin
+def admin_deposit_add_cash():
+    """Add cash deposit manually (client paid in cash). Available to all admin roles."""
+    d = request.get_json() or {}
+    phone = norm_phone(d.get('phone', ''))
+    try:
+        amount = float(d.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid_amount'}), 400
+    if not phone or amount <= 0:
+        return jsonify({'error': 'invalid'}), 400
+    # Insert as Approved deposit with 'cash' marker
+    import secrets
+    order_id = 'cash_{}_{}'.format(secrets.token_hex(4), int(time.time()))
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        conn.execute(
+            "INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status, wfp_transaction_status, created_at) "
+            "VALUES (?, 0, ?, ?, 'Approved', 'cash', datetime('now'))",
+            (phone, amount, order_id))
+        conn.commit()
+    finally:
+        conn.close()
+    # Get new balance
+    new_balance = _get_deposit_balance(phone)
+    logger.info('Cash deposit added: {} +{} UAH by {} (total: {})'.format(phone, amount, request.admin_phone, new_balance))
+    return jsonify({'ok': True, 'amount': amount, 'new_balance': new_balance})
+
+
 @app.route('/api/admin/cashback/redeem', methods=['POST'])
 @require_admin
 def admin_cashback_redeem():
