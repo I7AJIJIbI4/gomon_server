@@ -2777,7 +2777,7 @@ async function _addCashDeposit(phone) {
   var ok = await showConfirm('Внести готівку', 'Додати ' + amount + ' грн готівкового депозиту для клієнта?');
   if (!ok) return;
   try {
-    var r = await api('/admin/deposit/add-cash', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({phone: phone, amount: amount})});
+    var r = await api('/admin/deposit/add-cash', {method:'POST', body: JSON.stringify({phone: phone, amount: amount})});
     if (r.ok) {
       showToast('✅ +' + amount + ' грн внесено. Баланс: ' + r.new_balance.toFixed(0) + ' грн');
       _showAdminDepositHistory(phone);
