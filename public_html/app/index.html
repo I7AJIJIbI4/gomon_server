@@ -2811,11 +2811,18 @@ async function _addCashDeposit(phone) {
   } catch(e) { showToast('❌ Помилка'); }
 }
 
-async function _redeemCashback(phone, amount) {
+async function _redeemCashback(phone, maxCb) {
+  var input = document.getElementById('_redeemAmt');
+  var amount = parseInt(input && input.value || maxCb);
+  if (!amount || amount < 500) { showToast('Мінімум 500 грн'); if (input) input.focus(); return; }
+  if (amount > maxCb) { showToast('Максимум ' + maxCb.toFixed(0) + ' грн'); return; }
   document.getElementById('confirm-modal').classList.remove('show');
   document.getElementById('confirm-modal-ok').style.display = '';
+  document.getElementById('confirm-modal-ok').textContent = 'Так, списати';
   document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
-  var ok = await showConfirm('Списати кешбек', 'Списати ' + amount.toFixed(0) + ' грн кешбеку для клієнта?');
+  document.getElementById('confirm-modal-cancel').onclick = null;
+  await new Promise(r => setTimeout(r, 100));
+  var ok = await showConfirm('Списати кешбек', 'Списати ' + amount + ' грн кешбеку для клієнта?');
   if (!ok) return;
   try {
     var r = await api('/admin/cashback/redeem', {method:'POST', body: JSON.stringify({phone: phone, amount: amount})});
@@ -2851,9 +2858,12 @@ async function _showAdminDepositHistory(phone) {
       html += '<button onclick="_deductBalance(\'' + _esc(phone) + '\',' + dep + ')" style="padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--sans);color:var(--text2)">Списати з балансу</button>';
       html += '</div>';
     }
-    // Redeem cashback (from 500 UAH cashback)
+    // Redeem cashback (from 500 UAH cashback, manual amount input)
     if (cb >= cbMin) {
-      html += '<div style="text-align:center"><button onclick="_redeemCashback(\'' + _esc(phone) + '\',' + cb + ')" style="padding:8px 20px;background:var(--gold);color:#111;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:var(--sans)">Списати кешбек ' + cb.toFixed(0) + ' грн</button></div>';
+      html += '<div style="display:flex;align-items:center;gap:8px;justify-content:center">';
+      html += '<input type="number" id="_redeemAmt" placeholder="від ' + cbMin + '" min="' + cbMin + '" max="' + cb.toFixed(0) + '" value="' + cb.toFixed(0) + '" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);font-size:14px;font-family:var(--sans)">';
+      html += '<button onclick="_redeemCashback(\'' + _esc(phone) + '\',' + cb + ')" style="padding:7px 14px;background:var(--gold);color:#111;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--sans)">Списати кешбек</button>';
+      html += '</div>';
     } else if (cb > 0) {
       html += '<p style="text-align:center;font-size:12px;color:var(--text3)">Кешбек від ' + cbMin + ' грн (ще ' + (cbMin - cb).toFixed(0) + ' грн)</p>';
     }
