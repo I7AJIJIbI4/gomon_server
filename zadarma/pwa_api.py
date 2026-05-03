@@ -4786,14 +4786,14 @@ def _wfp_sign(params_list, secret):
     return hmac.new(secret.encode(), sign_string.encode(), hashlib.md5).hexdigest()
 
 def _get_deposit_balance(phone):
-    """Get client deposit balance (deposits - deductions)."""
+    """Get client deposit balance (deposits - deductions, excluding cashback redeems)."""
     conn = sqlite3.connect(DB_PATH)
     try:
         deposited = conn.execute(
             "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
             (norm_phone(phone),)).fetchone()[0]
         deducted = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+            "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason NOT LIKE 'cashback%'",
             (norm_phone(phone),)).fetchone()[0]
         return round(deposited - deducted, 2)
     finally:
@@ -5034,7 +5034,7 @@ def admin_deposit_deduct():
         "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
         (norm_phone(phone),)).fetchone()[0]
     deducted = conn.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason NOT LIKE 'cashback%'",
         (norm_phone(phone),)).fetchone()[0]
     balance = round(deposited - deducted, 2)
     if amount > balance:
