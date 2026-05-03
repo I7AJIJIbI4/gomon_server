@@ -2883,7 +2883,7 @@ async function openClientCard(phone, name) {
   fetch('/api/deposit/balance?phone=' + encodeURIComponent(phone), {headers: {Authorization: 'Bearer ' + token}})
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      var dep = d.balance || 0;
+      var dep = d.deposit_balance || 0;
       var cb = d.cashback_balance || 0;
       var total = dep + cb;
       var parts = [];
