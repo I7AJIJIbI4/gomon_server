@@ -5351,14 +5351,15 @@ async function loadDepositBalance() {
       var pct = Math.min(cb / cbMin * 100, 100);
       var remaining = Math.max(cbMin - cb, 0);
       var ready = cb >= cbMin;
-      var tierColors = {'start':'var(--text3)','silver':'#a8a8a8','gold':'var(--gold)','platinum':'#b8d4e8'};
+      var tierColors = {'start':'var(--text3)','silver':'#a8a8a8','gold':'var(--gold)','platinum':'#7eb8d8'};
+      window._lastTierKey = tier.key || 'start';
       var tierColor = tierColors[tier.key] || 'var(--text3)';
       bar.style.display = '';
       bar.innerHTML =
         '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
             '<div><span style="font-size:13px;color:var(--text2)">Кешбек </span><span style="font-size:13px;font-weight:600;color:' + tierColor + '">' + tierRate + '</span>' +
-              '<span style="font-size:11px;color:' + tierColor + ';margin-left:6px;border:1px solid ' + tierColor + ';border-radius:4px;padding:1px 5px">' + _esc(tierName) + '</span></div>' +
+              '<span onclick="event.stopPropagation();_showTierInfo()" style="font-size:11px;color:' + tierColor + ';margin-left:6px;border:1px solid ' + tierColor + ';border-radius:4px;padding:1px 5px;cursor:pointer">' + _esc(tierName) + ' ›</span></div>' +
             '<span style="font-size:15px;font-weight:600"><span style="color:var(--gold)">' + cb.toFixed(0) + '</span><span style="color:var(--text3);font-weight:400"> / ' + cbMin + ' грн</span></span>' +
           '</div>' +
           '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">' +
@@ -5377,6 +5378,51 @@ async function loadDepositBalance() {
 
 function _openClientBalance() {
   if (typeof openDepositBalance === 'function') openDepositBalance();
+}
+
+function _showTierInfo() {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10500;background:var(--overlay);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  var sheet = document.createElement('div');
+  sheet.style.cssText = 'background:var(--bg2);border-radius:16px;max-width:380px;width:100%;padding:20px;position:relative';
+
+  var tiers = [
+    {name:'Старт', key:'start', rate:'3.0%', visits:'—', redeems:'—', color:'var(--text3)', icon:'○'},
+    {name:'Срібло', key:'silver', rate:'3.3%', visits:'5', redeems:'1', color:'#a8a8a8', icon:'◈'},
+    {name:'Золото', key:'gold', rate:'3.6%', visits:'15', redeems:'3', color:'var(--gold)', icon:'◆'},
+    {name:'Платина', key:'platinum', rate:'4.0%', visits:'30', redeems:'7', color:'#7eb8d8', icon:'✦'},
+  ];
+
+  var currentKey = (window._lastTierKey || 'start');
+  var html = '<button class="modal-close" onclick="this.closest(\'[style*=fixed]\').remove()">&times;</button>';
+  html += '<h3 style="font-family:var(--serif);color:var(--gold-pale);margin:0 0 16px;font-weight:400">Програма лояльності</h3>';
+  html += '<p style="font-size:12px;color:var(--text3);margin-bottom:14px">Підвищуйте рівень — збільшуйте кешбек. Рівень визначається кількістю візитів або виведень кешбеку.</p>';
+
+  tiers.forEach(function(t) {
+    var isCurrent = t.key === currentKey;
+    var border = isCurrent ? '2px solid ' + t.color : '1px solid var(--border)';
+    var bg = isCurrent ? 'rgba(201,169,110,0.05)' : 'var(--surface)';
+    html += '<div style="border:' + border + ';border-radius:10px;padding:10px 12px;margin-bottom:8px;background:' + bg + '">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<span style="font-size:16px;color:' + t.color + '">' + t.icon + '</span>';
+    html += '<span style="font-size:15px;font-weight:600;color:' + t.color + '">' + _esc(t.name) + '</span>';
+    if (isCurrent) html += '<span style="font-size:10px;color:var(--gold);background:rgba(201,169,110,0.15);padding:1px 6px;border-radius:3px">ВАША</span>';
+    html += '</div>';
+    html += '<span style="font-size:15px;font-weight:600;color:' + t.color + '">' + t.rate + '</span>';
+    html += '</div>';
+    if (t.key === 'start') {
+      html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;padding-left:24px">Реєстрація в додатку</div>';
+    } else {
+      html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;padding-left:24px">' + t.visits + ' візитів або ' + t.redeems + ' виведень кешбеку</div>';
+    }
+    html += '</div>';
+  });
+
+  sheet.innerHTML = html;
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
 }
 
 async function openDepositBalance() {
