@@ -5150,12 +5150,14 @@ def admin_cashback_redeem():
     def _notify_redeem():
         try:
             from notifier import notify_client
-            text = '✅ Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
+            tg_text = '✅ Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
+            sms_text = 'Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
             if tier_upgraded:
-                text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
+                tg_text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
                     tier_after['name'], tier_after['rate'] * 100)
-            notify_client(phone, text, text,
-                push_title='🎉 Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
+                sms_text += ' Рівень {}! Кешбек {:.1f}%'.format(tier_after['name'], tier_after['rate'] * 100)
+            notify_client(phone, tg_text, sms_text,
+                push_title='Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
                 push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
                 push_tag='cashback_redeem', push_url='/app/#home')
         except Exception as e:

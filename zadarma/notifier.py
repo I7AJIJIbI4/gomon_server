@@ -491,12 +491,19 @@ def fmt_post_visit(appt):
 
     app_msg = '\n\nНе втрачайте кешбек з кожної процедури з нашим новим додатком для зручного відстеження записів, новин і акцій: https://flyl.link/app'
 
+    # SMS version: short, no emoji
+    import re as _re_sms
+    cashback_line_sms = _re_sms.sub(r'[^\w\s.,!?:;/%()+\-₴грн]', '', cashback_line).strip() if cashback_line else ''
+    # Shorten SMS cashback line — keep only amount + balance
+    if cashback_line_sms and last_cb > 0:
+        cashback_line_sms = '\nКешбек +{:.0f} грн. Баланс: {:.0f} грн'.format(last_cb, total)
+
     if cashback_line:
         tg = base_msg + cashback_line
-        sms = base_msg + cashback_line
+        sms = base_msg + cashback_line_sms
     else:
         tg = base_msg + app_msg
-        sms = base_msg + app_msg
+        sms = base_msg.replace('https://flyl.link/google', 'flyl.link/google') + '\nДодаток: flyl.link/app'
 
     push_title = 'Дякуємо за візит!'
     if has_review:
