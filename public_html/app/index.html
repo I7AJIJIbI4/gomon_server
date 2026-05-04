@@ -5389,9 +5389,9 @@ function _showTierInfo() {
 
   var tiers = [
     {name:'Старт', key:'start', rate:'3.0%', visits:'—', redeems:'—', color:'var(--text3)', icon:'○'},
-    {name:'Срібло', key:'silver', rate:'3.3%', visits:'5', redeems:'1', color:'#a8a8a8', icon:'◈'},
-    {name:'Золото', key:'gold', rate:'3.6%', visits:'15', redeems:'3', color:'var(--gold)', icon:'◆'},
-    {name:'Платина', key:'platinum', rate:'4.0%', visits:'30', redeems:'7', color:'#7eb8d8', icon:'✦'},
+    {name:'Срібло', key:'silver', rate:'3.3%', visits:'5', redeems:'1 виведення', color:'#a8a8a8', icon:'◈'},
+    {name:'Золото', key:'gold', rate:'3.6%', visits:'15', redeems:'3 виведення', color:'var(--gold)', icon:'◆'},
+    {name:'Платина', key:'platinum', rate:'4.0%', visits:'30', redeems:'7 виведень', color:'#7eb8d8', icon:'✦'},
   ];
 
   var currentKey = (window._lastTierKey || 'start');
@@ -5415,7 +5415,7 @@ function _showTierInfo() {
     if (t.key === 'start') {
       html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;padding-left:24px">Реєстрація в додатку</div>';
     } else {
-      html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;padding-left:24px">' + t.visits + ' візитів або ' + t.redeems + ' виведень кешбеку</div>';
+      html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;padding-left:24px">' + t.visits + ' візитів або ' + t.redeems + ' кешбеку</div>';
     }
     html += '</div>';
   });
