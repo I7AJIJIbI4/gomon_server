@@ -489,7 +489,7 @@ def fmt_post_visit(appt):
     else:
         base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
 
-    app_msg = '\n\n💰 Не втрачайте кешбек 3% з кожної процедури — встановіть додаток Dr. Gomon: https://flyl.link/app'
+    app_msg = '\n\n💰 Не втрачайте кешбек 3% з кожної процедури в нашому додатку: https://flyl.link/app'
 
     # SMS version: short, no emoji
     import re as _re_sms
@@ -503,7 +503,7 @@ def fmt_post_visit(appt):
         sms = base_msg + cashback_line_sms
     else:
         tg = base_msg + app_msg
-        sms = base_msg.replace('https://flyl.link/google', 'flyl.link/google') + '\nКешбек 3% в додатку: flyl.link/app'
+        sms = base_msg.replace('https://flyl.link/google', 'flyl.link/google') + '\nКешбек 3% в нашому додатку: flyl.link/app'
 
     push_title = 'Дякуємо за візит!'
     if has_review:
