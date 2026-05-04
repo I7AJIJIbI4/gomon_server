@@ -5352,7 +5352,7 @@ async function loadDepositBalance() {
         '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
             '<span style="font-size:13px;color:var(--text2)">Кешбек 3%</span>' +
-            '<span style="font-size:15px;font-weight:600;color:' + (ready ? 'var(--gold)' : 'var(--text)') + '">' + cb.toFixed(0) + ' / ' + cbMin + ' грн</span>' +
+            '<span style="font-size:15px;font-weight:600"><span style="color:var(--gold)">' + cb.toFixed(0) + '</span><span style="color:var(--text3);font-weight:400"> / ' + cbMin + ' грн</span></span>' +
           '</div>' +
           '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">' +
             '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + (ready ? 'var(--gold)' : 'linear-gradient(90deg, var(--gold) 0%, rgba(201,169,110,0.4) 100%)') + ';border-radius:3px;transition:width .5s"></div>' +
