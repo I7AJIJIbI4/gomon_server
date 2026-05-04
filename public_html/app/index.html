@@ -1442,6 +1442,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
         <h2 class="home-name" id="home-name">...</h2>
         <div class="gold-line"></div>
       </div>
+      <div id="home-cashback-bar" style="display:none;margin:0 16px 16px;cursor:pointer" onclick="_openClientBalance()"></div>
       <p class="section-label">Найближчий запис</p>
       <div id="home-next-appt"></div>
       <p class="section-label">Акції</p>
@@ -5330,16 +5331,45 @@ function fmtDateShort(dateStr) {
 
 async function loadDepositBalance() {
   var el = document.getElementById('deposit-balance-val');
-  if (!el || !token) return;
+  if (!token) return;
   try {
     var r = await api('/deposit/balance');
     var balance = r.balance || 0;
-    el.textContent = balance > 0 ? balance.toFixed(0) + ' грн' : '0 грн';
-    if (balance > 0) el.style.color = 'var(--gold)';
-    else el.style.color = 'var(--text3)';
+    var cb = r.cashback_balance || 0;
+    var cbMin = r.cashback_min_redeem || 500;
+    if (el) {
+      el.textContent = balance > 0 ? balance.toFixed(0) + ' грн' : '0 грн';
+      el.style.color = balance > 0 ? 'var(--gold)' : 'var(--text3)';
+    }
+    // Render cashback progress bar on home screen
+    var bar = document.getElementById('home-cashback-bar');
+    if (bar) {
+      var pct = Math.min(cb / cbMin * 100, 100);
+      var remaining = Math.max(cbMin - cb, 0);
+      var ready = cb >= cbMin;
+      bar.style.display = '';
+      bar.innerHTML =
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+            '<span style="font-size:13px;color:var(--text2)">Кешбек 3%</span>' +
+            '<span style="font-size:15px;font-weight:600;color:' + (ready ? 'var(--gold)' : 'var(--text)') + '">' + cb.toFixed(0) + ' / ' + cbMin + ' грн</span>' +
+          '</div>' +
+          '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + (ready ? 'var(--gold)' : 'linear-gradient(90deg, var(--gold) 0%, rgba(201,169,110,0.4) 100%)') + ';border-radius:3px;transition:width .5s"></div>' +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;margin-top:6px">' +
+            '<span style="font-size:11px;color:var(--text3)">' + (ready ? '✓ Можна списати' : 'Ще ' + remaining.toFixed(0) + ' грн') + '</span>' +
+            '<span style="font-size:11px;color:var(--text3)">' + pct.toFixed(0) + '%</span>' +
+          '</div>' +
+        '</div>';
+    }
   } catch(e) {
-    el.textContent = '—';
+    if (el) el.textContent = '—';
   }
+}
+
+function _openClientBalance() {
+  if (typeof openDepositBalance === 'function') openDepositBalance();
 }
 
 async function openDepositBalance() {
