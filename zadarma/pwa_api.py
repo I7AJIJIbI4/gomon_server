@@ -4799,8 +4799,10 @@ def _get_deposit_balance(phone):
     finally:
         conn.close()
 
-CASHBACK_RATE = 0.03  # 3%
 CASHBACK_MIN_REDEEM = 500  # мінімум для списання
+
+# ── Loyalty Tier System (shared module: loyalty.py) ──────────────────────────
+from loyalty import get_client_tier as _get_client_tier, get_cashback_rate as _get_cashback_rate
 
 def _get_cashback_balance(phone):
     """Get client cashback balance (earned - redeemed)."""
@@ -5006,11 +5008,14 @@ def deposit_balance():
     for c in cashbacks:
         transactions.append({'type': 'cashback', 'amount': c[0], 'procedure': c[1] or '', 'procedure_price': c[2] or 0, 'date': c[4]})
     transactions.sort(key=lambda x: x.get('date', ''), reverse=True)
+    tier = _get_client_tier(phone)
     return jsonify({
         'balance': total_balance,
         'deposit_balance': deposit_balance,
         'cashback_balance': cashback_balance,
         'cashback_min_redeem': CASHBACK_MIN_REDEEM,
+        'cashback_rate': tier['rate'],
+        'tier': tier,
         'transactions': transactions
     })
 

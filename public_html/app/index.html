@@ -5341,17 +5341,24 @@ async function loadDepositBalance() {
       el.textContent = balance > 0 ? balance.toFixed(0) + ' грн' : '0 грн';
       el.style.color = balance > 0 ? 'var(--gold)' : 'var(--text3)';
     }
-    // Render cashback progress bar on home screen
+    // Render cashback progress bar with tier on home screen
     var bar = document.getElementById('home-cashback-bar');
     if (bar) {
+      var tier = r.tier || {};
+      var tierName = tier.name || 'Старт';
+      var tierRate = ((tier.rate || 0.03) * 100).toFixed(1) + '%';
+      var nextName = tier.next_name;
       var pct = Math.min(cb / cbMin * 100, 100);
       var remaining = Math.max(cbMin - cb, 0);
       var ready = cb >= cbMin;
+      var tierColors = {'start':'var(--text3)','silver':'#a8a8a8','gold':'var(--gold)','platinum':'#b8d4e8'};
+      var tierColor = tierColors[tier.key] || 'var(--text3)';
       bar.style.display = '';
       bar.innerHTML =
         '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-            '<span style="font-size:13px;color:var(--text2)">Кешбек 3%</span>' +
+            '<div><span style="font-size:13px;color:var(--text2)">Кешбек </span><span style="font-size:13px;font-weight:600;color:' + tierColor + '">' + tierRate + '</span>' +
+              '<span style="font-size:11px;color:' + tierColor + ';margin-left:6px;border:1px solid ' + tierColor + ';border-radius:4px;padding:1px 5px">' + _esc(tierName) + '</span></div>' +
             '<span style="font-size:15px;font-weight:600"><span style="color:var(--gold)">' + cb.toFixed(0) + '</span><span style="color:var(--text3);font-weight:400"> / ' + cbMin + ' грн</span></span>' +
           '</div>' +
           '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">' +
@@ -5359,7 +5366,7 @@ async function loadDepositBalance() {
           '</div>' +
           '<div style="display:flex;justify-content:space-between;margin-top:6px">' +
             '<span style="font-size:11px;color:var(--text3)">' + (ready ? '✓ Можна списати' : 'Ще ' + remaining.toFixed(0) + ' грн') + '</span>' +
-            '<span style="font-size:11px;color:var(--text3)">' + pct.toFixed(0) + '%</span>' +
+            (nextName ? '<span style="font-size:11px;color:var(--text3)">→ ' + _esc(nextName) + '</span>' : '<span style="font-size:11px;color:' + tierColor + '">MAX</span>') +
           '</div>' +
         '</div>';
     }

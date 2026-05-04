@@ -67,7 +67,7 @@ logger = logging.getLogger('appt_reminder')
 DB_PATH = '/home/gomoncli/zadarma/users.db'
 OTP_DB_PATH = '/home/gomoncli/zadarma/otp_sessions.db'
 PRICES_PATH = '/home/gomoncli/private_data/prices.json'
-CASHBACK_RATE = 0.03  # 3%
+CASHBACK_RATE = 0.03  # 3% default (overridden by loyalty tier if available)
 
 def _is_app_user(phone):
     """Check if client has ever logged into the PWA (has session in otp_sessions.db)."""
@@ -161,7 +161,14 @@ def _accrue_cashback(appt):
     if price <= 0:
         logger.info('    cashback skip: no price for "{}"'.format(procedure))
         return
-    cashback_amount = round(price * CASHBACK_RATE, 2)
+    # Use loyalty tier rate if available, fallback to default
+    rate = CASHBACK_RATE
+    try:
+        from loyalty import get_cashback_rate
+        rate = get_cashback_rate(phone)
+    except Exception:
+        pass
+    cashback_amount = round(price * rate, 2)
     if cashback_amount < 1:
         return
     # Atomic insert — skip if already exists (UNIQUE constraint on phone+procedure_name+appt_date)

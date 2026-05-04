@@ -526,7 +526,13 @@ def check_pending_cashback_reminders():
         if not phone or not price:
             continue
         # Accrue cashback first (INSERT OR IGNORE — dedup by UNIQUE)
-        amount = round(price * 0.03, 2)
+        _rate = 0.03
+        try:
+            from loyalty import get_cashback_rate
+            _rate = get_cashback_rate(phone)
+        except Exception:
+            pass
+        amount = round(price * _rate, 2)
         try:
             conn2 = sqlite3.connect(DB_PATH, timeout=5)
             conn2.execute(
