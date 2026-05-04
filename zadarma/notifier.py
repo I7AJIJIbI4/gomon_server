@@ -462,7 +462,9 @@ def fmt_post_visit(appt):
                             visits_left = max(next_visits - visits, 0)
                             redeems_left = max(next_redeems - redeems, 0)
                             if visits_left > 0 and redeems_left > 0:
-                                cashback_line += '\n🏆 {} → {}: ще {} візитів або {} знять'.format(tier_name, next_name, visits_left, redeems_left)
+                                v_word = 'візит' if visits_left == 1 else ('візити' if visits_left < 5 else 'візитів')
+                                r_word = 'зняття' if redeems_left == 1 else ('зняття' if redeems_left < 5 else 'знять')
+                                cashback_line += '\n🏆 {} → {}: ще {} {} або {} {}'.format(tier_name, next_name, visits_left, v_word, redeems_left, r_word)
 
                         cashback_line += '\n\nБаланс: {:.0f} грн'.format(total)
                     except Exception:
