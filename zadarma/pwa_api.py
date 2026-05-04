@@ -5110,7 +5110,7 @@ def admin_cashback_redeem():
         "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
         (norm_phone(phone),)).fetchone()[0]
     deducted = conn.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=?",
+        "SELECT COALESCE(SUM(amount), 0) FROM deposit_deductions WHERE phone=? AND reason NOT LIKE 'cashback%'",
         (norm_phone(phone),)).fetchone()[0]
     dep_balance = round(deposited - deducted, 2)
     total = dep_balance + cb_balance
@@ -5130,14 +5130,32 @@ def admin_cashback_redeem():
     new_total = round(total - amount, 2)
     logger.info('Cashback redeemed: {} UAH for {}, by {}'.format(amount, phone, request.admin_phone))
 
-    # Notify client about cashback redemption (background)
+    # Check tier upgrade after redeem
+    tier_after = _get_client_tier(phone)
+    tier_before_key = None
+    # Estimate tier before this redeem (one less redeem)
+    from loyalty import TIERS
+    redeems_before = max((tier_after.get('redeems', 1)) - 1, 0)
+    visits = tier_after.get('visits', 0)
+    tier_before = TIERS[0]
+    for t in TIERS:
+        if visits >= t['min_visits'] or redeems_before >= t['min_redeems']:
+            tier_before = t
+        else:
+            break
+    tier_upgraded = tier_after['key'] != tier_before['key']
+
+    # Notify client about cashback redemption + tier upgrade (background)
     import threading
     def _notify_redeem():
         try:
             from notifier import notify_client
-            text = 'З вашого балансу Dr. Gomon Cosmetology списано {:.0f} грн кешбеку. Залишок балансу: {:.0f} грн'.format(amount, new_total)
+            text = '✅ Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
+            if tier_upgraded:
+                text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
+                    tier_after['name'], tier_after['rate'] * 100)
             notify_client(phone, text, text,
-                push_title='Кешбек списано',
+                push_title='🎉 Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
                 push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
                 push_tag='cashback_redeem', push_url='/app/#home')
         except Exception as e:

@@ -431,10 +431,45 @@ def fmt_post_visit(appt):
                     last_cb = last_cb_row[0] if last_cb_row else 0
                 finally:
                     conn.close()
-                if last_cb > 0:
-                    cashback_line = '\n\nВам нараховано кешбек +{:.0f} грн (3%). Ваш баланс: {:.0f} грн'.format(last_cb, total)
-                elif total > 0:
-                    cashback_line = '\n\nВаш баланс: {:.0f} грн'.format(total)
+                if last_cb > 0 or total > 0:
+                    try:
+                        from loyalty import get_client_tier
+                        tier = get_client_tier(phone)
+                        tier_name = tier.get('name', 'Старт')
+                        rate_pct = '{:.1f}'.format(tier.get('rate', 0.03) * 100)
+                        cb_balance = round(cb - cb_red, 2)
+                        cashback_min = 500
+                        remaining_redeem = max(cashback_min - cb_balance, 0)
+
+                        if last_cb > 0:
+                            cashback_line = '\n\n💰 Кешбек +{:.0f} грн ({})'.format(last_cb, rate_pct + '%')
+                        else:
+                            cashback_line = ''
+
+                        # Progress to redeem
+                        if cb_balance >= cashback_min:
+                            cashback_line += '\n✅ Кешбек {:.0f} грн — можна списати!'.format(cb_balance)
+                        elif cb_balance > 0:
+                            cashback_line += '\nДо списання ще {:.0f} грн (зібрано {:.0f} / {} грн)'.format(remaining_redeem, cb_balance, cashback_min)
+
+                        # Tier progress
+                        next_name = tier.get('next_name')
+                        if next_name:
+                            visits = tier.get('visits', 0)
+                            redeems = tier.get('redeems', 0)
+                            next_visits = tier.get('next_visits', 0)
+                            next_redeems = tier.get('next_redeems', 0)
+                            visits_left = max(next_visits - visits, 0)
+                            redeems_left = max(next_redeems - redeems, 0)
+                            if visits_left > 0 and redeems_left > 0:
+                                cashback_line += '\n🏆 {} → {}: ще {} візитів або {} знять'.format(tier_name, next_name, visits_left, redeems_left)
+
+                        cashback_line += '\n\nБаланс: {:.0f} грн'.format(total)
+                    except Exception:
+                        if last_cb > 0:
+                            cashback_line = '\n\n💰 Кешбек +{:.0f} грн. Баланс: {:.0f} грн'.format(last_cb, total)
+                        elif total > 0:
+                            cashback_line = '\n\nБаланс: {:.0f} грн'.format(total)
         except Exception:
             pass
 
