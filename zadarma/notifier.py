@@ -488,7 +488,7 @@ def fmt_post_visit(appt):
         base_sms = '{first_name}, дякуємо за довіру!'.format(**v)
     else:
         base_tg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
-        base_sms = '{first_name}, дякуємо за довіру! Відгук: flyl.link/google'.format(**v)
+        base_sms = '{first_name}, дякуємо за довіру! Будемо вдячні за відгук: flyl.link/google'.format(**v)
 
     app_msg = '\n\n💰 Не втрачайте кешбек 3% з кожної процедури в нашому додатку: https://flyl.link/app'
 
