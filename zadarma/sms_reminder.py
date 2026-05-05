@@ -118,6 +118,12 @@ SERVICE_INTERVALS = {
     'drumroll':                       8,
     'пресотерапія':                   8,
     'pressotherapy':                  8,
+    # Депіляція — не нагадуємо (інтервал 0 = skip)
+    'бікіні':                         0,
+    'депіляц':                        0,
+    'пахви':                          0,
+    'ноги':                           0,
+    'воск':                           0,
     # Чистки та загальний догляд (35 днів)
     'wow':                           35,
     'підліткова':                    35,
@@ -570,6 +576,9 @@ def check_and_send_reminders(dry_run=False):
 
             # Перевіряємо вікно нагадування
             interval_days = get_interval_days(service)
+            if interval_days <= 0:
+                stats['skipped'] += 1
+                continue  # Service excluded from reminders (e.g. depilation)
             remind_date = visit_date_obj + timedelta(days=interval_days)
             reminder_window_end = remind_date + timedelta(days=3)
 
