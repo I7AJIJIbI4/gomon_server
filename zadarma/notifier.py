@@ -484,26 +484,25 @@ def fmt_post_visit(appt):
         pass
 
     if has_review:
-        # Already reviewed — just thank, no review link
-        base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру!'.format(**v)
+        base_tg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру!'.format(**v)
+        base_sms = '{first_name}, дякуємо за довіру!'.format(**v)
     else:
-        base_msg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
+        base_tg = '{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: https://flyl.link/google'.format(**v)
+        base_sms = '{first_name}, дякуємо за довіру! Відгук: flyl.link/google'.format(**v)
 
     app_msg = '\n\n💰 Не втрачайте кешбек 3% з кожної процедури в нашому додатку: https://flyl.link/app'
 
-    # SMS version: short, no emoji
-    import re as _re_sms
-    cashback_line_sms = _re_sms.sub(r'[^\w\s.,!?:;/%()+\-₴грн]', '', cashback_line).strip() if cashback_line else ''
-    # Shorten SMS cashback line — keep only amount + balance
-    if cashback_line_sms and last_cb > 0:
+    # SMS cashback line — short, no emoji
+    cashback_line_sms = ''
+    if cashback_line and last_cb > 0:
         cashback_line_sms = '\nКешбек +{:.0f} грн. Баланс: {:.0f} грн'.format(last_cb, total)
 
     if cashback_line:
-        tg = base_msg + cashback_line
-        sms = base_msg + cashback_line_sms
+        tg = base_tg + cashback_line
+        sms = base_sms + cashback_line_sms
     else:
-        tg = base_msg + app_msg
-        sms = base_msg.replace('https://flyl.link/google', 'flyl.link/google') + '\nКешбек 3% в нашому додатку: flyl.link/app'
+        tg = base_tg + app_msg
+        sms = base_sms + '\nКешбек 3% в нашому додатку: flyl.link/app'
 
     push_title = 'Дякуємо за візит!'
     if has_review:
