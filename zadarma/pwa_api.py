@@ -2115,6 +2115,45 @@ def admin_ai_mute():
         return jsonify({'ok': True})
 
 
+@app.route('/api/admin/cashback-modifiers', methods=['GET', 'POST', 'DELETE'])
+@require_admin
+def admin_cashback_modifiers():
+    """Manage temporary cashback rate modifiers.
+    GET — list active modifiers
+    POST {scope, target?, delta, reason, start_date, end_date} — add modifier
+    DELETE {id} — deactivate modifier
+    """
+    from loyalty import add_modifier, list_active_modifiers, deactivate_modifier, _ensure_modifiers_table
+    _ensure_modifiers_table()
+    if request.method == 'GET':
+        return jsonify({'modifiers': list_active_modifiers()})
+    elif request.method == 'POST':
+        d = request.get_json() or {}
+        scope = d.get('scope', 'all')
+        if scope not in ('all', 'group', 'phone'):
+            return jsonify({'error': 'invalid scope (all|group|phone)'}), 400
+        target = d.get('target')
+        try:
+            delta = float(d.get('delta', 0))
+        except (ValueError, TypeError):
+            return jsonify({'error': 'invalid delta'}), 400
+        reason = d.get('reason', '')
+        start_date = d.get('start_date', '')
+        end_date = d.get('end_date', '')
+        if not start_date or not end_date:
+            return jsonify({'error': 'start_date and end_date required'}), 400
+        add_modifier(scope, target, delta, reason, start_date, end_date, created_by=request.admin_phone)
+        logger.info('Cashback modifier added: scope={} target={} delta={} by {}'.format(scope, target, delta, request.admin_phone))
+        return jsonify({'ok': True})
+    elif request.method == 'DELETE':
+        d = request.get_json() or {}
+        mid = d.get('id')
+        if not mid:
+            return jsonify({'error': 'missing id'}), 400
+        deactivate_modifier(mid)
+        return jsonify({'ok': True})
+
+
 @app.route('/api/admin/notifications/spec-settings', methods=['GET', 'POST'])
 @require_admin
 def admin_notif_spec_settings():
@@ -5009,12 +5048,18 @@ def deposit_balance():
         transactions.append({'type': 'cashback', 'amount': c[0], 'procedure': c[1] or '', 'procedure_price': c[2] or 0, 'date': c[4]})
     transactions.sort(key=lambda x: x.get('date', ''), reverse=True)
     tier = _get_client_tier(phone)
+    from loyalty import get_rate_modifier
+    modifier = get_rate_modifier(phone)
+    effective_rate = max(tier['rate'] + modifier['delta'], 0)
     return jsonify({
         'balance': total_balance,
         'deposit_balance': deposit_balance,
         'cashback_balance': cashback_balance,
         'cashback_min_redeem': CASHBACK_MIN_REDEEM,
-        'cashback_rate': tier['rate'],
+        'cashback_rate': effective_rate,
+        'cashback_base_rate': tier['rate'],
+        'cashback_modifier': modifier['delta'],
+        'cashback_modifier_reasons': modifier['reasons'],
         'tier': tier,
         'transactions': transactions
     })

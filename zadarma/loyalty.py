@@ -82,5 +82,167 @@ def get_client_tier(phone):
 
 
 def get_cashback_rate(phone):
-    """Get cashback rate for client based on loyalty tier."""
-    return get_client_tier(phone)['rate']
+    """Get cashback rate for client based on loyalty tier + temporary modifiers."""
+    base_rate = get_client_tier(phone)['rate']
+    modifier = get_rate_modifier(phone)
+    final_rate = base_rate + modifier['delta']
+    return max(final_rate, 0)  # Never negative
+
+
+# ── Temporary Rate Modifiers ─────────────────────────────────────────────────
+# Stored in DB table `cashback_modifiers`:
+#   id, scope (all|group|phone), target (NULL|group_name|phone),
+#   delta (+0.02 = +2%), reason, start_date, end_date, created_by, active
+#
+# Priority: phone-specific > group > all (highest applicable wins)
+# Multiple modifiers of same scope stack additively
+#
+# Examples:
+#   Birthday:  scope=phone, target=380..., delta=+0.03, start=birthday-7d, end=birthday+7d
+#   Holiday:   scope=all, target=NULL, delta=+0.02, start=dec-20, end=jan-05
+#   Sale prep: scope=all, target=NULL, delta=-0.01, start=before-sale, end=sale-start
+#   VIP:       scope=group, target=vip, delta=+0.02, start=..., end=...
+
+def _ensure_modifiers_table():
+    """Create cashback_modifiers table if not exists."""
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        conn.execute('''CREATE TABLE IF NOT EXISTS cashback_modifiers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT NOT NULL DEFAULT 'all',
+            target TEXT,
+            delta REAL NOT NULL DEFAULT 0.0,
+            reason TEXT,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            created_by TEXT,
+            active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )''')
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_rate_modifier(phone):
+    """Get active cashback rate modifier for a phone number.
+    Returns {'delta': float, 'reasons': [str]}
+    Priority: phone > group > all. Same-scope modifiers stack."""
+    phone = _normalize_phone(phone)
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        rows = conn.execute(
+            "SELECT scope, target, delta, reason FROM cashback_modifiers "
+            "WHERE active=1 AND start_date <= ? AND end_date >= ? "
+            "ORDER BY scope DESC",  # phone > group > all (alphabetical DESC)
+            (today, today)).fetchall()
+    except Exception:
+        return {'delta': 0.0, 'reasons': []}
+    finally:
+        conn.close()
+
+    delta = 0.0
+    reasons = []
+
+    # Collect applicable modifiers
+    for scope, target, d, reason in rows:
+        if scope == 'phone' and target == phone:
+            delta += d
+            if reason:
+                reasons.append(reason)
+        elif scope == 'group':
+            # Check if phone belongs to group (stored in client tags or separate table)
+            # For now: group membership checked via simple lookup
+            if _phone_in_group(phone, target):
+                delta += d
+                if reason:
+                    reasons.append(reason)
+        elif scope == 'all':
+            delta += d
+            if reason:
+                reasons.append(reason)
+
+    return {'delta': delta, 'reasons': reasons}
+
+
+def _phone_in_group(phone, group_name):
+    """Check if phone belongs to a group. Groups can be defined by tags or lists."""
+    # TODO: implement group membership (e.g. 'vip', 'new_clients', 'birthday_week')
+    # For now, 'birthday_week' is handled automatically via birthday check
+    if group_name == 'birthday_week':
+        return _is_birthday_week(phone)
+    return False
+
+
+def _is_birthday_week(phone):
+    """Check if client's birthday is within ±7 days of today."""
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        # birth_date stored in clients table (if available from WLaunch)
+        row = conn.execute(
+            "SELECT birth_date FROM clients WHERE phone=?", (phone,)).fetchone()
+        if not row or not row[0]:
+            return False
+        from datetime import date, timedelta
+        today = date.today()
+        try:
+            birth = date.fromisoformat(row[0])
+        except (ValueError, TypeError):
+            return False
+        # This year's birthday
+        this_year_bday = birth.replace(year=today.year)
+        diff = abs((today - this_year_bday).days)
+        return diff <= 7
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+# ── Admin API helpers ────────────────────────────────────────────────────────
+
+def add_modifier(scope, target, delta, reason, start_date, end_date, created_by='system'):
+    """Add a temporary cashback modifier.
+    scope: 'all' | 'group' | 'phone'
+    target: None (all) | group_name | phone number
+    delta: float (e.g. 0.02 for +2%, -0.01 for -1%)
+    """
+    _ensure_modifiers_table()
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        conn.execute(
+            "INSERT INTO cashback_modifiers (scope, target, delta, reason, start_date, end_date, created_by) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (scope, target, delta, reason, start_date, end_date, created_by))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_active_modifiers():
+    """List all currently active modifiers."""
+    _ensure_modifiers_table()
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        rows = conn.execute(
+            "SELECT id, scope, target, delta, reason, start_date, end_date, created_by "
+            "FROM cashback_modifiers WHERE active=1 AND end_date >= ? ORDER BY start_date",
+            (today,)).fetchall()
+        return [{'id': r[0], 'scope': r[1], 'target': r[2], 'delta': r[3], 'reason': r[4],
+                 'start_date': r[5], 'end_date': r[6], 'created_by': r[7]} for r in rows]
+    finally:
+        conn.close()
+
+
+def deactivate_modifier(modifier_id):
+    """Deactivate a modifier by ID."""
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        conn.execute("UPDATE cashback_modifiers SET active=0 WHERE id=?", (modifier_id,))
+        conn.commit()
+    finally:
+        conn.close()
