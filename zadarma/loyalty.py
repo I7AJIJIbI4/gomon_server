@@ -19,13 +19,13 @@ TIERS = [
     {'name': 'Старт',   'key': 'start',    'min_visits': 0,  'min_redeems': 0, 'rate': 0.030,
      # 'bonus_cosmetics_discount': 0, 'bonus_free_consult': False, 'bonus_priority_booking': False
     },
-    {'name': 'Срібло',  'key': 'silver',   'min_visits': 5,  'min_redeems': 1, 'rate': 0.033,
+    {'name': 'Срібло',  'key': 'silver',   'min_visits': 10, 'min_redeems': 1, 'rate': 0.033,
      # 'bonus_cosmetics_discount': 5, 'bonus_free_consult': False, 'bonus_priority_booking': False
     },
-    {'name': 'Золото',  'key': 'gold',     'min_visits': 15, 'min_redeems': 3, 'rate': 0.036,
+    {'name': 'Золото',  'key': 'gold',     'min_visits': 30, 'min_redeems': 3, 'rate': 0.036,
      # 'bonus_cosmetics_discount': 10, 'bonus_free_consult': True, 'bonus_priority_booking': False
     },
-    {'name': 'Платина', 'key': 'platinum', 'min_visits': 30, 'min_redeems': 7, 'rate': 0.040,
+    {'name': 'Платина', 'key': 'platinum', 'min_visits': 50, 'min_redeems': 7, 'rate': 0.040,
      # 'bonus_cosmetics_discount': 15, 'bonus_free_consult': True, 'bonus_priority_booking': True
     },
 ]
