@@ -191,7 +191,39 @@ def _accrue_cashback(appt):
     if actual_changes == 0:
         logger.info('    cashback already accrued for {} {} {}'.format(phone, procedure, appt_date))
     else:
-        logger.info('    cashback +{} UAH (3% of {} for {})'.format(cashback_amount, price, procedure))
+        logger.info('    cashback +{} UAH ({:.1f}% of {} for {})'.format(cashback_amount, rate * 100, price, procedure))
+        # Check if tier upgraded after this visit
+        try:
+            from loyalty import get_client_tier, TIERS
+            tier = get_client_tier(phone)
+            # Compare with tier BEFORE this visit (one less visit)
+            visits_before = max(tier.get('visits', 1) - 1, 0)
+            redeems = tier.get('redeems', 0)
+            tier_before = TIERS[0]
+            for t in TIERS:
+                if visits_before >= t['min_visits'] or redeems >= t['min_redeems']:
+                    tier_before = t
+                else:
+                    break
+            if tier['key'] != tier_before['key']:
+                logger.info('    TIER UPGRADE: {} → {} for {}'.format(tier_before['name'], tier['name'], phone))
+                import threading
+                def _notify_tier_up():
+                    try:
+                        from notifier import notify_client
+                        tg = '🎉 Вітаємо! Ваш рівень підвищено до {}!\nТепер ваш кешбек — {:.1f}% з кожної процедури'.format(
+                            tier['name'], tier['rate'] * 100)
+                        sms = 'Вітаємо! Рівень {}! Кешбек {:.1f}%. Dr. Gomon Cosmetology'.format(
+                            tier['name'], tier['rate'] * 100)
+                        notify_client(phone, tg, sms,
+                            push_title='Рівень {}!'.format(tier['name']),
+                            push_body='Кешбек підвищено до {:.1f}%'.format(tier['rate'] * 100),
+                            push_tag='tier_upgrade', push_url='/app/#home')
+                    except Exception as _te:
+                        logger.error('tier upgrade notify error: {}'.format(_te))
+                threading.Thread(target=_notify_tier_up, daemon=True).start()
+        except Exception:
+            pass
         # Check if total balance just reached 500 UAH → push notification
         conn2 = _db()
         try:
