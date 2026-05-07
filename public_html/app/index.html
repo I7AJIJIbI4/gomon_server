@@ -4757,7 +4757,7 @@ var _notifTypes = [
     {key:'reminder_24h',label:'Нагадування за 24 год',channels:'Push + TG + SMS',
      tpl:'{first_name}, нагадуємо про ваш запис завтра!\n📅 {date}, {time}\n💆 {service}\n👩‍⚕️ {spec_name}\n📍 БЦ Галерея, "ЛІФТ", 6 поверх\n🗺 flyl.link/map'},
     {key:'post_visit',label:'Відгук після процедури',channels:'Push + TG + SMS (через 2 год)',
-     tpl:'{first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні і за Ваш відгук: flyl.link/google\n\n[app user] Вам нараховано кешбек +XX грн (3%). Ваш баланс: YY грн\n[не app user] Не втрачайте кешбек з кожної процедури з нашим додатком: flyl.link/app\n\n⚠️ Якщо клієнт вже залишив відгук на Google — лінка на відгук не надсилається (sync щодня о 08:00)'},
+     tpl:'TG: {first_name}, Dr. Gomon Cosmetology дякує за довіру! Будемо вдячні за відгук: flyl.link/google\n💰 Кешбек +XX грн ({rate}%)\nДо списання ще YY грн (зібрано ZZ / 500 грн)\n🏆 {tier} → {next}: ще N візитів або M знять\n\nSMS: {first_name}, дякуємо за довіру! Будемо вдячні за відгук: flyl.link/google\nКешбек +XX грн. Баланс: YY грн\n\n[не app user] Кешбек 3% в нашому додатку: flyl.link/app\n\n⚠️ Drug selection процедури — не шле через 2 год, чекає підтвердження лікарем'},
     {key:'repeat_proc',label:'Повторні процедури',channels:'TG / SMS fallback',
      tpl:'Привіт, {name}! Минуло {elapsed} з «{service}». Dr.Gomon чекає вас для повторної процедури.\nЗаписатись: ig.me/m/dr.gomon | t.me/DrGomonCosmetology'},
     {key:'cancellation',label:'Скасування запису',channels:'Push + TG + SMS',
@@ -4765,12 +4765,16 @@ var _notifTypes = [
     {key:'cashback_accrued',label:'Кешбек нараховано',channels:'Push',
      tpl:'Push: Дякуємо за візит! Кешбек нараховано! Залиште відгук'},
     {key:'cashback_redeemed',label:'Кешбек списано',channels:'Push + TG + SMS',
-     tpl:'З вашого балансу Dr. Gomon Cosmetology списано {amount} грн кешбеку. Залишок балансу: {total} грн'},
+     tpl:'TG: ✅ {first_name}, списано {amount} грн кешбеку. Залишок: {total} грн\n[якщо підвищення рівня] 🎉 Вітаємо! Рівень підвищено до {tier}! Кешбек {rate}%\nSMS: те саме без emoji'},
     {key:'cashback_500',label:'Кешбек 500 грн досягнуто',channels:'Push',
-     tpl:'Push: Ваш кешбек готовий до списання! Баланс {total} грн. Оберіть процедуру і зверніться до лікаря'}
+     tpl:'Push: Ваш кешбек готовий до списання! Баланс {total} грн. Оберіть процедуру і зверніться до лікаря'},
+    {key:'tier_upgrade',label:'Підвищення рівня лояльності',channels:'Push + TG + SMS',
+     tpl:'TG: 🎉 {first_name}, вітаємо! Ваш рівень підвищено до {tier}! Тепер ваш кешбек — {rate}% з кожної процедури\nSMS: те саме без emoji\n\nРівні: Старт (3.0%) → Срібло 10 візитів (3.3%) → Золото 30 (3.6%) → Платина 50 (4.0%)\nАбо через виведення кешбеку: 1/3/7 разів'},
+    {key:'cashback_drug',label:'Підтвердження кешбеку (drug selection)',channels:'TG + SMS (після підтвердження лікарем)',
+     tpl:'Надсилається разом з відгуком після підтвердження лікарем ціни.\nТГ кнопки для лікаря / IG ввід ціни числом.\nДрамРол/Пресо — авто-нарахування зі знижкою -20%.'}
   ]},
   {group:'Спеціалісту (Анастасія)',items:[
-    {key:'spec_new_appt',label:'Нові записи клієнтів',channels:'TG',
+    {key:'spec_new_appt',label:'Нові записи клієнтів',channels:'TG (груповане)',
      tpl:'{spec_name}, до тебе на {date} о {time} записаний клієнт {first_name} на процедуру "{service}". Вартість {price}, тривалість {duration}.'},
     {key:'spec_briefing',label:'Брифінг записів на завтра',channels:'TG',time:'21:05',
      tpl:'{spec_name}, до тебе на завтра {date} о {time} записаний клієнт {first_name} на процедуру "{service}". Вартість {price}, тривалість {duration}.'},
@@ -4780,14 +4784,20 @@ var _notifTypes = [
      tpl:'Скасовано запис: {client_name} на "{service}" {date} о {time}'}
   ]},
   {group:'Лікарю (Вікторія)',items:[
-    {key:'doc_briefing',label:'Брифінг всіх записів на завтра',channels:'TG',time:'21:05',
+    {key:'doc_briefing',label:'Брифінг всіх записів на завтра',channels:'TG + IG',time:'21:05',
      tpl:'Записи на завтра (N):\n{date} о {time} «{service}». {first_name}, +380XXXXXXXXX'},
     {key:'doc_cancel',label:'Скасування записів клієнтів',channels:'TG',
      tpl:'Скасовано запис: {client_name} на "{service}" {date} о {time}'},
     {key:'doc_callback',label:'Заявки на зворотній зв\'язок',channels:'TG',
      tpl:'📞 Заявка на зворотній зв\'язок\n👤 {name} ({phone})\n🕐 {time}'},
     {key:'doc_photo',label:'Фото папки до/після',channels:'TG',time:'21:00',
-     tpl:'Сьогодні були процедури:\n1. {client} — {procedure} → {drive_link}'}
+     tpl:'Сьогодні були процедури:\n1. {client} — {procedure} → {drive_link}'},
+    {key:'doc_ig_mirror',label:'Нові повідомлення з TG в IG',channels:'IG DM',
+     tpl:'💬 Нове повідомлення в Telegram\n{client}: "{message}"\nВідповідайте в Telegram або додатку'},
+    {key:'doc_ig_escalation',label:'Ескалації від AI бота',channels:'TG + IG DM',
+     tpl:'🔔 Ескалація з Telegram/Instagram\nКлієнт: {name}\nGomonAI передав розмову вам.'},
+    {key:'doc_ig_cashback',label:'Кешбек ввід через IG',channels:'IG DM',
+     tpl:'💰 Кешбек: {client} ({procedure})\nВідправте ціну числом (наприклад: 4000)\n#cashback|phone|MMDD'}
   ]},
   {group:'Адміну',items:[
     {key:'admin_report',label:'Щоденний звіт повідомлень',channels:'TG',time:'22:10',
