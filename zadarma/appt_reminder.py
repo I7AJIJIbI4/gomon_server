@@ -211,10 +211,12 @@ def _accrue_cashback(appt):
                 def _notify_tier_up():
                     try:
                         from notifier import notify_client
-                        tg = '🎉 Вітаємо! Ваш рівень підвищено до {}!\nТепер ваш кешбек — {:.1f}% з кожної процедури'.format(
-                            tier['name'], tier['rate'] * 100)
-                        sms = 'Вітаємо! Рівень {}! Кешбек {:.1f}%. Dr. Gomon Cosmetology'.format(
-                            tier['name'], tier['rate'] * 100)
+                        from notifier import _first_name
+                        fname = _first_name(None, phone=phone)
+                        tg = '🎉 {}, вітаємо! Ваш рівень підвищено до {}!\nТепер ваш кешбек — {:.1f}% з кожної процедури'.format(
+                            fname, tier['name'], tier['rate'] * 100)
+                        sms = '{}, вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}% з кожної процедури'.format(
+                            fname, tier['name'], tier['rate'] * 100)
                         notify_client(phone, tg, sms,
                             push_title='Рівень {}!'.format(tier['name']),
                             push_body='Кешбек підвищено до {:.1f}%'.format(tier['rate'] * 100),

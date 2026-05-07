@@ -5194,13 +5194,15 @@ def admin_cashback_redeem():
     import threading
     def _notify_redeem():
         try:
-            from notifier import notify_client
-            tg_text = '✅ Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
-            sms_text = 'Списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(amount, new_total)
+            from notifier import notify_client, _first_name
+            fname = _first_name(None, phone=phone)
+            tg_text = '✅ {}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
+            sms_text = '{}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
             if tier_upgraded:
                 tg_text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
                     tier_after['name'], tier_after['rate'] * 100)
-                sms_text += ' Рівень {}! Кешбек {:.1f}%'.format(tier_after['name'], tier_after['rate'] * 100)
+                sms_text += '\nВітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
+                    tier_after['name'], tier_after['rate'] * 100)
             notify_client(phone, tg_text, sms_text,
                 push_title='Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
                 push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
