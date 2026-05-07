@@ -523,7 +523,7 @@ def check_pending_cashback_reminders():
         return
 
     for r in rows:
-        rid, phone, name, proc, drug, price, date, time_str, specialist = r
+        rid, phone, name, proc, drug, price, date, time_str, specialist = r[:9]
         if not phone or not price:
             continue
         # Accrue cashback first (INSERT OR IGNORE — dedup by UNIQUE)
