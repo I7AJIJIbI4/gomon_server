@@ -526,6 +526,21 @@ def check_pending_cashback_reminders():
         rid, phone, name, proc, drug, price, date, time_str, specialist = r[:9]
         if not phone or not price:
             continue
+        # Only app users get cashback
+        try:
+            _otp_conn = sqlite3.connect('/home/gomoncli/zadarma/otp_sessions.db', timeout=5)
+            _is_app = _otp_conn.execute("SELECT 1 FROM sessions WHERE phone=? LIMIT 1", (phone,)).fetchone()
+            _otp_conn.close()
+            if not _is_app:
+                # Mark as notified to stop retrying, but don't accrue
+                conn_skip = sqlite3.connect(DB_PATH, timeout=5)
+                conn_skip.execute("UPDATE photo_tasks SET cashback_status='notified', cashback_notified_at=datetime('now') WHERE id=?", (rid,))
+                conn_skip.commit()
+                conn_skip.close()
+                logger.info('Cashback skip (not app user): {} {}'.format(phone, proc))
+                continue
+        except Exception:
+            pass
         # Accrue cashback first (INSERT OR IGNORE — dedup by UNIQUE)
         _rate = 0.03
         try:
