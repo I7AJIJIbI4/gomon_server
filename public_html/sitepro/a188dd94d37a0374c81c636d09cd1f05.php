@@ -624,20 +624,6 @@
   .ai-section-btn { font-size: 15px; letter-spacing: 2px; padding: 16px 40px; display: inline-flex; align-items: center; gap: 10px; }
   @media (max-width: 480px) { .ai-section { padding: 44px 16px 28px; } .ai-section-badge { font-size: 11px; padding: 6px 14px 6px 10px; margin-bottom: 16px; } .ai-section-sub { margin-bottom: 12px; } .ai-section-desc { font-size: 14px; margin-bottom: 24px; } }
 
-  /* FAQ SECTION */
-  .faq-section { padding: 60px 20px 50px; background: var(--dark); border-top: 1px solid var(--border-gold); }
-  .faq-inner { max-width: 760px; margin: 0 auto; }
-  .faq-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 5vw, 42px); font-weight: 300; color: var(--cream); text-align: center; margin-bottom: 36px; line-height: 1.2; }
-  .faq-title em { font-style: italic; color: var(--gold-light); }
-  .faq-item { border-bottom: 1px solid var(--border-gold); }
-  .faq-q { display: flex; align-items: center; justify-content: space-between; padding: 20px 4px; cursor: pointer; gap: 16px; -webkit-tap-highlight-color: transparent; }
-  .faq-q span { font-family: 'Jost', sans-serif; font-size: 16px; color: var(--cream); line-height: 1.5; letter-spacing: 0.3px; }
-  .faq-q svg { flex-shrink: 0; width: 20px; height: 20px; stroke: var(--gold); transition: transform 0.3s ease; }
-  .faq-item.open .faq-q svg { transform: rotate(45deg); }
-  .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.35s ease, padding 0.35s ease; padding: 0 4px; }
-  .faq-item.open .faq-a { max-height: 400px; padding: 0 4px 20px; }
-  .faq-a p { font-family: 'Jost', sans-serif; font-size: 15px; color: var(--text-light); line-height: 1.75; }
-  @media (max-width: 480px) { .faq-section { padding: 40px 16px 32px; } .faq-title { margin-bottom: 24px; } .faq-q span { font-size: 15px; } .faq-a p { font-size: 14px; } }
 </style>
 <script src="https://static.elfsight.com/platform/platform.js" defer></script>
 </head>
@@ -911,19 +897,6 @@
   </div>
 </section>
 
-<!-- FAQ -->
-<section class="faq-section" id="faq">
-  <div class="faq-inner">
-    <h2 class="faq-title reveal"><em>Часті</em> запитання</h2>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Які послуги та ціни у косметолога Dr. Gomon?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>WOW-чистка обличчя від 1400 грн, контурна пластика губ від 4000 грн (Neuramis Deep, Saypha Filler, Perfecta, Neauvia), біорепарація Rejuran від 3500 грн, біоревіталізація від 3200 грн, мезотерапія від 1400 грн, пілінги від 900 грн, DrumRoll масаж від 600 грн, пресотерапія 600 грн, відбілювання зубів Magic Smile від 1400 грн. Повний прайс — на сайті та в додатку.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Де знаходиться Dr. Gomon Cosmetology?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>м. Черкаси, вул. Смілянська, 23, БЦ «Галерея», 6 поверх. Лівий вхід із написом «Ліфт» (поряд із кафе «Шарлотка»). Працюємо без вихідних з 9:00 до 20:00, тільки за записом.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Як записатись до косметолога?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>Через Instagram Direct (@dr.gomon), Telegram (@DrGomonCosmetology), за телефоном 073-310-31-10 або через мобільний додаток drgomon.beauty/app. Працюємо без вихідних, тільки за попереднім записом.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Скільки коштує консультація?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>Консультація лікаря-косметолога — 500 грн (офлайн або онлайн). Якщо після консультації ви вирішите робити процедуру — консультація безкоштовна. Лікар Вікторія оцінить стан шкіри та підбере індивідуальний план.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Що таке DrumRoll масаж?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>DrumRoll масаж: моделювання окремої ділянки 600 грн, всього тіла 900 грн, релакс-масаж 1200 грн. Пресотерапія «Легкість тіла» 600 грн. Курс 5 сеансів зі знижкою -20%, 10 сеансів -30%. Ефективно при болях у спині, м'язовій втомі та набряках.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Які чистки обличчя доступні?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>WOW-чистка обличчя 1400 грн (80 хв), WOW-чистка «Сяяння» 1800 грн (90 хв), підліткова делікатна чистка 1800 грн. Глибоке очищення комбінацією апаратних та мануальних технік — ультразвуковий скрабінг, вакуумний гідропілінг, LED-терапія.</p></div></div>
-    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)"><span>Чи є відбілювання зубів?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="faq-a"><p>Відбілювання зубів Magic Smile: Light (1 засвічування) 1400 грн, Medium (2 засвічування) 1800 грн, Maximum (3 засвічування) 2200 грн. Безпечна система без болю та пошкодження емалі. Від 45 до 90 хвилин.</p></div></div>
-  </div>
-</section>
 
 <!-- CTA BOTTOM -->
 <section class="cta-section" id="cta">
@@ -957,13 +930,6 @@
   </div>
 </footer>
 <script>
-  function toggleFaq(el){
-    var item=el.parentElement;
-    if(item.classList.contains('open')){item.classList.remove('open');return;}
-    document.querySelectorAll('.faq-item.open').forEach(function(o){o.classList.remove('open');});
-    item.classList.add('open');
-  }
-
   document.querySelectorAll('.pay-item').forEach(function(el) {
     el.addEventListener('pointerdown', function(e) {
       el.classList.add('tip-on');
