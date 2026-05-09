@@ -86,7 +86,7 @@ def _is_app_user(phone):
 def _accrue_cashback(appt):
     """Auto-accrue 3% cashback for completed procedure. Only for app users."""
     phone = appt.get('client_phone', '')
-    procedure = appt.get('procedure_name', '')
+    procedure = ', '.join(sorted(appt.get('procedure_name', '').split(', ')))
     appt_date = appt.get('date', '')
     if not phone or not procedure:
         return

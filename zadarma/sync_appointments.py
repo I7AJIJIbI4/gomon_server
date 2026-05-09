@@ -92,7 +92,7 @@ def sync_recent_appointments(days_back=7, days_forward=90):
             last_name = client.get('last_name', '')
 
             services_list_appt = appt.get('services', [])
-            service_name = ', '.join(s.get('name', '') for s in services_list_appt if s.get('name'))
+            service_name = ', '.join(sorted(s.get('name', '') for s in services_list_appt if s.get('name')))
 
             # DST-correct UTC->Kyiv conversion via shared parse_appt_time
             visit_date, visit_hour, visit_minute = parse_appt_time(appt.get('start_time', ''))
