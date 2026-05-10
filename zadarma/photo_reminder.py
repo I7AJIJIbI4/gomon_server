@@ -87,10 +87,9 @@ def _get_drugs_for_procedure(procedure_name):
         for target_cat in cats:
             if target_cat.startswith('_'):
                 keyword = target_cat[1:]
-                # Consultation: confirm 500 UAH or 0 (free if proceeding with procedure)
+                # Consultation: confirm 500 UAH or enter custom procedure price
                 if keyword == 'консультація':
-                    drugs.append({'name': 'Консультація 500 грн', 'price': 500})
-                    drugs.append({'name': 'Безкоштовна (процедура)', 'price': 0})
+                    drugs.append({'name': 'Консультація', 'price': 500})
                     return drugs
                 # Special handling for body procedures — show base price + course options
                 if keyword in ('drumroll', 'пресотерапія'):
