@@ -57,6 +57,9 @@ PROCEDURE_TO_CATEGORIES = {
     'Ліполітики (обличчя, 4 мл)': ['_ліполітики'],
     'Ліполітики (тіло, 10 мл)': ['_ліполітики'],
     'Гіалуронідаза (розчинення філера)': ['_гіалуронідаза'],
+    'Консультація': ['_консультація'],
+    'Офлайн-консультація': ['_консультація'],
+    'Онлайн-консультація': ['_консультація'],
     # DrumRoll/Пресотерапія — auto-accrue з ціною -20% (курсова знижка)
     # 'Моделювання всього тіла': ['_drumroll'],
     # 'Моделювання окремої ділянки': ['_drumroll'],
@@ -80,10 +83,15 @@ def _get_drugs_for_procedure(procedure_name):
     drugs = []
     for cat in prices:
         cat_name = cat.get('cat', '')
-        # Virtual categories: _ліполітики, _гіалуронідаза — filter by keyword in item name
+        # Virtual categories: _ліполітики, _гіалуронідаза, _консультація — filter by keyword in item name
         for target_cat in cats:
             if target_cat.startswith('_'):
                 keyword = target_cat[1:]
+                # Consultation: confirm 500 UAH or 0 (free if proceeding with procedure)
+                if keyword == 'консультація':
+                    drugs.append({'name': 'Консультація 500 грн', 'price': 500})
+                    drugs.append({'name': 'Безкоштовна (процедура)', 'price': 0})
+                    return drugs
                 # Special handling for body procedures — show base price + course options
                 if keyword in ('drumroll', 'пресотерапія'):
                     # Find base price from prices.json
@@ -147,7 +155,11 @@ def _send_drug_buttons(tg_id, appts, date_str):
             for d in drugs[i:i+2]:
                 # cb|phone10|MMDD|price — drug name NOT in callback, resolved from price+procedure
                 cb_data = 'cb|{}|{}|{}'.format(ph_short, dt_short, d['price'])
-                row.append({'text': '{} ₴{}'.format(d['name'][:25], d['price']), 'callback_data': cb_data})
+                if d['price'] == 0:
+                    btn_text = d['name'][:30]
+                else:
+                    btn_text = '{} ₴{}'.format(d['name'][:25], d['price'])
+                row.append({'text': btn_text, 'callback_data': cb_data})
             rows.append(row)
 
         # Add "Enter custom price" button

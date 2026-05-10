@@ -927,25 +927,33 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
 
     confirmer = str(update.effective_user.id)
     try:
+        # price=0 means free consultation (client proceeded with procedure) — no cashback
+        accrued_flag = 1 if price == 0 else 0
         conn.execute(
             "INSERT OR REPLACE INTO cashback_pending "
             "(phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-            (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S')))
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S'), accrued_flag))
         # Also update photo_tasks if exists
+        status = 'skipped' if price == 0 else 'confirmed'
         conn.execute(
-            "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
+            "UPDATE photo_tasks SET cashback_status=?, cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
             "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','pending')",
-            (drug_name, price, _kn().strftime('%Y-%m-%d %H:%M:%S'), phone, appt_date))
+            (status, drug_name, price, _kn().strftime('%Y-%m-%d %H:%M:%S'), phone, appt_date))
         conn.commit()
         conn.close()
 
-        cashback_amount = round(price * 0.03, 2)
         phone_display = ('+' + phone) if phone.startswith('380') else phone
-        await query.edit_message_text(
-            '✅ {} — {} (₴{})\nКешбек +{:.0f} грн — клієнт отримає повідомлення наступного дня'.format(
-                phone_display, drug_name, int(price), cashback_amount))
-        logger.info('Cashback confirmed: {} {} {} ₴{} by {}'.format(phone, appt_date, drug_name, price, confirmer))
+        if price == 0:
+            await query.edit_message_text(
+                '✅ {} — безкоштовна консультація (процедура)\nКешбек не нараховується'.format(phone_display))
+            logger.info('Cashback skipped (free consult): {} {} by {}'.format(phone, appt_date, confirmer))
+        else:
+            cashback_amount = round(price * 0.03, 2)
+            await query.edit_message_text(
+                '✅ {} — {} (₴{})\nКешбек +{:.0f} грн — клієнт отримає повідомлення наступного дня'.format(
+                    phone_display, drug_name, int(price), cashback_amount))
+            logger.info('Cashback confirmed: {} {} {} ₴{} by {}'.format(phone, appt_date, drug_name, price, confirmer))
     except Exception as e:
         conn.close()
         logger.error('cashback_drug_callback error: {}'.format(e))
