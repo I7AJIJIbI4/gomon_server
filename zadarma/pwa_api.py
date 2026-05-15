@@ -1017,6 +1017,68 @@ def _ig_process_reply(sender_id):
         except Exception:
             pass
 
+        # Client context: resolve IG sender → phone → appointments
+        try:
+            conn_cl = sqlite3.connect(DB_PATH, timeout=5)
+            # Find client_phone linked to this IG conversation
+            cl_row = conn_cl.execute(
+                "SELECT client_phone FROM messages WHERE conversation_id=? AND client_phone IS NOT NULL AND client_phone != '' LIMIT 1",
+                (conv_id,)).fetchone()
+            _cl_phone = cl_row[0] if cl_row else None
+            if not _cl_phone:
+                # Try matching by name from messages → clients
+                _name_row = conn_cl.execute(
+                    "SELECT sender_name FROM messages WHERE conversation_id=? AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
+                    (conv_id,)).fetchone()
+                if _name_row and _name_row[0]:
+                    _parts = _name_row[0].strip().split()
+                    if len(_parts) >= 2:
+                        _fn, _ln = _parts[0], _parts[-1]
+                        _cl_match = conn_cl.execute(
+                            "SELECT phone FROM clients WHERE (first_name LIKE ? AND last_name LIKE ?) OR (first_name LIKE ? AND last_name LIKE ?) LIMIT 1",
+                            (_fn + '%', _ln + '%', _ln + '%', _fn + '%')).fetchone()
+                        if _cl_match:
+                            _cl_phone = _cl_match[0]
+            if _cl_phone:
+                _cl_data = conn_cl.execute(
+                    "SELECT first_name, last_name, services_json, visits_count FROM clients WHERE phone=?",
+                    (_cl_phone,)).fetchone()
+                if _cl_data:
+                    _cl_name_parts = []
+                    if _cl_data[0]: _cl_name_parts.append(_cl_data[0])
+                    if _cl_data[1]: _cl_name_parts.append(_cl_data[1])
+                    if _cl_name_parts:
+                        system_prompt += "\n\n---\nДані поточного клієнта:\nІм'я: {}".format(' '.join(_cl_name_parts))
+                        system_prompt += "\nТелефон: {}".format(_cl_phone)
+                    _cl_services = json.loads(_cl_data[2] or '[]')
+                    if _cl_services:
+                        from tz_utils import kyiv_now as _kn_cl
+                        _today_cl = _kn_cl().strftime('%Y-%m-%d')
+                        _upcoming_cl = [s for s in _cl_services
+                                        if s.get('date', '') >= _today_cl
+                                        and s.get('status', '').upper() not in ('CANCELLED',)]
+                        _upcoming_cl.sort(key=lambda x: x.get('date', ''))
+                        if _upcoming_cl:
+                            _ulines = []
+                            for s in _upcoming_cl:
+                                _line = '- {} о {}:{:02d}: {} (спеціаліст: {})'.format(
+                                    s.get('date', ''), s.get('hour', '?'),
+                                    s.get('minute', 0) or 0,
+                                    s.get('service', ''), s.get('specialist', '?'))
+                                _ulines.append(_line)
+                            system_prompt += '\n\n---\n## Майбутні записи клієнта\n{}'.format('\n'.join(_ulines))
+                        else:
+                            system_prompt += '\n\n---\n## Майбутні записи клієнта\nНемає майбутніх записів.'
+                        _past_cl = [s for s in _cl_services if s.get('date', '') < _today_cl]
+                        _past_cl.sort(key=lambda x: x.get('date', ''), reverse=True)
+                        if _past_cl:
+                            _plines = ['- {}: {} ({})'.format(s.get('date', ''), s.get('service', ''), s.get('status', ''))
+                                        for s in _past_cl[:5]]
+                            system_prompt += '\n\n## Історія візитів (останні 5)\n{}'.format('\n'.join(_plines))
+            conn_cl.close()
+        except Exception as _cl_e:
+            logger.warning('IG client context error: {}'.format(_cl_e))
+
         # Get conversation history — includes ALL recent messages (user may have sent multiple)
         messages = []
         try:
