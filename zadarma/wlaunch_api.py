@@ -566,6 +566,83 @@ def create_wlaunch_appointment(client_phone, client_name, procedure_name,
         return None, str(e)
 
 
+def update_wlaunch_appointment(wl_id, client_phone, procedure_name,
+                                specialist, date_str, time_str, duration_min):
+    """
+    Update existing WLaunch appointment. Returns (success_bool, error_string).
+    """
+    from tz_utils import kyiv_offset
+
+    branch_id = get_branch_id()
+    if not branch_id:
+        return False, "no_branch"
+
+    # Convert Kyiv time to UTC
+    try:
+        kyiv_dt = datetime.strptime("{} {}".format(date_str, time_str), "%Y-%m-%d %H:%M")
+        utc_dt = kyiv_dt - timedelta(hours=kyiv_offset(kyiv_dt))
+        start_time_utc = utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    except Exception as e:
+        return False, "time_parse: {}".format(e)
+
+    # Get resource ID for specialist
+    resources = get_wlaunch_resources(branch_id)
+    resource_id = resources.get(specialist)
+
+    # Find service ID
+    wl_services = get_wlaunch_services(branch_id)
+    proc_lower = procedure_name.lower()
+    service_match = wl_services.get(proc_lower)
+    if not service_match:
+        import re as _re
+        _norm = lambda s: _re.sub(r'[«»""\'`]', '', s).replace('  ', ' ').strip()
+        pn = _norm(proc_lower)
+        for wl_name, wl_data in wl_services.items():
+            wn = _norm(wl_name)
+            if pn in wn or wn in pn:
+                service_match = wl_data
+                break
+
+    # Build update payload
+    appt_body = {
+        "id": wl_id,
+        "start_time": start_time_utc,
+        "duration": duration_min * 60,
+    }
+    if service_match and resource_id:
+        appt_body["service_resource_settings"] = [{
+            "service": service_match["id"],
+            "resources": [resource_id],
+            "auto_selected_resources": False,
+            "ordinal": 1,
+            "duration": duration_min * 60,
+        }]
+    elif resource_id:
+        # At least reassign specialist even if service not matched
+        appt_body["resource_id"] = resource_id
+
+    post_headers = dict(HEADERS)
+    post_headers["Content-Type"] = "application/json"
+
+    url = "{}/company/{}/branch/{}/appointment/{}".format(
+        WLAUNCH_API_URL, COMPANY_ID, branch_id, wl_id)
+
+    try:
+        resp = requests.post(url, headers=post_headers,
+                             json={"appointment": appt_body}, timeout=15)
+        if resp.status_code in (200, 201):
+            logger.info("WLaunch appointment updated: {} → {} {} {}".format(
+                wl_id, date_str, time_str, procedure_name))
+            return True, None
+        else:
+            err = resp.text[:200]
+            logger.error("WLaunch update failed {}: {}".format(resp.status_code, err))
+            return False, "http_{}: {}".format(resp.status_code, err)
+    except Exception as e:
+        logger.error("WLaunch update error: {}".format(e))
+        return False, str(e)
+
+
 def test_wlaunch_connection():
     """Тестує підключення"""
     try:

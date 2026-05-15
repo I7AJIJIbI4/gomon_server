@@ -3292,6 +3292,74 @@ def admin_cal_update(appt_id):
 
     return jsonify({'ok': True})
 
+@app.route('/api/admin/calendar/wlaunch-appointments/<wl_id>', methods=['PUT'])
+@require_admin
+def admin_cal_update_wl(wl_id):
+    """Edit a WLaunch appointment: date, time, duration, specialist, procedure."""
+    d = request.get_json() or {}
+
+    # Validate inputs
+    date_str = d.get('date', '')
+    time_str = d.get('time', '')
+    specialist = d.get('specialist', '')
+    procedure = d.get('procedure_name', '')
+    duration = int(d.get('duration', 60) or 60)
+    client_phone = d.get('client_phone', '')
+
+    if date_str and not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return jsonify({'error': 'invalid_date'}), 400
+    if time_str and not re.match(r'^\d{2}:\d{2}$', time_str):
+        return jsonify({'error': 'invalid_time'}), 400
+    if specialist and specialist not in ('victoria', 'anastasia'):
+        return jsonify({'error': 'invalid_specialist'}), 400
+    if not date_str or not time_str or not procedure or not specialist:
+        return jsonify({'error': 'missing_fields'}), 400
+
+    # Specialist role check
+    if request.admin_role == 'specialist' and specialist != request.admin_specialist:
+        return jsonify({'error': 'forbidden'}), 403
+
+    # Call WLaunch API (synchronous — this is the primary write)
+    try:
+        from wlaunch_api import update_wlaunch_appointment
+        ok, err = update_wlaunch_appointment(
+            wl_id, client_phone, procedure, specialist, date_str, time_str, duration)
+        if not ok:
+            if err and 'http_422' in str(err):
+                return jsonify({'error': 'wlaunch_rejected', 'detail': err}), 422
+            return jsonify({'error': 'wlaunch_error', 'detail': err}), 502
+    except Exception as e:
+        logger.error('WLaunch update exception: {}'.format(e))
+        return jsonify({'error': 'wlaunch_error', 'detail': str(e)[:100]}), 502
+
+    # Update local services_json
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        if client_phone:
+            row = conn.execute("SELECT phone, services_json FROM clients WHERE phone=?",
+                               (client_phone,)).fetchone()
+            if row:
+                services = json.loads(row[1] or '[]')
+                for s in services:
+                    if s.get('appt_id') == wl_id:
+                        h, m = (int(x) for x in time_str.split(':'))
+                        s['date'] = date_str
+                        s['hour'] = h
+                        s['minute'] = m
+                        s['service'] = procedure
+                        s['specialist'] = specialist
+                        s['duration_min'] = duration
+                        break
+                conn.execute("UPDATE clients SET services_json=? WHERE phone=?",
+                             (json.dumps(services, ensure_ascii=False), client_phone))
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning('Local services_json update error: {}'.format(e))
+
+    return jsonify({'ok': True})
+
+
 @app.route('/api/admin/calendar/appointments/<int:appt_id>', methods=['DELETE'])
 @require_admin
 def admin_cal_delete(appt_id):

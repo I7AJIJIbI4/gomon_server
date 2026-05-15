@@ -2715,6 +2715,7 @@ function openApptAction(id) {
     if (a.status !== 'CONFIRMED') btns.push('<button class="adm-action-btn" onclick="updateApptStatus(' + id + ',\'CONFIRMED\')">Підтвердити</button>');
     btns.push('<button class="adm-action-btn danger" onclick="cancelAppt(' + id + ')">Скасувати</button>');
   } else {
+    btns.push('<button class="adm-action-btn" onclick="showEditApptForm(\'' + _esc(String(a.id)) + '\')">Редагувати</button>');
     btns.push('<button class="adm-action-btn danger" onclick="cancelWlAppt(\'' + _esc(a.id) + '\',\'' + _esc(a.client_phone||'') + '\',\'' + _esc(a.date) + '\',\'' + _esc((a.procedure_name||'').replace(/'/g,"\\'")) + '\')">Скасувати</button>');
   }
   // Photo folder button
@@ -4325,10 +4326,13 @@ async function submitNewAppt() {
   const procName = _apptProc ? _apptProc.name : document.getElementById('appt-proc-q').value.trim();
   if (!procName || !date || !time) { showToast('Заповніть процедуру, дату і час'); return; }
   const isEdit = !!_editApptId;
+  const isWlEdit = isEdit && String(_editApptId).startsWith('wl_');
   const btn = document.getElementById('appt-submit-btn');
   btn.disabled = true; btn.textContent = 'Збереження…';
   try {
-    const url = '/api/admin/calendar/appointments' + (isEdit ? '/'+_editApptId : '');
+    const url = isWlEdit
+      ? '/api/admin/calendar/wlaunch-appointments/' + encodeURIComponent(String(_editApptId).replace('wl_',''))
+      : '/api/admin/calendar/appointments' + (isEdit ? '/'+_editApptId : '');
     const r = await fetch(url, {
       method: isEdit ? 'PUT' : 'POST',
       headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
