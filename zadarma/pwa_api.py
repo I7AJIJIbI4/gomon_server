@@ -1002,7 +1002,13 @@ def _ig_process_reply(sender_id):
         prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public_html', 'app', 'system_prompt.txt')
         with open(prompt_path, 'r') as f:
             system_prompt = f.read()
-        system_prompt += '\n\n---\n## Контекст: Instagram Direct (DM)\nТи спілкуєшся з клієнтом в Instagram Direct лікаря Dr. Gomon. Відповідай стисло і дружньо. Клієнт вже в правильному каналі — НЕ направляй нікуди. При запиті на запис або ескалації — повідом: "Лікар Вікторія відповість вам у найближчий вільний час".'
+        system_prompt += ('\n\n---\n## Контекст: Instagram Direct (DM)'
+            '\nТи спілкуєшся з клієнтом в Instagram Direct лікаря Dr. Gomon. Відповідай стисло і дружньо.'
+            '\n\nВАЖЛИВО: Клієнт вже в Instagram — НІКОЛИ не давай посилання на Instagram, Telegram або телефон для зв\'язку. '
+            'Клієнт вже в правильному каналі. Ігноруй секцію "Сайт або Додаток" з system prompt — вона не для цього каналу.'
+            '\nПри запиті на запис або ескалації — повідом: "Лікар Вікторія відповість вам у найближчий вільний час".'
+            '\nПісля фрази про очікування ЗАВЖДИ додай: "Поки чекаєте, можете пройти тест на визначення типу шкіри — '
+            'це допоможе лікарю підібрати процедури саме для вас: https://t.me/DrGomonSkinTypeBot"')
 
         # Load prices
         try:
