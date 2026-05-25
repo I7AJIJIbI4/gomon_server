@@ -3586,6 +3586,9 @@ var _msgFilter = '';       // legacy compat for AI tab
 var _msgActiveConv = null;
 var _msgPollTimer = null;
 var _msgConvs = [];
+var _msgOldestId = null;       // id of oldest message currently rendered (for infinite-scroll pagination)
+var _msgLoadingOlder = false;  // guard to prevent concurrent fetches
+var _msgNoMoreOlder = false;   // flag set when backend returns empty older batch
 
 function loadMsgConversations() {
   var parts = [];
@@ -3755,8 +3758,59 @@ async function openAiThread(sessionId, name, source) {
   }
 }
 
+// Single-bubble renderer — reused by initial load, refresh, and infinite-scroll prepend
+function _msgBubbleHTML(m, convPlatform) {
+  var cls = m.is_from_admin ? 'out' : 'in';
+  var time = _fmtMsgTime(m.created_at || '');
+  var body = '';
+  var mediaBase = (convPlatform === 'telegram') ? '/app/tg_media.php?fid=' : '/api/feed/media/';
+  if (m.media_type === 'photo' && m.file_id) {
+    body = '<img src="' + mediaBase + _esc(m.file_id) + '" alt="photo" loading="lazy" style="max-width:200px;border-radius:10px" onclick="window.open(this.src)">';
+    if (m.content && m.content !== '[Фото]') body += '<div>' + _esc(m.content) + '</div>';
+  } else if (m.media_type === 'video' && m.file_id) {
+    body = '<video src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="max-width:200px;border-radius:10px"></video>';
+    if (m.content && m.content !== '[Відео]') body += '<div>' + _esc(m.content) + '</div>';
+  } else if (m.media_type === 'voice' && m.file_id) {
+    body = '<audio src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="width:200px"></audio>';
+  } else if (m.media_type === 'sticker') {
+    body = '<div style="font-size:48px;line-height:1.2">' + _esc(m.content || '') + '</div>';
+  } else {
+    body = _esc(m.content || '[медіа]');
+  }
+  return '<div class="msg-bubble-row ' + cls + '" data-mid="' + m.id + '">' +
+    '<div class="msg-bubble">' + body + '</div>' +
+    '<div class="msg-bubble-time">' + time + '</div></div>';
+}
+
+function _msgLoadOlder() {
+  if (!_msgActiveConv || _msgLoadingOlder || _msgNoMoreOlder || !_msgOldestId) return;
+  _msgLoadingOlder = true;
+  var el = document.getElementById('msgMessages');
+  var conv = _msgConvs.find(function(c) { return c.conversation_id === _msgActiveConv; });
+  var convPlatform = conv ? conv.platform : '';
+  var prevScrollHeight = el.scrollHeight;
+  fetch('/api/admin/messages/' + encodeURIComponent(_msgActiveConv) +
+        '?limit=50&before_id=' + _msgOldestId,
+        {headers:{Authorization:'Bearer '+token}})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var older = data.messages || [];
+      if (!older.length) { _msgNoMoreOlder = true; return; }
+      _msgOldestId = older[0].id;
+      var html = older.map(function(m) { return _msgBubbleHTML(m, convPlatform); }).join('');
+      el.insertAdjacentHTML('afterbegin', html);
+      // Preserve scroll position: new scrollHeight grows by prepended content
+      el.scrollTop = el.scrollHeight - prevScrollHeight;
+    })
+    .catch(function(){})
+    .finally(function() { _msgLoadingOlder = false; });
+}
+
 function openMsgThread(convId) {
   _msgActiveConv = convId;
+  _msgOldestId = null;
+  _msgLoadingOlder = false;
+  _msgNoMoreOlder = false;
   var conv = _msgConvs.find(function(c) { return c.conversation_id === convId; });
 
   document.getElementById('msgChatEmpty').style.display = 'none';
@@ -3777,36 +3831,22 @@ function openMsgThread(convId) {
   var el = document.getElementById('msgMessages');
   el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Завантаження...</div>';
 
+  // Attach scroll listener (once per conversation open) — triggers older-batch fetch near top
+  el.onscroll = function() {
+    if (el.scrollTop < 120) _msgLoadOlder();
+  };
+
   var ctrl = new AbortController();
   setTimeout(function() { ctrl.abort(); }, 30000);
-  fetch('/api/admin/messages/' + encodeURIComponent(convId) + '?limit=50', {headers:{Authorization:'Bearer '+token}, signal:ctrl.signal})
+  fetch('/api/admin/messages/' + encodeURIComponent(convId) + '?limit=200', {headers:{Authorization:'Bearer '+token}, signal:ctrl.signal})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var msgs = data.messages || [];
       if (!msgs.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Немає повідомлень</div>'; return; }
       var convPlatform = conv ? conv.platform : '';
-      el.innerHTML = msgs.map(function(m) {
-        var cls = m.is_from_admin ? 'out' : 'in';
-        var time = _fmtMsgTime(m.created_at || '');
-        var body = '';
-        var mediaBase = (convPlatform === 'telegram') ? '/app/tg_media.php?fid=' : '/api/feed/media/';
-        if (m.media_type === 'photo' && m.file_id) {
-          body = '<img src="' + mediaBase + _esc(m.file_id) + '" alt="photo" loading="lazy" style="max-width:200px;border-radius:10px" onclick="window.open(this.src)">';
-          if (m.content && m.content !== '[Фото]') body += '<div>' + _esc(m.content) + '</div>';
-        } else if (m.media_type === 'video' && m.file_id) {
-          body = '<video src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="max-width:200px;border-radius:10px"></video>';
-          if (m.content && m.content !== '[Відео]') body += '<div>' + _esc(m.content) + '</div>';
-        } else if (m.media_type === 'voice' && m.file_id) {
-          body = '<audio src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="width:200px"></audio>';
-        } else if (m.media_type === 'sticker') {
-          body = '<div style="font-size:48px;line-height:1.2">' + _esc(m.content || '') + '</div>';
-        } else {
-          body = _esc(m.content || '[медіа]');
-        }
-        return '<div class="msg-bubble-row ' + cls + '">' +
-          '<div class="msg-bubble">' + body + '</div>' +
-          '<div class="msg-bubble-time">' + time + '</div></div>';
-      }).join('');
+      _msgOldestId = msgs[0].id;
+      _msgNoMoreOlder = (msgs.length < 200);  // if backend returned fewer than the cap, no more older exist
+      el.innerHTML = msgs.map(function(m) { return _msgBubbleHTML(m, convPlatform); }).join('');
       el.scrollTop = el.scrollHeight;
     })
     .catch(function(e) {
@@ -3880,7 +3920,8 @@ function _toggleAiMute() {
   var currentlyMuted = _msgMuteState[_msgActiveConv] || false;
   var method = currentlyMuted ? 'DELETE' : 'POST';
   var conv = _msgConvs.find(function(c) { return c.conversation_id === _msgActiveConv; });
-  var uname = conv ? (conv.sender_name || conv.client_name || '') : '';
+  // Prefer client_name (resolved via clients table or first non-admin sender_name) — sender_name from last message can be 'Admin' if doctor's echo was last
+  var uname = conv ? (conv.client_name || conv.sender_name || '') : '';
   var ctrl = new AbortController();
   setTimeout(function() { ctrl.abort(); }, 10000);
   fetch('/api/admin/ai-mute', {
@@ -4080,46 +4121,31 @@ function _refreshActiveThread() {
   if (_refreshAbort) _refreshAbort.abort();
   _refreshAbort = new AbortController();
   var _rt = setTimeout(function(){ _refreshAbort.abort(); }, 15000);
-  fetch('/api/admin/messages/' + encodeURIComponent(convId) + '?limit=50', {headers:{Authorization:'Bearer '+token}, signal:_refreshAbort.signal})
+  fetch('/api/admin/messages/' + encodeURIComponent(convId) + '?limit=200', {headers:{Authorization:'Bearer '+token}, signal:_refreshAbort.signal})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (_msgActiveConv !== convId) return; // switched away
       var msgs = data.messages || [];
-      var curCount = el.querySelectorAll('.msg-bubble-row').length;
-      if (msgs.length === curCount) return; // no new messages
+      if (!msgs.length) return;
+      // Determine the newest already-rendered id so we only append diff (preserves older paginated messages)
+      var rendered_max_id = 0;
+      el.querySelectorAll('.msg-bubble-row').forEach(function(b) {
+        var mid = parseInt(b.getAttribute('data-mid') || '0', 10);
+        if (mid > rendered_max_id) rendered_max_id = mid;
+      });
+      var newMsgs = msgs.filter(function(m) { return m.id > rendered_max_id; });
+      if (!newMsgs.length) return;
       var wasAtBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
       var conv = _msgConvs.find(function(c) { return c.conversation_id === convId; });
       var convPlatform = conv ? conv.platform : '';
-      el.innerHTML = msgs.map(function(m) {
-        var cls = m.is_from_admin ? 'out' : 'in';
-        var time = _fmtMsgTime(m.created_at || '');
-        var body = '';
-        var mediaBase = (convPlatform === 'telegram') ? '/app/tg_media.php?fid=' : '/api/feed/media/';
-        if (m.media_type === 'photo' && m.file_id) {
-          body = '<img src="' + mediaBase + _esc(m.file_id) + '" alt="photo" loading="lazy" style="max-width:200px;border-radius:10px" onclick="window.open(this.src)">';
-          if (m.content && m.content !== '[Фото]') body += '<div>' + _esc(m.content) + '</div>';
-        } else if (m.media_type === 'video' && m.file_id) {
-          body = '<video src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="max-width:200px;border-radius:10px"></video>';
-          if (m.content && m.content !== '[Відео]') body += '<div>' + _esc(m.content) + '</div>';
-        } else if (m.media_type === 'voice' && m.file_id) {
-          body = '<audio src="' + mediaBase + _esc(m.file_id) + '" controls preload="metadata" style="width:200px"></audio>';
-        } else if (m.media_type === 'sticker') {
-          body = '<div style="font-size:48px;line-height:1.2">' + _esc(m.content || '') + '</div>';
-        } else {
-          body = _esc(m.content || '[медіа]');
-        }
-        return '<div class="msg-bubble-row ' + cls + '">' +
-          '<div class="msg-bubble">' + body + '</div>' +
-          '<div class="msg-bubble-time">' + time + '</div></div>';
-      }).join('');
+      var html = newMsgs.map(function(m) { return _msgBubbleHTML(m, convPlatform); }).join('');
+      el.insertAdjacentHTML('beforeend', html);
       if (wasAtBottom) el.scrollTop = el.scrollHeight;
       // Mark new messages as read
-      if (msgs.length > curCount) {
-        fetch('/api/admin/messages/read', {
-          method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-          body: JSON.stringify({conversation_id: convId})
-        }).catch(function(){});
-      }
+      fetch('/api/admin/messages/read', {
+        method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body: JSON.stringify({conversation_id: convId})
+      }).catch(function(){});
     })
     .catch(function(){});
 }
@@ -6945,7 +6971,7 @@ document.addEventListener('keydown', function(e) {
     };
   })();
 </script>
-<script src="/app/gomon-chat.js?v=20260406f"></script>
+<script src="/app/gomon-chat.js?v=20260525b"></script>
 <script>
   (function(){
     function initAiEntry(){

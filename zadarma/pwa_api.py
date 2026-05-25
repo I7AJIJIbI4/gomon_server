@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # pwa_api.py — Flask API для Dr. Gomon PWA
-# Розташування: /home/gomoncli/zadarma/pwa_api.py
+# Розташування: /opt/gomon/app/zadarma/pwa_api.py
 # Запуск: python3 pwa_api.py
 
 import sqlite3
@@ -21,7 +21,7 @@ from typing import Optional
 from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
 
-sys.path.append('/home/gomoncli/zadarma')
+sys.path.append('/opt/gomon/app/zadarma')
 try:
     from sms_fly import send_sms
 except ImportError:
@@ -35,7 +35,7 @@ CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com', 'ht
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 _log_handler = logging.handlers.RotatingFileHandler(
-    '/home/gomoncli/zadarma/pwa_api.log', maxBytes=10*1024*1024, backupCount=5)
+    '/opt/gomon/app/zadarma/pwa_api.log', maxBytes=10*1024*1024, backupCount=5)
 _log_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
 logging.getLogger().addHandler(_log_handler)
 logger = logging.getLogger('pwa_api')
@@ -43,8 +43,8 @@ logger = logging.getLogger('pwa_api')
 # notifier.py imported lazily in endpoints that use it
 
 # ── CONFIG ──
-DB_PATH      = '/home/gomoncli/zadarma/users.db'
-FEED_DB      = '/home/gomoncli/zadarma/feed.db'
+DB_PATH      = '/opt/gomon/app/zadarma/users.db'
+FEED_DB      = '/opt/gomon/app/zadarma/feed.db'
 from config import TELEGRAM_TOKEN as TG_TOKEN, ANTHROPIC_KEY, TG_BIZ_TOKEN
 try:
     from config import PIN_AUTH as _PIN_AUTH_CFG
@@ -70,9 +70,9 @@ def init_feed_db():
 
 init_feed_db()
 
-OTP_DB       = '/home/gomoncli/zadarma/otp_sessions.db'
-PRICES_PATH  = '/home/gomoncli/private_data/prices.json'
-PWA_DIR      = '/home/gomoncli/public_html/app'
+OTP_DB       = '/opt/gomon/app/zadarma/otp_sessions.db'
+PRICES_PATH  = '/opt/gomon/app/private_data/prices.json'
+PWA_DIR      = '/opt/gomon/app/public_html/app'
 OTP_TTL      = 300    # 5 хв
 SESSION_TTL  = 30 * 86400  # 30 днів
 
@@ -871,11 +871,14 @@ def ig_message_webhook():
 
         conv_id = 'ig_{}'.format(sender_id)
 
-        # Resolve sender name + avatar: check if we already have it, otherwise fetch from IG Graph API
+        # Resolve sender name + avatar: check if we already have it (only from CLIENT messages,
+        # never inherit from admin echoes — those have sender_name='Admin'), otherwise fetch from IG Graph API
         sender_name = ''
         avatar_url = ''
         existing = conn.execute(
-            "SELECT sender_name, avatar_url FROM messages WHERE conversation_id=? AND sender_name IS NOT NULL AND sender_name != '' LIMIT 1",
+            "SELECT sender_name, avatar_url FROM messages WHERE conversation_id=? "
+            "AND is_from_admin=0 AND sender_name IS NOT NULL AND sender_name != '' AND sender_name != 'Admin' "
+            "LIMIT 1",
             (conv_id,)).fetchone()
         if existing:
             sender_name = existing[0]
@@ -939,7 +942,7 @@ def ig_ai_reply():
         conv_id_cd = 'ig_{}'.format(sender_id)
         admin_rows = conn_cd.execute(
             "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-129600 seconds') LIMIT 1",
+            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-259200 seconds') LIMIT 1",
             (conv_id_cd,)).fetchone()
         conn_cd.close()
         if admin_rows:
@@ -952,7 +955,7 @@ def ig_ai_reply():
     import threading
     def _ig_delayed_reply(sid):
         import time as _time
-        _time.sleep(60)
+        _time.sleep(90)
         try:
             with app.app_context():
                 _ig_process_reply(sid)
@@ -972,7 +975,7 @@ def _ig_process_reply(sender_id):
         conn_check = sqlite3.connect(DB_PATH, timeout=5)
         recent = conn_check.execute(
             "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
-            "AND created_at > datetime('now', '-58 seconds')",
+            "AND created_at > datetime('now', '-88 seconds')",
             (conv_id,)).fetchone()
         conn_check.close()
         if recent and recent[0] > 0:
@@ -986,7 +989,7 @@ def _ig_process_reply(sender_id):
         conn_ap = sqlite3.connect(DB_PATH, timeout=5)
         admin_rows = conn_ap.execute(
             "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-129600 seconds') LIMIT 1",
+            "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-259200 seconds') LIMIT 1",
             (conv_id,)).fetchone()
         conn_ap.close()
         if admin_rows:
@@ -1130,6 +1133,29 @@ def _ig_process_reply(sender_id):
         # Strip tags (<ESCALATE>, <CANCEL>, <PROCEDURE>)
         import re
         reply_clean = re.sub(r'<[A-Z]+[^>]*>', '', reply_text).strip()
+
+        # Final race-condition guard: re-check ai_mute AND admin_pause immediately before send.
+        # Anthropic+typing-window could have taken several seconds, during which:
+        #   - admin may have toggled mute for this user
+        #   - doctor's echo from IG app may have just arrived
+        try:
+            conn_final = sqlite3.connect(DB_PATH, timeout=5)
+            muted_now = conn_final.execute(
+                "SELECT 1 FROM ai_mute WHERE user_id=? AND channel='ig' AND active=1 LIMIT 1",
+                (sender_id,)).fetchone()
+            admin_now = conn_final.execute(
+                "SELECT 1 FROM messages WHERE conversation_id=? AND is_from_admin=1 "
+                "AND sender_id != 'ai_bot' AND created_at > datetime('now', '-259200 seconds') LIMIT 1",
+                (conv_id,)).fetchone()
+            conn_final.close()
+            if muted_now:
+                logger.info('IG AI skipped (muted, pre-send) for {}'.format(sender_id))
+                return
+            if admin_now:
+                logger.info('IG AI skipped (admin_pause, pre-send) for {}'.format(sender_id))
+                return
+        except Exception as _final_e:
+            logger.warning('IG AI pre-send guard error: {}'.format(_final_e))
 
         # Send reply via IG Graph API
         ig_resp = _req.post('https://graph.instagram.com/v25.0/me/messages', headers={
@@ -1781,7 +1807,7 @@ def admin_clients_list():
             cb_map[cd['phone']] = cb_map.get(cd['phone'], 0) - cd['s']
         # Photo counts from photo_cache.db (actual uploaded photos, not just folders)
         try:
-            pconn = sqlite3.connect('/home/gomoncli/zadarma/photo_cache.db', timeout=5)
+            pconn = sqlite3.connect('/opt/gomon/app/zadarma/photo_cache.db', timeout=5)
             # photo_cache has client_name, need to map back to phone
             name_to_phone = {}
             for nr in conn.execute("SELECT phone, first_name, last_name FROM clients").fetchall():
@@ -1945,7 +1971,7 @@ def admin_client_photos(phone):
     if not name:
         return jsonify({'photos': []})
     # Read from photo cache DB (built by photo_cache.py cron)
-    PHOTO_CACHE_DB = '/home/gomoncli/zadarma/photo_cache.db'
+    PHOTO_CACHE_DB = '/opt/gomon/app/zadarma/photo_cache.db'
     try:
         pconn = sqlite3.connect(PHOTO_CACHE_DB, timeout=5)
         pconn.row_factory = sqlite3.Row
@@ -2371,6 +2397,7 @@ def admin_sync_prices():
             tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(PRICES_PATH), suffix='.json')
             with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
                 json.dump(our_prices, f, ensure_ascii=False, indent=2)
+            os.chmod(tmp_path, 0o644)
             os.replace(tmp_path, PRICES_PATH)
 
         return jsonify({'ok': True, 'updated': updated, 'wl_services': len(wl_prices)})
@@ -2386,14 +2413,14 @@ def admin_sync():
     import subprocess
     try:
         r1 = subprocess.run(
-            ['python3', '/home/gomoncli/zadarma/sync_clients.py'],
+            ['python3', '/opt/gomon/app/zadarma/sync_clients.py'],
             capture_output=True, text=True, timeout=60,
-            cwd='/home/gomoncli/zadarma'
+            cwd='/opt/gomon/app/zadarma'
         )
         r2 = subprocess.run(
-            ['python3', '/home/gomoncli/zadarma/sync_appointments.py'],
+            ['python3', '/opt/gomon/app/zadarma/sync_appointments.py'],
             capture_output=True, text=True, timeout=120,
-            cwd='/home/gomoncli/zadarma'
+            cwd='/opt/gomon/app/zadarma'
         )
         return jsonify({
             'ok':     True,
@@ -2493,7 +2520,7 @@ def superadmin_put_permissions():
 
 # ── AI CHAT LOG ───────────────────────────────────────────────────────────
 
-AI_CHAT_DB = '/home/gomoncli/zadarma/ai_chat.db'
+AI_CHAT_DB = '/opt/gomon/app/zadarma/ai_chat.db'
 
 @app.route('/api/admin/ai-conversations', methods=['GET'])
 @require_admin
@@ -3578,6 +3605,7 @@ def admin_prices_put():
         try:
             with os.fdopen(tmp_fd, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            os.chmod(tmp_path, 0o644)
             os.replace(tmp_path, PRICES_PATH)  # atomic on POSIX
         except Exception:
             os.unlink(tmp_path)
@@ -4014,7 +4042,7 @@ except Exception as _push_err:
     logger.warning('push_sender unavailable: {}'.format(_push_err))
     _push_ok = False
 
-with open('/home/gomoncli/zadarma/vapid_public.txt') as _f:
+with open('/opt/gomon/app/zadarma/vapid_public.txt') as _f:
     VAPID_PUBLIC_KEY = _f.read().strip()
 
 
@@ -4733,7 +4761,7 @@ def admin_messages_send():
     if file_ref:
     
         if re.match(r'^[A-Za-z0-9_.-]+$', file_ref):
-            candidate = os.path.join('/home/gomoncli/zadarma/msg_media', file_ref)
+            candidate = os.path.join('/opt/gomon/app/zadarma/msg_media', file_ref)
             if os.path.isfile(candidate):
                 file_path = candidate
 
@@ -4816,7 +4844,7 @@ def admin_messages_send():
     return jsonify({'ok': True, 'media_type': media_type, 'file_id': tg_file_id or file_id or ''})
 
 
-MSG_MEDIA_DIR = '/home/gomoncli/zadarma/msg_media'
+MSG_MEDIA_DIR = '/opt/gomon/app/zadarma/msg_media'
 
 
 @app.route('/api/admin/messages/upload', methods=['POST'])

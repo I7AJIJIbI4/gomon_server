@@ -105,31 +105,43 @@ function format_tg_link(?array $tg_user): string {
 //  ВХІДНІ ДАНІ
 // ═══════════════════════════════════════════════════════════════
 
-// GET — return chat history from DB
+// GET — return chat history from DB.
+// Authenticated (phone+token) — loads phone_XXX session_key.
+// Guest (no phone) — loads today's ip_X_date session_key (server derives from REMOTE_ADDR).
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['history'])) {
     $hist_phone = normalize_phone(trim($_GET['phone'] ?? ''));
     $hist_token = trim($_GET['token'] ?? '');
-    if (!$hist_phone || !$hist_token) {
-        echo json_encode(['messages' => []]);
-        exit;
-    }
-    // Verify session token matches phone
-    try {
-        $sess_db = new SQLite3('/home/gomoncli/zadarma/otp_sessions.db');
-        $sess_st = $sess_db->prepare('SELECT phone FROM sessions WHERE token=:t AND expires_at > :now LIMIT 1');
-        $sess_st->bindValue(':t', $hist_token);
-        $sess_st->bindValue(':now', time());
-        $sess_row = $sess_st->execute()->fetchArray(SQLITE3_ASSOC);
-        $sess_db->close();
-        if (!$sess_row || substr(preg_replace('/\D/', '', $sess_row['phone']), -9) !== substr(preg_replace('/\D/', '', $hist_phone), -9)) {
+    $sess_key = null;
+
+    if ($hist_phone && $hist_token) {
+        // Authenticated path: verify session token matches phone, then load phone_XXX
+        try {
+            $sess_db = new SQLite3('/home/gomoncli/zadarma/otp_sessions.db');
+            $sess_st = $sess_db->prepare('SELECT phone FROM sessions WHERE token=:t AND expires_at > :now LIMIT 1');
+            $sess_st->bindValue(':t', $hist_token);
+            $sess_st->bindValue(':now', time());
+            $sess_row = $sess_st->execute()->fetchArray(SQLITE3_ASSOC);
+            $sess_db->close();
+            if (!$sess_row || substr(preg_replace('/\D/', '', $sess_row['phone']), -9) !== substr(preg_replace('/\D/', '', $hist_phone), -9)) {
+                echo json_encode(['messages' => []]);
+                exit;
+            }
+        } catch (Exception $e) {
             echo json_encode(['messages' => []]);
             exit;
         }
-    } catch (Exception $e) {
-        echo json_encode(['messages' => []]);
-        exit;
+        $sess_key = 'phone_' . substr(preg_replace('/[^\d]/', '', $hist_phone), -9);
+    } else {
+        // Guest path: derive session_key from client IP + today (UTC date, matches POST save logic)
+        $client_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (!$client_ip) {
+            echo json_encode(['messages' => []]);
+            exit;
+        }
+        $today = date('Y-m-d');  // PHP default TZ — must match POST save logic at line ~229
+        $sess_key = 'ip_' . $client_ip . '_' . $today;
     }
-    $sess_key = 'phone_' . substr(preg_replace('/[^\d]/', '', $hist_phone), -9);
+
     try {
         $ai_db = new SQLite3('/home/gomoncli/zadarma/ai_chat.db');
         $ai_db->exec('PRAGMA journal_mode=WAL');

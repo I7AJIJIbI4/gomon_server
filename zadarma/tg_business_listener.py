@@ -21,18 +21,18 @@ import os
 import threading
 
 # Config
-sys.path.append('/home/gomoncli/zadarma')
+sys.path.append('/opt/gomon/app/zadarma')
 from config import TG_BIZ_TOKEN as BOT_TOKEN, ANTHROPIC_KEY
-DB_PATH = '/home/gomoncli/zadarma/users.db'
-LOG_FILE = '/home/gomoncli/zadarma/tg_business.log'
-PID_FILE = '/home/gomoncli/zadarma/tg_business.pid'
-OFFSET_FILE = '/home/gomoncli/zadarma/.tg_business_offset'
-SYSTEM_PROMPT_FILE = '/home/gomoncli/public_html/app/system_prompt.txt'
-PRICES_FILE = '/home/gomoncli/private_data/prices.json'
-PROMOS_FILE = '/home/gomoncli/private_data/promos.json'
+DB_PATH = '/opt/gomon/app/zadarma/users.db'
+LOG_FILE = '/opt/gomon/app/zadarma/tg_business.log'
+PID_FILE = '/opt/gomon/app/zadarma/tg_business.pid'
+OFFSET_FILE = '/opt/gomon/app/zadarma/.tg_business_offset'
+SYSTEM_PROMPT_FILE = '/opt/gomon/app/public_html/app/system_prompt.txt'
+PRICES_FILE = '/opt/gomon/app/private_data/prices.json'
+PROMOS_FILE = '/opt/gomon/app/private_data/promos.json'
 POLL_TIMEOUT = 30
 AI_RATE_LIMIT = 10       # max AI replies per client per day
-AI_ADMIN_PAUSE = 129600  # 36 hours — don't reply if admin replied recently
+AI_ADMIN_PAUSE = 259200  # 72 hours — don't reply if admin replied recently
 AI_MAX_HISTORY = 20      # max messages in context
 AI_MODEL = 'claude-sonnet-4-5'
 
@@ -664,7 +664,7 @@ def _cancel_client_appointment(client_phone, target_date=None):
         appt_id = appt.get('appt_id', '')
 
         # Import cancel functions from pwa_api context
-        sys.path.insert(0, '/home/gomoncli/zadarma')
+        sys.path.insert(0, '/opt/gomon/app/zadarma')
         from wlaunch_api import get_branch_id
 
         from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
@@ -753,15 +753,15 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
     conv_id = 'tg_{}'.format(chat_id)
 
     try:
-        # Wait 30s for user to finish sending multiple messages
-        time.sleep(60)
+        # Wait 90s for user to finish sending multiple messages (also widens the doctor-reply window)
+        time.sleep(90)
 
         # Check if user sent more messages during the wait — skip if so (next thread handles it)
         try:
             _cc = sqlite3.connect(DB_PATH, timeout=5)
             _recent = _cc.execute(
                 "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=0 "
-                "AND created_at > datetime('now', '-58 seconds')", (conv_id,)).fetchone()
+                "AND created_at > datetime('now', '-88 seconds')", (conv_id,)).fetchone()
             _cc.close()
             if _recent and _recent[0] > 0:
                 logger.info('AI skip for {} (user still typing)'.format(conv_id))
@@ -859,6 +859,13 @@ def handle_ai_reply(chat_id, biz_conn_id, client_phone=None, client_name=None, i
         # Call AI
         reply = _call_anthropic(prompt, history)
         if not reply:
+            return
+
+        # Final race-condition guard: re-check ai_mute + admin_pause + rate_limit immediately before send.
+        # Anthropic API takes seconds, during which admin may have toggled mute or replied.
+        _should_now, _reason_now = _check_ai_should_reply(conv_id, chat_id)
+        if not _should_now and _reason_now in ('muted', 'cooldown'):
+            logger.info('TG AI skip (pre-send guard) for {}: {}'.format(conv_id, _reason_now))
             return
 
         # Check for cancel tag

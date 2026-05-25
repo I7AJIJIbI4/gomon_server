@@ -65,9 +65,15 @@
   let history = [];
   let _historyLoaded = false;
   async function _loadHistoryFromServer() {
-    if (!CONFIG.userPhone || _historyLoaded) return;
+    if (_historyLoaded) return;
+    // Authenticated → load by phone+token. Guest → no params, server derives ip_X_today.
+    var url = CONFIG.apiUrl + '?history=1';
+    if (CONFIG.userPhone) {
+      url += '&phone=' + encodeURIComponent(CONFIG.userPhone) +
+             '&token=' + encodeURIComponent(CONFIG.token || '');
+    }
     try {
-      var r = await fetch(CONFIG.apiUrl + '?history=1&phone=' + encodeURIComponent(CONFIG.userPhone) + '&token=' + encodeURIComponent(CONFIG.token || ''));
+      var r = await fetch(url);
       var data = await r.json();
       if (data.messages && data.messages.length) {
         history = data.messages;
