@@ -3562,12 +3562,13 @@ def admin_prices_get():
             items = []
             for row in rows:
                 if isinstance(row, list):
-                    items.append({'name': row[0] if len(row) > 0 else '', 'price': row[2] if len(row) > 2 else '', 'specialists': []})
+                    items.append({'name': row[0] if len(row) > 0 else '', 'price': row[2] if len(row) > 2 else '', 'specialists': [], 'duration': 60})
                 elif isinstance(row, dict):
                     items.append({
                         'name':        row.get('name') or row.get('service') or '',
                         'price':       row.get('price') or row.get('cost') or '',
                         'specialists': row.get('specialists', []),
+                        'duration':    int(row.get('duration') or row.get('duration_min') or 60),
                     })
             if items:
                 result.append({'cat': cat_name, 'items': items})
@@ -3588,14 +3589,40 @@ def admin_prices_put():
     for cat in data:
         if not isinstance(cat, dict) or 'cat' not in cat or 'items' not in cat:
             return jsonify({'error': 'invalid_format'}), 400
-    # Load old prices for diff
-    old_prices = {}
+
+    # Dedupe: merge categories with the same name (preserve order of first occurrence).
+    # Items inside a merged category are deduped by name as well (first wins).
+    deduped = []
+    cat_index = {}
+    for cat in data:
+        cn = (cat.get('cat') or '').strip()
+        if not cn:
+            deduped.append(cat)
+            continue
+        if cn in cat_index:
+            target = deduped[cat_index[cn]]
+            existing_names = {(it.get('name') or '').strip() for it in target.get('items', [])}
+            for it in cat.get('items', []):
+                nm = (it.get('name') or '').strip()
+                if nm and nm not in existing_names:
+                    target.setdefault('items', []).append(it)
+                    existing_names.add(nm)
+        else:
+            cat_index[cn] = len(deduped)
+            deduped.append(cat)
+    data = deduped
+
+    # Load old prices + durations for diff
+    old_prices, old_durations = {}, {}
     try:
         with open(PRICES_PATH, 'r', encoding='utf-8') as f:
             old_data = json.load(f)
         for cat in (old_data if isinstance(old_data, list) else []):
             for item in cat.get('items', []):
-                old_prices[item.get('name', '')] = item.get('price', '')
+                nm = item.get('name', '')
+                old_prices[nm] = item.get('price', '')
+                if item.get('duration'):
+                    old_durations[nm] = int(item.get('duration') or 60)
     except Exception:
         pass
 
@@ -3613,16 +3640,20 @@ def admin_prices_put():
 
         # Sync changes to WLaunch in background
         import threading
-        new_prices = {}
-        new_specialists = {}
+        new_prices, new_specialists, new_durations = {}, {}, {}
         for cat in data:
             for item in cat.get('items', []):
                 name = item.get('name', '')
                 new_prices[name] = item.get('price', '')
                 if item.get('specialists'):
                     new_specialists[name] = item['specialists']
-        if new_prices != old_prices:
-            threading.Thread(target=_sync_prices_to_wlaunch, args=(old_prices, new_prices, new_specialists), daemon=True).start()
+                if item.get('duration'):
+                    new_durations[name] = int(item.get('duration') or 60)
+        if new_prices != old_prices or new_durations != old_durations:
+            threading.Thread(
+                target=_sync_prices_to_wlaunch,
+                args=(old_prices, new_prices, new_specialists, old_durations, new_durations),
+                daemon=True).start()
 
         return jsonify({'ok': True})
     except Exception as e:
@@ -3641,9 +3672,11 @@ def _parse_price_uah(price_str):
     return int(m.group()) * 100 if m else None  # kopiyky
 
 
-def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None):
-    """Background sync: push price changes and resource assignments to WLaunch."""
+def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None, old_durations=None, new_durations=None):
+    """Background sync: push price/duration changes and resource assignments to WLaunch."""
     specialists_map = specialists_map or {}
+    old_durations = old_durations or {}
+    new_durations = new_durations or {}
     try:
         from config import WLAUNCH_API_URL, COMPANY_ID
         from wlaunch_api import get_branch_id, HEADERS as WL_HEADERS
@@ -3665,6 +3698,8 @@ def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None):
 
         added = renamed = price_changed = 0
 
+        duration_changed = 0
+
         for name, price_str in new_prices.items():
             old_price_str = old_prices.get(name)
 
@@ -3677,6 +3712,22 @@ def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None):
                         _req.put('{}/company/{}/service/prices'.format(WLAUNCH_API_URL, COMPANY_ID),
                             headers=h, json={'prices': [{'service_id': sid, 'amount': amount, 'service_price_list_id': price_list_id}]}, timeout=10)
                         price_changed += 1
+
+                # Check if duration changed (stored as minutes in prices.json, WLaunch wants seconds)
+                new_dur_min = new_durations.get(name)
+                old_dur_min = old_durations.get(name)
+                if new_dur_min and new_dur_min != old_dur_min:
+                    new_dur_sec = int(new_dur_min) * 60
+                    sid = wl_by_name[name]['id']
+                    try:
+                        _req.post(
+                            '{}/company/{}/service/{}'.format(WLAUNCH_API_URL, COMPANY_ID, sid),
+                            headers=h,
+                            json={'company_service': {'duration': new_dur_sec, 'display_duration': new_dur_sec}},
+                            timeout=10)
+                        duration_changed += 1
+                    except Exception as _de:
+                        logger.warning('WLaunch duration sync failed for {}: {}'.format(name, _de))
             else:
                 # New service — find category parent, create in WLaunch
                 # Skip for now — manual creation preferred to avoid orphans
@@ -3723,8 +3774,8 @@ def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None):
             except Exception:
                 pass
 
-        logger.info('WLaunch sync: prices_changed={} renamed={} new={} resources_attached={}'.format(
-            price_changed, renamed, added, attached))
+        logger.info('WLaunch sync: prices_changed={} durations_changed={} renamed={} new={} resources_attached={}'.format(
+            price_changed, duration_changed, renamed, added, attached))
     except Exception as e:
         logger.error('_sync_prices_to_wlaunch error: {}'.format(e))
 

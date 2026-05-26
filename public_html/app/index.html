@@ -766,6 +766,8 @@ nav{
 .adm-proc-item-main{display:flex;align-items:center;gap:6px}
 .adm-proc-name-inp{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:17px;color:var(--text);font-family:var(--sans);outline:none;min-width:0}
 .adm-proc-price-inp{width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:17px;color:var(--gold);font-family:var(--sans);outline:none;text-align:right}
+.adm-proc-dur-inp{width:62px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 6px;font-size:15px;color:var(--text2);font-family:var(--sans);outline:none;text-align:right}
+.adm-proc-dur-ro{font-size:14px;color:var(--text3);margin-left:6px;flex-shrink:0}
 .adm-proc-name-ro{font-size:17px;color:var(--text);flex:1}
 .adm-proc-price-ro{font-size:17px;color:var(--gold);flex-shrink:0}
 .adm-proc-specs{display:flex;align-items:center;gap:12px;margin-top:5px;padding-left:1px}
@@ -4557,11 +4559,13 @@ function renderProcedures(canEdit) {
       const specs = item.specialists || [];
       const hasV = specs.includes('victoria');
       const hasA = specs.includes('anastasia');
+      const dur = parseInt(item.duration || 60, 10);
       if (canEdit) {
         html += `<div class="adm-proc-item">
           <div class="adm-proc-item-main">
             <input class="adm-proc-name-inp" value="${(item.name||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].name=this.value" placeholder="Назва"/>
             <input class="adm-proc-price-inp" value="${(item.price||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].price=this.value" placeholder="Ціна"/>
+            <input class="adm-proc-dur-inp" type="number" min="15" max="480" step="15" value="${dur}" oninput="_procData[${ci}].items[${ii}].duration=parseInt(this.value,10)||60" title="Тривалість, хв" placeholder="хв"/>
             <button class="adm-proc-del" onclick="deleteProcItem(${ci},${ii})">✕</button>
           </div>
           <div class="adm-proc-specs">
@@ -4573,6 +4577,7 @@ function renderProcedures(canEdit) {
         html += `<div class="adm-proc-item">
           <div class="adm-proc-item-main">
             <span class="adm-proc-name-ro">${item.name||''}</span>
+            <span class="adm-proc-dur-ro">${dur} хв</span>
             <span class="adm-proc-price-ro">${item.price||''}</span>
           </div>
           ${specs.length ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${specs.map(s=>s==='victoria'?'Вікторія':'Анастасія').join(', ')}</div>` : ''}
@@ -4591,7 +4596,7 @@ function procSpecChanged(ci, ii, spec, checked) {
   _procData[ci].items[ii].specialists = s;
 }
 function addProcItem(ci) {
-  _procData[ci].items.push({name:'',price:'',specialists:[]});
+  _procData[ci].items.push({name:'',price:'',specialists:[],duration:60});
   renderProcedures(true);
 }
 function deleteProcItem(ci, ii) {
@@ -6971,7 +6976,7 @@ document.addEventListener('keydown', function(e) {
     };
   })();
 </script>
-<script src="/app/gomon-chat.js?v=20260525b"></script>
+<script src="/app/gomon-chat.js?v=20260526a"></script>
 <script>
   (function(){
     function initAiEntry(){

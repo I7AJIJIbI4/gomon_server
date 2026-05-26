@@ -1121,6 +1121,17 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update, context: ContextTypes.DEFAULT_TYPE):
     error = context.error
     error_str = str(error)
+    err_type = type(error).__name__
+
+    # Filter by exception class name — httpx network errors often have
+    # empty str(error), so substring matching alone misses them.
+    if err_type in (
+        'ReadError', 'ConnectError', 'ConnectTimeout', 'ReadTimeout',
+        'WriteError', 'WriteTimeout', 'PoolTimeout',
+        'RemoteProtocolError', 'NetworkError', 'TimedOut',
+    ):
+        logger.warning(f"Transient network error (ignored): {err_type}: {error}")
+        return
 
     if any(x in error_str.lower() for x in [
         'connection aborted', 'connection broken', 'connection reset',
