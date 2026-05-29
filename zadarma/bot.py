@@ -1118,6 +1118,9 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
 ## media_message_handler removed -- messages are captured by tg_business_listener.py
 
 
+_conflict_hits = []  # timestamps of recent getUpdates Conflict errors (rate-limit alerting)
+
+
 async def error_handler(update, context: ContextTypes.DEFAULT_TYPE):
     error = context.error
     error_str = str(error)
@@ -1132,6 +1135,23 @@ async def error_handler(update, context: ContextTypes.DEFAULT_TYPE):
     ):
         logger.warning(f"Transient network error (ignored): {err_type}: {error}")
         return
+
+    # Conflict (409 getUpdates) — usually a transient self-conflict when PTB
+    # reconnects and the previous long-poll is still held on Telegram's side.
+    # PTB auto-recovers. Only alert if it PERSISTS (>=5 in 5 min = two live
+    # bot instances polling the same token), otherwise log and move on.
+    if err_type == 'Conflict':
+        import time as _t
+        now = _t.time()
+        _conflict_hits.append(now)
+        cutoff = now - 300
+        while _conflict_hits and _conflict_hits[0] < cutoff:
+            _conflict_hits.pop(0)
+        if len(_conflict_hits) < 5:
+            logger.warning(f"Transient getUpdates Conflict (ignored, PTB auto-recovers): {error}")
+            return
+        logger.error(f"PERSISTENT getUpdates Conflict ({len(_conflict_hits)} in 5min) — likely a second bot instance running!")
+        # fall through to admin alert
 
     if any(x in error_str.lower() for x in [
         'connection aborted', 'connection broken', 'connection reset',
