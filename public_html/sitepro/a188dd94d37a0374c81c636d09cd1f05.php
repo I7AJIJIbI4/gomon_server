@@ -1135,7 +1135,7 @@
         var lookup = {};
         (data || []).forEach(function(cat) {
           (cat.items || []).forEach(function(it) {
-            if (it.desc) lookup[it.name.toLowerCase()] = it;
+            lookup[it.name.toLowerCase()] = it;  // index ALL items; desc/prep/etc sections gracefully hide when missing
           });
         });
         procData = lookup;
@@ -1178,9 +1178,52 @@
       if (e.key === 'Escape') closeProcDetail();
     });
 
-    // Preload data when service modal opens
-    var origOpen = window.openServiceModal || function(){};
-    // Will hook after modal renders
+    // ── Drag-to-close: swipe sheet down to dismiss ──
+    (function() {
+      var sheet = document.querySelector('.proc-detail-sheet');
+      if (!sheet) return;
+      var startY = 0, deltaY = 0, dragging = false;
+
+      sheet.addEventListener('touchstart', function(e) {
+        // Don't intercept if sheet content is scrolled — let inner scroll happen
+        if (sheet.scrollTop > 0) return;
+        startY = e.touches[0].clientY;
+        deltaY = 0;
+        dragging = true;
+        sheet.style.transition = 'none';
+      }, {passive: true});
+
+      sheet.addEventListener('touchmove', function(e) {
+        if (!dragging) return;
+        deltaY = e.touches[0].clientY - startY;
+        if (deltaY < 0) {
+          // User dragged back up — release drag, allow normal interaction
+          dragging = false;
+          sheet.style.transition = '';
+          sheet.style.transform = '';
+          return;
+        }
+        // Prevent body scroll while dragging sheet down
+        if (e.cancelable) e.preventDefault();
+        sheet.style.transform = 'translateY(' + deltaY + 'px)';
+      }, {passive: false});
+
+      function endDrag() {
+        if (!dragging) return;
+        dragging = false;
+        sheet.style.transition = '';
+        if (deltaY > 100) {
+          sheet.style.transform = '';  // CSS transition slides it back to translateY(100%) via .is-open removal
+          closeProcDetail();
+        } else {
+          sheet.style.transform = '';  // snap back
+        }
+        deltaY = 0;
+      }
+
+      sheet.addEventListener('touchend', endDrag, {passive: true});
+      sheet.addEventListener('touchcancel', endDrag, {passive: true});
+    })();
   })();
 
   // Override renderPrices to make names clickable
