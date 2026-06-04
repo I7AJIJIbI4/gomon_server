@@ -475,10 +475,19 @@ def check_and_send_reminders(dry_run=False):
                 loose_filler_corrs.append(entry)
                 continue
 
+            field    = 'correction' if is_corr else 'base'
+            # Cancelled appointments are not real visits and must not contribute to
+            # the reminder calendar. Without this skip, a later-dated cancellation
+            # silently overrode the prior real visit (services_json is sorted
+            # newest-first, so the cancellation was seen first and locked in as
+            # 'base'), and the repeat reminder for the whole category was never
+            # sent — see Катерина 2026-06-04 bug.
+            entry_status = (entry.get('status') or '').upper()
+            if field == 'base' and entry_status in CANCELLED_STATUSES:
+                continue
             key = (cat, interval)
             if key not in groups:
                 groups[key] = {'base': None, 'correction': None}
-            field    = 'correction' if is_corr else 'base'
             existing = groups[key][field]
             if existing is None or dt > existing.get('date', ''):
                 groups[key][field] = entry
