@@ -12,6 +12,7 @@ from config import TG_SKINTYPE_TOKEN
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.db')
 PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skin_type_bot.pid')
+IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skin_type_imgs')
 LOG_PATH = '/var/log/gomon/skin_type_bot.log'
 
 logger = logging.getLogger('skin_type_bot')
@@ -353,7 +354,24 @@ async def _finalize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "\n\nПоділіться результатами з вашим косметологом:"
     text += "\n[Instagram](https://ig.me/m/dr.gomon) | [Telegram](https://t.me/DrGomonCosmetology)"
 
-    await query.edit_message_text(text, parse_mode='Markdown')
+    img_path = os.path.join(IMG_DIR, '{}.png'.format(result_code))
+    if os.path.exists(img_path):
+        # Replace the buttons message with a photo carrying the result as caption.
+        # edit_message_text can't change a text message into a photo, so delete + send_photo.
+        try:
+            await query.message.delete()
+        except Exception as e:
+            logger.warning('delete quiz message failed: {}'.format(e))
+        with open(img_path, 'rb') as f:
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=f,
+                caption=text,
+                parse_mode='Markdown',
+            )
+    else:
+        logger.warning('skin_type image missing for {}, falling back to text'.format(result_code))
+        await query.edit_message_text(text, parse_mode='Markdown')
 
     # Save result
     user = query.from_user
