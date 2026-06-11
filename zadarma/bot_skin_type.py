@@ -354,24 +354,19 @@ async def _finalize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "\n\nПоділіться результатами з вашим косметологом:"
     text += "\n[Instagram](https://ig.me/m/dr.gomon) | [Telegram](https://t.me/DrGomonCosmetology)"
 
+    # Replace the buttons message with the text result (stays as text — copyable, full-size font).
+    await query.edit_message_text(text, parse_mode='Markdown')
+
+    # Then send the per-type illustration as a separate photo message.
     img_path = os.path.join(IMG_DIR, '{}.png'.format(result_code))
     if os.path.exists(img_path):
-        # Replace the buttons message with a photo carrying the result as caption.
-        # edit_message_text can't change a text message into a photo, so delete + send_photo.
         try:
-            await query.message.delete()
+            with open(img_path, 'rb') as f:
+                await context.bot.send_photo(chat_id=query.message.chat_id, photo=f)
         except Exception as e:
-            logger.warning('delete quiz message failed: {}'.format(e))
-        with open(img_path, 'rb') as f:
-            await context.bot.send_photo(
-                chat_id=query.message.chat_id,
-                photo=f,
-                caption=text,
-                parse_mode='Markdown',
-            )
+            logger.warning('send_photo failed for {}: {}'.format(result_code, e))
     else:
-        logger.warning('skin_type image missing for {}, falling back to text'.format(result_code))
-        await query.edit_message_text(text, parse_mode='Markdown')
+        logger.warning('skin_type image missing for {}'.format(result_code))
 
     # Save result
     user = query.from_user
