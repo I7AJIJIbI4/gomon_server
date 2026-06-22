@@ -212,7 +212,7 @@ function igLogin() {
     response_type: 'code',
     scope:         IG_SCOPES,
   });
-  window.location.href = 'https://www.instagram.com/oauth/authorize?' + params.toString();
+  window.location.href = 'https://api.instagram.com/oauth/authorize?' + params.toString();
 }
 
 function logout() {
