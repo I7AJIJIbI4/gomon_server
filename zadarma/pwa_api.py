@@ -885,7 +885,8 @@ def ig_message_webhook():
             avatar_url = existing[1] or ''
         if not sender_name or not avatar_url:
             try:
-                from config import IG_FALLBACK_TOKEN
+                from config import get_ig_token
+                IG_FALLBACK_TOKEN = get_ig_token()
                 name_resp = _req.get(
                     'https://graph.instagram.com/v25.0/{}'.format(sender_id),
                     params={'fields': 'name,username,profile_pic', 'access_token': IG_FALLBACK_TOKEN},
@@ -999,7 +1000,8 @@ def _ig_process_reply(sender_id):
         pass
 
     try:
-        from config import ANTHROPIC_KEY, IG_FALLBACK_TOKEN
+        from config import ANTHROPIC_KEY, get_ig_token
+        IG_FALLBACK_TOKEN = get_ig_token()
 
         # Load system prompt
         prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public_html', 'app', 'system_prompt.txt')
@@ -4847,8 +4849,8 @@ def admin_messages_send():
     elif platform_short == 'ig':
         # Instagram Graph API via send.php proxy
         try:
-            from config import IG_FALLBACK_TOKEN
-            ig_payload = {'recipient_id': recipient_id, 'message_text': text or '', 'token': IG_FALLBACK_TOKEN}
+            from config import get_ig_token
+            ig_payload = {'recipient_id': recipient_id, 'message_text': text or '', 'token': get_ig_token()}
             ig_resp = _req.post('http://127.0.0.1/messenger/send.php', json=ig_payload, timeout=15,
                                 headers={'Host': 'drgomon.beauty'})
             if ig_resp.status_code == 200:

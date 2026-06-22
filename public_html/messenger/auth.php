@@ -83,8 +83,10 @@ curl_close($ch2);
 $ll_data = json_decode($ll_response, true);
 
 if ($ll_http_code === 200 && isset($ll_data['access_token'])) {
+    $final_token = $ll_data['access_token'];
+    @file_put_contents('/opt/gomon/app/private_data/ig_token.txt', $final_token);
     echo json_encode([
-        'access_token' => $ll_data['access_token'],
+        'access_token' => $final_token,
         'token_type'   => $ll_data['token_type'] ?? 'bearer',
         'expires_in'   => $ll_data['expires_in'] ?? 5184000,
         'user_id'      => $user_id,

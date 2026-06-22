@@ -152,7 +152,7 @@
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────
 const IG_APP_ID    = '847955297878760';
-const IG_REDIRECT  = 'https://gomonclinic.com/messenger/';
+const IG_REDIRECT  = 'https://drgomon.beauty/messenger/';
 const IG_SCOPES    = 'instagram_business_basic,instagram_business_manage_messages';
 
 const state = {
@@ -212,7 +212,7 @@ function igLogin() {
     response_type: 'code',
     scope:         IG_SCOPES,
   });
-  window.location.href = 'https://api.instagram.com/oauth/authorize?' + params.toString();
+  window.location.href = 'https://www.instagram.com/oauth/authorize?' + params.toString();
 }
 
 function logout() {
