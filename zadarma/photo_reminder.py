@@ -550,6 +550,12 @@ def check_pending_cashback_reminders():
                 conn_skip.commit()
                 conn_skip.close()
                 logger.info('Cashback skip (not app user): {} {}'.format(phone, proc))
+                try:
+                    from notifier import send_post_visit
+                    send_post_visit({'client_phone': phone, 'client_name': name or '', 'procedure_name': drug or proc, 'specialist': specialist or '', 'date': date, 'time': time_str or '', 'duration_min': 60})
+                    logger.info('Post-visit sent (no cashback, not app user): {} {}'.format(phone, proc))
+                except Exception as _nf:
+                    logger.warning('post_visit non-app user error: {}'.format(_nf))
                 continue
         except Exception:
             pass
