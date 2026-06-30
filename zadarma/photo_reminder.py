@@ -61,6 +61,9 @@ PROCEDURE_TO_CATEGORIES = {
     'Офлайн-консультація': ['_консультація'],
     'Онлайн-консультація': ['_консультація'],
     'Відбілювання зубів': ['Відбілювання зубів Magic Smile'],
+    'Відбілювання зубів Light': ['Відбілювання зубів Magic Smile'],
+    'Відбілювання зубів Medium': ['Відбілювання зубів Magic Smile'],
+    'Відбілювання зубів Maximum': ['Відбілювання зубів Magic Smile'],
     # DrumRoll/Пресотерапія — auto-accrue з ціною -20% (курсова знижка)
     # 'Моделювання всього тіла': ['_drumroll'],
     # 'Моделювання окремої ділянки': ['_drumroll'],
@@ -128,6 +131,11 @@ def _get_drugs_for_procedure(procedure_name):
                     price_val = int(p.group()) if p else 0
                     if price_val > 0:
                         drugs.append({'name': name, 'price': price_val})
+    # If any item name exactly matches the procedure, show only that one
+    if drugs:
+        exact = [d for d in drugs if d['name'] == procedure_name]
+        if exact:
+            return exact
     return drugs
 
 
