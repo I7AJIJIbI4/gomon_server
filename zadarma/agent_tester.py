@@ -37,6 +37,17 @@ ADMIN_ACTION_PATTERNS = [
     'скину Вам варіанти',
     'Скидати Вам найближчі',
     'найближчі віконця',
+    'не в кабінеті',   # real-time присутність лікаря
+    'буду тільки за',  # real-time статус ("буду тільки за хвилин 15")
+    'є останній',      # фізичний залишок товару
+    'є остання',
+]
+
+# Клієнтські повідомлення, які бот не може обробити (медіа, звернення до лікаря)
+CLIENT_SKIP_PATTERNS = [
+    '[медіа]',   # фото/відео — бот не бачить
+    '[фото]',
+    '[відео]',
 ]
 
 
@@ -48,6 +59,12 @@ def _is_admin_action(golden_response):
     if len(re.findall(r'\b\d{1,2}:\d{2}\b', golden_response or '')) >= 2:
         return True
     return False
+
+
+def _is_unanswerable(client_message):
+    """Повідомлення, на які бот принципово не може відповісти коректно."""
+    text = (client_message or '').lower().strip()
+    return any(p.lower() in text for p in CLIENT_SKIP_PATTERNS)
 
 
 JUDGE_PROMPT = """Ти оцінюєш якість відповіді AI-асистента Dr. Gomon Cosmetology.
@@ -296,8 +313,9 @@ def main():
 
     before = len(golden)
     golden = [e for e in golden if not _is_admin_action(e.get('golden_response', ''))]
+    golden = [e for e in golden if not _is_unanswerable(e.get('client_message', ''))]
     if len(golden) < before:
-        print('Filtered {} admin-action cases (booking/payment/inventory)'.format(before - len(golden)))
+        print('Filtered {} cases (admin-action/media/unanswerable)'.format(before - len(golden)))
 
     if args.sample and len(golden) > args.sample:
         random.seed(args.seed)
