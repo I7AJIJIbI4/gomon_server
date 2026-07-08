@@ -68,7 +68,7 @@ def build(limit_doctor=300, limit_ai=150, output=OUTPUT_PATH):
         "FROM messages m "
         "WHERE m.is_from_admin=1 AND m.sender_id != 'ai_bot' "
         "  AND length(m.content) >= ? "
-        "  AND m.media_type IS NULL "
+        "  AND m.media_type = 'text' "
         "ORDER BY m.id DESC LIMIT ?",
         (MIN_CONTENT_LEN, limit_doctor)
     ).fetchall()
@@ -83,7 +83,7 @@ def build(limit_doctor=300, limit_ai=150, output=OUTPUT_PATH):
         "     AND datetime(d.created_at) <= datetime(m.created_at, '+{} minutes') "
         "  ) as corrected "
         "FROM messages m "
-        "WHERE m.sender_id='ai_bot' AND length(m.content) >= ? AND m.media_type IS NULL "
+        "WHERE m.sender_id='ai_bot' AND length(m.content) >= ? AND m.media_type = 'text' "
         "ORDER BY m.id DESC LIMIT ?".format(CORRECTION_WINDOW_MINUTES),
         (MIN_CONTENT_LEN, limit_ai * 2)  # over-fetch then filter
     ).fetchall()
