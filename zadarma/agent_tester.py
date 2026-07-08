@@ -22,7 +22,8 @@ SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), '..', 'public_html'
 REPORT_PATH = os.path.join(os.path.dirname(__file__), '..', 'private_data', 'agent_test_report.json')
 
 AGENT_MODEL = 'claude-sonnet-4-5'
-JUDGE_MODEL = 'claude-sonnet-4-6'
+JUDGE_MODEL = 'claude-haiku-4-5-20251001'
+JUDGE_RUNS = 3  # кількість запусків судді для стабільної оцінки
 
 JUDGE_PROMPT = """Ти оцінюєш якість відповіді AI-асистента Dr. Gomon Cosmetology.
 
@@ -106,12 +107,7 @@ def run_agent(api_key, system_prompt, context, client_message):
                            max_tokens=512, temperature=0.5)
 
 
-def judge(api_key, context, client_message, golden_response, actual_response):
-    """Оцінює відповідь агента vs еталону."""
-    ctx_text = '\n'.join(
-        '[{}]: {}'.format('Клієнт' if m['role'] == 'user' else 'Бот', m['content'])
-        for m in context[-6:]
-    )
+def _judge_once(api_key, ctx_text, client_message, golden_response, actual_response):
     prompt = JUDGE_PROMPT.format(
         context=ctx_text or '(немає попередніх повідомлень)',
         client_message=client_message,
@@ -122,13 +118,47 @@ def judge(api_key, context, client_message, golden_response, actual_response):
                           'Ти суддя якості AI-відповідей. Відповідай тільки JSON.',
                           [{'role': 'user', 'content': prompt}],
                           max_tokens=600, temperature=0)
-    # Strip possible markdown code fences
     raw = raw.strip()
     if raw.startswith('```'):
         raw = '\n'.join(raw.split('\n')[1:])
     if raw.endswith('```'):
         raw = raw[:-3]
     return json.loads(raw.strip())
+
+
+def _average_verdicts(verdicts):
+    """Усереднює оцінки кількох запусків судді."""
+    overall = round(sum(v['overall'] for v in verdicts) / len(verdicts))
+    dims = {}
+    for dim in verdicts[0].get('dimensions', {}):
+        avg_score = round(sum(v['dimensions'][dim]['score'] for v in verdicts) / len(verdicts))
+        dims[dim] = {
+            'score': avg_score,
+            'pass': avg_score >= 65,
+            'comment': verdicts[-1]['dimensions'][dim].get('comment', ''),
+        }
+    return {
+        'overall': overall,
+        'pass': overall >= 65,
+        'dimensions': dims,
+        'summary': verdicts[-1].get('summary', ''),
+        'runs': len(verdicts),
+    }
+
+
+def judge(api_key, context, client_message, golden_response, actual_response):
+    """Оцінює відповідь агента vs еталону, запускає суддю JUDGE_RUNS разів."""
+    ctx_text = '\n'.join(
+        '[{}]: {}'.format('Клієнт' if m['role'] == 'user' else 'Бот', m['content'])
+        for m in context[-6:]
+    )
+    verdicts = []
+    for i in range(JUDGE_RUNS):
+        verdicts.append(_judge_once(api_key, ctx_text, client_message,
+                                    golden_response, actual_response))
+        if i < JUDGE_RUNS - 1:
+            time.sleep(0.5)
+    return _average_verdicts(verdicts)
 
 
 def print_report(results):
