@@ -10,6 +10,7 @@ agent_tester.py — LLM-as-Judge тестування AI-агента по golde
 """
 import json
 import os
+import re
 import sys
 import time
 import argparse
@@ -41,7 +42,12 @@ ADMIN_ACTION_PATTERNS = [
 
 def _is_admin_action(golden_response):
     text = (golden_response or '').lower()
-    return any(p.lower() in text for p in ADMIN_ACTION_PATTERNS)
+    if any(p.lower() in text for p in ADMIN_ACTION_PATTERNS):
+        return True
+    # Лікар дала слоти з календаря (2+ часових позначок) — бот не має доступу до розкладу
+    if len(re.findall(r'\b\d{1,2}:\d{2}\b', golden_response or '')) >= 2:
+        return True
+    return False
 
 
 JUDGE_PROMPT = """Ти оцінюєш якість відповіді AI-асистента Dr. Gomon Cosmetology.
