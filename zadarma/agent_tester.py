@@ -161,34 +161,68 @@ def judge(api_key, context, client_message, golden_response, actual_response):
     return _average_verdicts(verdicts)
 
 
-def print_report(results):
+def print_report(results, ci=False):
     total = len(results)
     passed = sum(1 for r in results if r['verdict'].get('pass'))
+    pass_rate = 100 * passed / total if total else 0
     scores = [r['verdict'].get('overall', 0) for r in results]
     avg = sum(scores) / len(scores) if scores else 0
 
-    print('\n' + '='*60)
-    print('AGENT TEST REPORT')
-    print('='*60)
-    print('Entries tested : {}'.format(total))
-    print('Pass           : {} / {} ({:.0f}%)'.format(passed, total, 100*passed/total if total else 0))
-    print('Avg score      : {:.1f}/100'.format(avg))
-
     dim_names = ['tone', 'completeness', 'escalation', 'safety']
+    dim_avgs = {}
     for dim in dim_names:
-        dim_scores = [r['verdict']['dimensions'][dim]['score']
-                      for r in results if dim in r['verdict'].get('dimensions', {})]
-        if dim_scores:
-            print('  {:14s}: avg {:.0f}'.format(dim, sum(dim_scores)/len(dim_scores)))
+        ds = [r['verdict']['dimensions'][dim]['score']
+              for r in results if dim in r['verdict'].get('dimensions', {})]
+        dim_avgs[dim] = round(sum(ds) / len(ds)) if ds else 0
 
-    print()
     failures = [r for r in results if not r['verdict'].get('pass')]
-    if failures:
-        print('FAILURES ({})'.format(len(failures)))
-        for r in failures[:5]:
-            v = r['verdict']
-            print('  [{}] score={} — {}'.format(r['id'], v.get('overall'), v.get('summary', '')[:80]))
-    print('='*60)
+
+    if ci:
+        # GitHub Actions step summary (Markdown)
+        status_icon = '✅' if pass_rate >= 65 else '❌'
+        print('## {} Agent Quality Report'.format(status_icon))
+        print()
+        print('| Metric | Value |')
+        print('|--------|-------|')
+        print('| Tested | {} |'.format(total))
+        print('| Pass | **{}/{} ({:.0f}%)** |'.format(passed, total, pass_rate))
+        print('| Avg score | **{:.1f}/100** |'.format(avg))
+        print()
+        print('### Dimensions')
+        print('| Dimension | Avg score |')
+        print('|-----------|-----------|')
+        dim_labels = {'tone': 'Tone & style', 'completeness': 'Completeness',
+                      'escalation': 'Escalation', 'safety': 'Safety'}
+        for dim in dim_names:
+            icon = '🟢' if dim_avgs[dim] >= 65 else '🔴'
+            print('| {} {} | {} |'.format(icon, dim_labels.get(dim, dim), dim_avgs[dim]))
+        if failures:
+            print()
+            print('### Failures ({})'.format(len(failures)))
+            print('| ID | Score | Summary |')
+            print('|----|-------|---------|')
+            for r in failures[:10]:
+                v = r['verdict']
+                summary = v.get('summary', '')[:100].replace('|', '\\|')
+                print('| `{}` | {} | {} |'.format(r['id'], v.get('overall'), summary))
+    else:
+        print('\n' + '='*60)
+        print('AGENT TEST REPORT')
+        print('='*60)
+        print('Entries tested : {}'.format(total))
+        print('Pass           : {} / {} ({:.0f}%)'.format(passed, total, pass_rate))
+        print('Avg score      : {:.1f}/100'.format(avg))
+        for dim in dim_names:
+            print('  {:14s}: avg {}'.format(dim, dim_avgs[dim]))
+        print()
+        if failures:
+            print('FAILURES ({})'.format(len(failures)))
+            for r in failures[:5]:
+                v = r['verdict']
+                print('  [{}] score={} — {}'.format(r['id'], v.get('overall'), v.get('summary', '')[:80]))
+        print('='*60)
+
+    return pass_rate
 
 
 def main():
@@ -199,6 +233,10 @@ def main():
     parser.add_argument('--input', default=GOLDEN_SET_PATH)
     parser.add_argument('--output-report', default=REPORT_PATH)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--fail-threshold', type=int, default=65,
+                        help='Pass rate %% below which CI fails (default 65)')
+    parser.add_argument('--ci', action='store_true',
+                        help='Output Markdown for GitHub Actions step summary')
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -260,12 +298,16 @@ def main():
 
         time.sleep(1.0)  # між запитами
 
-    print_report(results)
+    pass_rate = print_report(results, ci=args.ci)
 
     os.makedirs(os.path.dirname(args.output_report), exist_ok=True)
     with open(args.output_report, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-    print('Report saved to: {}'.format(args.output_report))
+    if not args.ci:
+        print('Report saved to: {}'.format(args.output_report))
+
+    if pass_rate < args.fail_threshold:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

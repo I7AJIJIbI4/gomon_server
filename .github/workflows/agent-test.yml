@@ -1,0 +1,66 @@
+name: Agent Quality Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public_html/app/system_prompt.txt'
+      - 'zadarma/tg_business_listener.py'
+      - 'public_html/app/chat.php'
+      - 'zadarma/agent_tester.py'
+      - 'zadarma/golden_set_builder.py'
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 09:00 Kyiv (UTC+3)
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: 'Test cases to run'
+        default: '30'
+        required: false
+      source:
+        description: 'Source filter: doctor | ai_accepted | all'
+        default: 'all'
+        required: false
+      fail_threshold:
+        description: 'Fail if pass rate below this %'
+        default: '65'
+        required: false
+
+jobs:
+  agent-test:
+    name: LLM-as-Judge
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Run agent tests on server
+        id: test
+        env:
+          SAMPLE: ${{ github.event.inputs.sample || '30' }}
+          SOURCE: ${{ github.event.inputs.source || 'all' }}
+          THRESHOLD: ${{ github.event.inputs.fail_threshold || '65' }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+              root@${{ secrets.SERVER_HOST }} \
+              "cd /opt/gomon/app/zadarma && \
+               /opt/gomon/venv/bin/python agent_tester.py \
+                 --sample ${SAMPLE} \
+                 --source ${SOURCE} \
+                 --fail-threshold ${THRESHOLD} \
+                 --ci 2>&1" | tee /tmp/agent_report.md
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Write step summary
+        if: always()
+        run: cat /tmp/agent_report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if below threshold
+        if: steps.test.outputs.exit_code != '0'
+        run: exit 1
