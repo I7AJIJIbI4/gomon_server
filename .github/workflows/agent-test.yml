@@ -49,7 +49,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
               root@${{ secrets.SERVER_HOST }} \
-              "cd /opt/gomon/app/zadarma && \
+              "cd /opt/gomon/app && git pull --ff-only && cd zadarma && \
                /opt/gomon/venv/bin/python agent_tester.py \
                  --sample ${SAMPLE} \
                  --source ${SOURCE} \
