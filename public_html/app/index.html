@@ -1624,12 +1624,12 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
             <button class="ai-send-btn" id="ai-quick-send" aria-label="Відправити">&#10148;</button>
           </div>
         </div>
-        <a class="chat-option telegram" href="https://t.me/DrGomonCosmetology" target="_blank">
+        <a class="chat-option telegram" href="https://t.me/DrGomonCosmetology" onclick="openExternal('https://t.me/DrGomonCosmetology');return false;">
           <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></span>
           <h4>Telegram</h4>
           <p>Швидка відповідь</p>
         </a>
-        <a class="chat-option instagram" href="https://ig.me/m/dr.gomon" target="_blank">
+        <a class="chat-option instagram" href="https://ig.me/m/dr.gomon" onclick="openExternal('https://ig.me/m/dr.gomon');return false;">
           <span class="chat-option-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1" fill="#C9A96E" stroke="none"/></svg></span>
           <h4>Instagram</h4>
           <p>Direct повідомлення</p>
@@ -6278,7 +6278,8 @@ function go(id) {
 })();
 
 /* ── ACTIONS ── */
-function openMap() { window.open('https://maps.app.goo.gl/LqWgda1A5ZjK8QE76','_blank'); }
+function openMap() { window.location.href='https://maps.app.goo.gl/LqWgda1A5ZjK8QE76'; }
+function openExternal(url) { window.location.href = url; }
 function callClinic() { window.location.href='tel:+380733103110'; }
 
 /* ── INSTALL LOGIC ── */
@@ -6566,12 +6567,12 @@ document.addEventListener('keydown', function(e) {
             <button class="ai-send-btn" id="ai-nc-send" aria-label="Відправити">&#10148;</button>
           </div>
         </div>
-      <a class="not-client-row" href="https://t.me/DrGomonCosmetology" target="_blank">
+      <a class="not-client-row" href="https://t.me/DrGomonCosmetology" onclick="openExternal('https://t.me/DrGomonCosmetology');return false;">
         <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg></div>
         <div class="not-client-info"><h5>Telegram</h5><p>@DrGomonCosmetology</p></div>
         <span class="not-client-arrow">›</span>
       </a>
-      <a class="not-client-row" href="https://ig.me/m/dr.gomon" target="_blank">
+      <a class="not-client-row" href="https://ig.me/m/dr.gomon" onclick="openExternal('https://ig.me/m/dr.gomon');return false;">
         <div class="not-client-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r="1.2" fill="var(--gold)" stroke="none"/></svg></div>
         <div class="not-client-info"><h5>Instagram</h5><p>@dr.gomon</p></div>
         <span class="not-client-arrow">›</span>
