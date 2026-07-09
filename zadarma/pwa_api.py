@@ -3566,11 +3566,16 @@ def admin_prices_get():
                 if isinstance(row, list):
                     items.append({'name': row[0] if len(row) > 0 else '', 'price': row[2] if len(row) > 2 else '', 'specialists': [], 'duration': 60})
                 elif isinstance(row, dict):
+                    raw_dur = row.get('duration') or row.get('duration_min') or 60
+                    try:
+                        dur = int(raw_dur)
+                    except (TypeError, ValueError):
+                        dur = 60
                     items.append({
                         'name':        row.get('name') or row.get('service') or '',
                         'price':       row.get('price') or row.get('cost') or '',
                         'specialists': row.get('specialists', []),
-                        'duration':    int(row.get('duration') or row.get('duration_min') or 60),
+                        'duration':    dur,
                     })
             if items:
                 result.append({'cat': cat_name, 'items': items})
@@ -3579,6 +3584,9 @@ def admin_prices_get():
         return jsonify([])
     except json.JSONDecodeError:
         return jsonify({'error': 'invalid_json'}), 500
+    except Exception as e:
+        logger.error('admin_prices_get error: %s', e)
+        return jsonify({'error': 'server_error'}), 500
 
 @app.route('/api/admin/prices/edit', methods=['PUT'])
 @require_full_admin
