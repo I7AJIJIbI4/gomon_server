@@ -6,12 +6,16 @@ on:
       - 'zadarma/pwa_api.py'
       - 'zadarma/user_db.py'
       - 'zadarma/loyalty.py'
+      - 'zadarma/tg_business_listener.py'
+      - 'zadarma/bot.py'
       - 'tests/**'
   pull_request:
     paths:
       - 'zadarma/pwa_api.py'
       - 'zadarma/user_db.py'
       - 'zadarma/loyalty.py'
+      - 'zadarma/tg_business_listener.py'
+      - 'zadarma/bot.py'
       - 'tests/**'
   workflow_dispatch:
 
