@@ -1,16 +1,6 @@
 name: Agent Quality Test
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'public_html/app/system_prompt.txt'
-      - 'zadarma/tg_business_listener.py'
-      - 'public_html/app/chat.php'
-      - 'zadarma/agent_tester.py'
-      - 'zadarma/golden_set_builder.py'
-  schedule:
-    - cron: '0 6 * * 1'  # Monday 09:00 Kyiv (UTC+3)
   workflow_dispatch:
     inputs:
       sample:
