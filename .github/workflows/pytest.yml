@@ -1,0 +1,33 @@
+name: pytest
+
+on:
+  push:
+    paths:
+      - 'zadarma/pwa_api.py'
+      - 'zadarma/user_db.py'
+      - 'zadarma/loyalty.py'
+      - 'tests/**'
+  pull_request:
+    paths:
+      - 'zadarma/pwa_api.py'
+      - 'zadarma/user_db.py'
+      - 'zadarma/loyalty.py'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install flask flask-cors pytest requests
+
+      - name: Run pytest
+        run: pytest tests/ -v --tb=short
