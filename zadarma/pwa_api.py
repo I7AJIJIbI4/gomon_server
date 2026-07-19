@@ -1004,7 +1004,7 @@ def _ig_process_reply(sender_id):
         IG_FALLBACK_TOKEN = get_ig_token()
 
         # Load system prompt
-        prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'public_html', 'app', 'system_prompt.txt')
+        prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'system_prompt.txt')
         with open(prompt_path, 'r') as f:
             system_prompt = f.read()
         system_prompt += ('\n\n---\n## Контекст: Instagram Direct (DM)'

@@ -19,7 +19,7 @@ import random
 sys.path.insert(0, os.path.dirname(__file__))
 
 GOLDEN_SET_PATH = os.path.join(os.path.dirname(__file__), '..', 'private_data', 'golden_set.json')
-SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), '..', 'public_html', 'app', 'system_prompt.txt')
+SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), '..', 'system_prompt.txt')
 REPORT_PATH = os.path.join(os.path.dirname(__file__), '..', 'private_data', 'agent_test_report.json')
 
 AGENT_MODEL = 'claude-sonnet-4-5'

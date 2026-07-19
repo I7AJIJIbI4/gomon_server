@@ -12,8 +12,8 @@ date_default_timezone_set('Europe/Kyiv');
 // Завантажуємо конфігурацію з окремого файлу (не в Git)
 require_once __DIR__ . '/config.php';
 
-// Шлях до системного промпту — рекомендується вище webroot
-define('SYSTEM_PROMPT_FILE', __DIR__ . '/system_prompt.txt');
+// Шлях до системного промпту — вище webroot
+define('SYSTEM_PROMPT_FILE', '/home/gomoncli/system_prompt.txt');
 
 // Дозволені origins (CORS)
 $allowed_origins = [

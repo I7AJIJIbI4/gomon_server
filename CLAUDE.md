@@ -862,7 +862,7 @@ GomonAI працює в **трьох незалежних каналах** з є
 
 ### System prompt
 
-Єдиний файл: `/opt/gomon/app/public_html/app/system_prompt.txt` (~22KB)
+Єдиний файл: `/opt/gomon/app/system_prompt.txt` (~22KB) — вище webroot, недоступний по HTTP
 
 Кожен канал додає свій контекст:
 - **Сайт**: "Ти спілкуєшся з відвідувачем сайту..." + пропонує записатись через IG/TG/додаток
