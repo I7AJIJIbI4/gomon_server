@@ -829,7 +829,7 @@ def ig_message_webhook():
                                 (_full_phone, '', _cb_proc, _drug_name, _price_val, _appt_date, 'ig_doctor', _kn_str))
                             conn.execute(
                                 "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
-                                "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','pending')",
+                                "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','needs_price','pending')",
                                 (_drug_name, _price_val, _kn_str, _full_phone, _appt_date))
                             conn.commit()
                             # Reply confirmation via IG

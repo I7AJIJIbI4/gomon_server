@@ -73,6 +73,27 @@ PROCEDURE_TO_CATEGORIES = {
 # Exact set of WLaunch service names that need doctor price confirmation (drug buttons)
 NEEDS_DRUG_SELECTION = set(PROCEDURE_TO_CATEGORIES.keys())
 
+# Correction/touch-up visits — never accrue cashback (only the original procedure does)
+CASHBACK_EXCLUDED = {'Корекція ботулотоксину', 'Корекція філера'}
+
+
+def cashback_classify(procedure_name):
+    """Classify a WLaunch procedure name for cashback handling.
+
+    Returns one of:
+      'needs_price' — combined visit (multiple services in one string) — doctor enters amount manually
+      'excluded'    — correction/touch-up visit — never gets cashback
+      'needs_drug'  — single procedure with a variable drug/price — doctor picks from buttons
+      'auto'        — single fixed-price procedure — auto-accrue 3% from prices.json
+    """
+    if ',' in procedure_name:
+        return 'needs_price'
+    if procedure_name in CASHBACK_EXCLUDED:
+        return 'excluded'
+    if procedure_name in NEEDS_DRUG_SELECTION:
+        return 'needs_drug'
+    return 'auto'
+
 
 def _get_drugs_for_procedure(procedure_name):
     """Get list of {name, price} drugs from prices.json for a generic procedure."""
@@ -140,41 +161,51 @@ def _get_drugs_for_procedure(procedure_name):
 
 
 def _send_drug_buttons(tg_id, appts, date_str):
-    """Send inline keyboard with drug options for each appointment that needs cashback confirmation."""
+    """Send inline keyboard with drug options / manual-price entry for appointments that need cashback confirmation."""
     import requests as _req
     for a in appts:
         procedure = a.get('procedure', '')
-        drugs = _get_drugs_for_procedure(procedure)
-        if not drugs:
-            continue  # No drugs to choose — fixed price procedure, auto-accrue
+        status = cashback_classify(procedure)
+        if status not in ('needs_drug', 'needs_price'):
+            continue  # 'excluded' — never gets cashback; 'auto' — accrued automatically, no doctor input needed
 
         client_phone = a.get('client_phone', '')
         client_name = a.get('client_name', '')
         if not client_phone:
             continue
 
-        # Build inline keyboard — 2 buttons per row
+        drugs = []
+        if status == 'needs_drug':
+            drugs = _get_drugs_for_procedure(procedure)
+            if not drugs:
+                continue
+
         # callback_data max 64 bytes (UTF-8). Use short phone (last 10 digits) + short date (MMDD)
         ph_short = client_phone[-10:] if len(client_phone) > 10 else client_phone
         dt_short = date_str[5:].replace('-', '')  # "2026-04-20" → "0420"
         rows = []
-        for i in range(0, len(drugs), 2):
-            row = []
-            for d in drugs[i:i+2]:
-                # cb|phone10|MMDD|price — drug name NOT in callback, resolved from price+procedure
-                cb_data = 'cb|{}|{}|{}'.format(ph_short, dt_short, d['price'])
-                if d['price'] == 0:
-                    btn_text = d['name'][:30]
-                else:
-                    btn_text = '{} ₴{}'.format(d['name'][:25], d['price'])
-                row.append({'text': btn_text, 'callback_data': cb_data})
-            rows.append(row)
+        if status == 'needs_drug':
+            # Build inline keyboard — 2 buttons per row
+            for i in range(0, len(drugs), 2):
+                row = []
+                for d in drugs[i:i+2]:
+                    # cb|phone10|MMDD|price — drug name NOT in callback, resolved from price+procedure
+                    cb_data = 'cb|{}|{}|{}'.format(ph_short, dt_short, d['price'])
+                    if d['price'] == 0:
+                        btn_text = d['name'][:30]
+                    else:
+                        btn_text = '{} ₴{}'.format(d['name'][:25], d['price'])
+                    row.append({'text': btn_text, 'callback_data': cb_data})
+                rows.append(row)
 
         # Add "Enter custom price" button
         cb_custom = 'cc|{}|{}'.format(ph_short, dt_short)
         rows.append([{'text': '✏️ Ввести ціну вручну', 'callback_data': cb_custom}])
 
-        text = '💰 Кешбек для {} ({})\nОберіть препарат або введіть ціну:'.format(client_name, procedure)
+        if status == 'needs_drug':
+            text = '💰 Кешбек для {} ({})\nОберіть препарат або введіть ціну:'.format(client_name, procedure)
+        else:
+            text = '💰 Кешбек для {} ({})\nКомбінований запис — введіть суму вручну:'.format(client_name, procedure)
 
         try:
             _req.post(
@@ -193,9 +224,13 @@ def _send_drug_buttons(tg_id, appts, date_str):
             spec = a.get('specialist', '')
             ig_uid = SPECIALIST_INFO.get(spec, {}).get('ig_user_id')
             if ig_uid:
-                drug_lines = '\n'.join('  {} — ₴{}'.format(d['name'], d['price']) for d in drugs)
-                ig_text = '💰 Кешбек: {} ({})\n\n{}\n\nВідправте ціну числом (наприклад: {})'.format(
-                    client_name, procedure, drug_lines, drugs[0]['price'])
+                if status == 'needs_drug':
+                    drug_lines = '\n'.join('  {} — ₴{}'.format(d['name'], d['price']) for d in drugs)
+                    ig_text = '💰 Кешбек: {} ({})\n\n{}\n\nВідправте ціну числом (наприклад: {})'.format(
+                        client_name, procedure, drug_lines, drugs[0]['price'])
+                else:
+                    ig_text = '💰 Кешбек: {} ({})\n\nКомбінований запис — відправте суму числом'.format(
+                        client_name, procedure)
                 # Tag message for price input parsing: #cashback|phone|MMDD
                 ig_text += '\n#cashback|{}|{}'.format(ph_short, dt_short)
                 _send_ig(ig_uid, ig_text)
@@ -313,13 +348,12 @@ def create_folders_and_notify(date_str=None):
                 import re as _re_pt
                 _fid_m = _re_pt.search(r'/folders/([a-zA-Z0-9_-]+)', a['drive_url'])
                 _fid = _fid_m.group(1) if _fid_m else ''
-                _needs = a['procedure'] in NEEDS_DRUG_SELECTION
                 _pt_conn.execute(
                     "INSERT OR IGNORE INTO photo_tasks (appt_id, client_phone, client_name, procedure_name, specialist, appt_date, appt_time, drive_folder_url, drive_folder_id, cashback_status) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (a.get('id',''), a.get('client_phone',''), a['client_name'], a['procedure'], spec,
                      date_str, a.get('time',''), a['drive_url'], _fid,
-                     'needs_drug' if _needs else 'auto'))
+                     cashback_classify(a['procedure'])))
                 _pt_conn.commit()
                 _pt_conn.close()
             except Exception as _pt_e:

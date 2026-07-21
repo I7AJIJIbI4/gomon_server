@@ -465,22 +465,16 @@ def run_feedback(dry_run=False, override_date=None):
             phone, appt.get('client_name', '—'), appt.get('procedure_name', '—')
         ))
 
-        # Cashback: auto-accrue only for procedures without drug selection
-        # (procedures not in PROCEDURE_TO_CATEGORIES use auto-accrual)
+        # Cashback: classify procedure — 'auto' (fixed price) accrues automatically here;
+        # 'needs_drug'/'needs_price' wait for doctor confirmation via TG buttons;
+        # 'excluded' (correction/touch-up visits) never gets cashback.
         procedure = appt.get('procedure_name', '')
-        # Exact WLaunch service names that need doctor price confirmation
         try:
-            from photo_reminder import NEEDS_DRUG_SELECTION
+            from photo_reminder import cashback_classify
+            _status = cashback_classify(procedure)
         except ImportError:
-            NEEDS_DRUG_SELECTION = {'Ботулінотерапія', 'Контурна пластика губ', 'Контурна пластика обличчя',
-                                    'Біорепарація шкіри', 'Біоревіталізація шкіри', 'Мезотерапія',
-                                    'Ліполітики (обличчя, 4 мл)', 'Ліполітики (тіло, 10 мл)',
-                                    'Гіалуронідаза (розчинення філера)',
-                                    'Консультація', 'Офлайн-консультація', 'Онлайн-консультація',
-                                    'Відбілювання зубів', 'Відбілювання зубів Light',
-                                    'Відбілювання зубів Medium', 'Відбілювання зубів Maximum'}
-        _is_drug = procedure in NEEDS_DRUG_SELECTION
-        if not _is_drug:
+            _status = 'needs_price' if ',' in procedure else 'auto'
+        if _status == 'auto':
             try:
                 _accrue_cashback(appt)
                 cashback_ok += 1
@@ -492,9 +486,9 @@ def run_feedback(dry_run=False, override_date=None):
             skipped += 1
             continue
 
-        # Drug selection procedures: skip post_visit now — will be sent after doctor confirms price
-        if _is_drug:
-            logger.info('    skip post_visit (needs_drug) — will send after cashback confirmation')
+        # Drug/price selection procedures: skip post_visit now — will be sent after doctor confirms price
+        if _status in ('needs_drug', 'needs_price'):
+            logger.info('    skip post_visit ({}) — will send after cashback confirmation'.format(_status))
             skipped += 1
             continue
 

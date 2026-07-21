@@ -935,7 +935,7 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
         # Also update photo_tasks if exists
         conn.execute(
             "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
-            "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','pending')",
+            "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','needs_price','pending')",
             (drug_name, price, _kn().strftime('%Y-%m-%d %H:%M:%S'), phone, appt_date))
         conn.commit()
         conn.close()
@@ -1066,12 +1066,17 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
             import sqlite3
             from tz_utils import kyiv_now
             conn = sqlite3.connect('/home/gomoncli/zadarma/users.db', timeout=10)
+            _kn_str = kyiv_now().strftime('%Y-%m-%d %H:%M:%S')
             conn.execute(
                 "INSERT OR REPLACE INTO cashback_pending "
                 "(phone, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
                 (state['phone'], state['procedure'], 'Ціна вручну', price,
-                 state['date'], str(user_id), kyiv_now().strftime('%Y-%m-%d %H:%M:%S')))
+                 state['date'], str(user_id), _kn_str))
+            conn.execute(
+                "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug='Ціна вручну', cashback_price=?, cashback_confirmed_at=? "
+                "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','needs_price','pending')",
+                (price, _kn_str, state['phone'], state['date']))
             conn.commit()
             conn.close()
             cashback_amount = round(price * 0.03, 2)
