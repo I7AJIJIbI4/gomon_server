@@ -1877,6 +1877,7 @@ def admin_client_card(phone):
         for s in services:
             visits.append({
                 'date': s.get('date', ''),
+                'time': '{:02d}:00'.format(s['hour']) if s.get('hour') is not None else '',
                 'service': s.get('service', ''),
                 'specialist': s.get('specialist', ''),
                 'status': s.get('status', ''),
@@ -1922,6 +1923,7 @@ def admin_client_card(phone):
                     vdate, vhour, vmin = parse_appt_time(appt.get('start_time', ''))
                     visits.append({
                         'date': vdate,
+                        'time': '{:02d}:{:02d}'.format(vhour, vmin) if vhour is not None else '',
                         'service': svc_name,
                         'specialist': get_specialist(appt.get('resources', [])),
                         'status': (appt.get('status') or '').upper(),
@@ -1938,6 +1940,7 @@ def admin_client_card(phone):
     for m in manual:
         visits.append({
             'date': m['date'],
+            'time': m['time'] or '',
             'service': m['procedure_name'],
             'specialist': m['specialist'],
             'status': m['status'],
@@ -1952,6 +1955,95 @@ def admin_client_card(phone):
         'last_visit': row['last_visit'] or '',
         'visits_count': max(row['visits_count'] or 0, len(visits)),
         'visits': visits,
+    })
+
+@app.route('/api/admin/visit-detail', methods=['GET'])
+@require_admin
+def admin_visit_detail():
+    """Single-visit detail for the client-card drill-down: time, price, cashback, photo folder."""
+    denied = _check_perm('clients', 'read')
+    if denied: return denied
+    phone = request.args.get('phone', '')
+    date = request.args.get('date', '')
+    procedure = request.args.get('procedure', '')
+    p = norm_phone(phone)
+    if not p or not date or not procedure:
+        return jsonify({'error': 'phone, date, procedure required'}), 400
+    tail = '%' + p[-9:]
+
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn.row_factory = sqlite3.Row
+
+    pt = conn.execute(
+        "SELECT appt_time, drive_folder_url, cashback_status, cashback_drug, cashback_price "
+        "FROM photo_tasks WHERE (client_phone=? OR client_phone LIKE ?) AND appt_date=? AND procedure_name=?",
+        (p, tail, date, procedure)).fetchone()
+    cb = conn.execute(
+        "SELECT amount, procedure_price FROM cashback "
+        "WHERE (phone=? OR phone LIKE ?) AND appt_date=? AND procedure_name=?",
+        (p, tail, date, procedure)).fetchone()
+    pending = conn.execute(
+        "SELECT price, accrued FROM cashback_pending WHERE (phone=? OR phone LIKE ?) AND appt_date=? AND accrued=0",
+        (p, tail, date)).fetchone()
+
+    result_time = pt['appt_time'] if pt and pt['appt_time'] else ''
+    if not result_time:
+        m = conn.execute(
+            "SELECT time FROM manual_appointments WHERE (client_phone=? OR client_phone LIKE ?) AND date=? AND procedure_name=?",
+            (p, tail, date, procedure)).fetchone()
+        if m and m['time']:
+            result_time = m['time']
+    conn.close()
+
+    price = None
+    if cb and cb['procedure_price']:
+        price = cb['procedure_price']
+    elif pt and pt['cashback_price']:
+        price = pt['cashback_price']
+    elif pending and pending['price']:
+        price = pending['price']
+    else:
+        try:
+            with open(PRICES_PATH, 'r') as f:
+                prices = json.load(f)
+            proc_lower = procedure.lower()
+            for cat in prices:
+                for item in cat.get('items', []):
+                    if item.get('name', '').lower() == proc_lower:
+                        _m = re.search(r'\d+', str(item.get('price', '')).replace(' ', ''))
+                        if _m:
+                            price = float(_m.group())
+                        break
+                if price:
+                    break
+        except Exception:
+            pass
+
+    cashback_amount = None
+    cashback_label = '—'
+    status = pt['cashback_status'] if pt else None
+    if cb:
+        cashback_amount = cb['amount']
+        cashback_label = 'Нараховано'
+    elif status == 'excluded':
+        cashback_label = 'Не нараховується (корекція)'
+    elif pending:
+        cashback_amount = round(pending['price'] * 0.03, 2)
+        cashback_label = 'Підтверджено, очікує нарахування'
+    elif status in ('needs_drug', 'needs_price'):
+        cashback_label = 'Очікує підтвердження лікарем'
+    elif status == 'auto':
+        cashback_label = 'Очікує обробки'
+
+    return jsonify({
+        'date': date,
+        'time': result_time,
+        'procedure': procedure,
+        'price': price,
+        'cashback_amount': cashback_amount,
+        'cashback_label': cashback_label,
+        'cashback_drug': (pt['cashback_drug'] if pt else '') or '',
+        'drive_folder_url': (pt['drive_folder_url'] if pt else '') or '',
     })
 
 @app.route('/api/admin/client-photos/<phone>', methods=['GET'])

@@ -2969,10 +2969,11 @@ async function openClientCard(phone, name) {
       modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Немає записаних візитів</div>';
       return;
     }
+    _clientVisitsCache[phone] = visits;
     var html = '<div style="padding:0 0 4px;color:var(--text3);font-size:13px">Всього візитів: ' + totalCount + '</div>';
-    visits.forEach(function(v) {
+    visits.forEach(function(v, vi) {
       var statusCls = (v.status||'').toUpperCase() === 'CANCELLED' ? 'color:var(--text3);text-decoration:line-through' : '';
-      html += '<div class="client-card-visit-row" style="' + statusCls + '">' +
+      html += '<div class="client-card-visit-row" style="cursor:pointer;' + statusCls + '" onclick="_openVisitDetail(\'' + _esc(phone) + '\',' + vi + ')">' +
         '<span class="client-card-visit-date">' + _esc(v.date || '') + '</span>' +
         '<span class="client-card-visit-proc">' + _esc(v.service || v.procedure_name || '') + '</span>' +
         (v.specialist ? '<span class="client-card-visit-spec" style="color:' + (v.specialist==='victoria'?'#1D9E75':'#7F77DD') + '">' + _esc(v.specialist==='victoria'?'В':'А') + '</span>' : '') +
@@ -2986,6 +2987,50 @@ async function openClientCard(phone, name) {
   } catch(e) {
     if (e.name !== 'AbortError')
       modal.querySelector('.client-card-visits').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Помилка завантаження</div>';
+  }
+}
+
+var _clientVisitsCache = {};
+async function _openVisitDetail(phone, idx) {
+  var v = (_clientVisitsCache[phone] || [])[idx];
+  if (!v) return;
+  document.getElementById('confirm-modal-title').textContent = v.service || v.procedure_name || 'Візит';
+  document.getElementById('confirm-modal-text').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Завантаження...</div>';
+  document.getElementById('confirm-modal-ok').style.display = 'none';
+  document.getElementById('confirm-modal-cancel').textContent = 'Закрити';
+  document.getElementById('confirm-modal').classList.add('show');
+  document.getElementById('confirm-modal-cancel').onclick = function() {
+    document.getElementById('confirm-modal').classList.remove('show');
+    document.getElementById('confirm-modal-ok').style.display = '';
+    document.getElementById('confirm-modal-cancel').textContent = 'Відміна';
+    document.getElementById('confirm-modal-cancel').onclick = null;
+  };
+  try {
+    var d = await api('/admin/visit-detail?phone=' + encodeURIComponent(phone) +
+      '&date=' + encodeURIComponent(v.date || '') + '&procedure=' + encodeURIComponent(v.service || v.procedure_name || ''));
+    var rows = [
+      ['Дата', (d.date || '—') + (d.time ? ' ' + d.time : '')],
+      ['Процедура', d.procedure || '—'],
+    ];
+    if (d.cashback_drug) rows.push(['Препарат', d.cashback_drug]);
+    rows.push(['Ціна', d.price != null ? d.price.toFixed(0) + ' грн' : '—']);
+    var cbText = d.cashback_amount != null ? d.cashback_amount.toFixed(0) + ' грн — ' + d.cashback_label : d.cashback_label;
+    rows.push(['Кешбек', cbText]);
+    var html = '<div style="padding:4px 0">';
+    rows.forEach(function(r) {
+      html += '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="color:var(--text3);font-size:14px">' + _esc(r[0]) + '</span>' +
+        '<span style="font-size:14px;text-align:right;max-width:65%">' + _esc(r[1]) + '</span></div>';
+    });
+    if (d.drive_folder_url) {
+      html += '<div style="padding:12px 0 4px;text-align:center"><a href="' + _esc(d.drive_folder_url) + '" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline;font-size:14px">Фото до/після</a></div>';
+    } else {
+      html += '<div style="padding:12px 0 4px;text-align:center;color:var(--text3);font-size:13px">Фото відсутні</div>';
+    }
+    html += '</div>';
+    document.getElementById('confirm-modal-text').innerHTML = html;
+  } catch(e) {
+    document.getElementById('confirm-modal-text').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Помилка завантаження</div>';
   }
 }
 
