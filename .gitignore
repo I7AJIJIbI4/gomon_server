@@ -2,6 +2,7 @@
 .env
 vapid_private.pem
 config.py
+zadarma/config.php
 *.pem
 *.key
 private_data/

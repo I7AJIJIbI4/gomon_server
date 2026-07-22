@@ -2,14 +2,16 @@
 // ОНОВЛЕНА СИСТЕМА з IVR + Telegram Bot Support
 header('Content-Type: application/json; charset=utf-8');
 
+require_once '/home/gomoncli/zadarma/config.php';
+
 if (isset($_GET['zd_echo'])) {
     exit($_GET['zd_echo']);
 }
 
 $config = [
-    'zadarma_key' => '322168f1b94be856f0de',
-    'zadarma_secret' => 'ae4b189367a9f6de88b3',
-    'main_phone' => '0733103110',
+    'zadarma_key' => ZADARMA_API_KEY,
+    'zadarma_secret' => ZADARMA_API_SECRET,
+    'main_phone' => ZADARMA_MAIN_PHONE,
     'log_file' => '/home/gomoncli/zadarma/ivr_webhook.log',
 
     // Номер лікаря для переадресації (кнопка 3 в новому IVR)
@@ -30,8 +32,8 @@ $config = [
     ],
 
     'telegram_config' => [
-        'bot_token' => '8030228734:AAGYMKVWYfNT5h-UJlVWmmWmul8-KhdaOk4',
-        'chat_id' => '573368771'
+        'bot_token' => TG_BOT_TOKEN,
+        'chat_id' => TG_ADMIN_CHAT
     ]
 ];
 

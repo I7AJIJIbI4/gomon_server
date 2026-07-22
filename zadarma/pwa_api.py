@@ -5108,7 +5108,7 @@ def admin_messages_read():
 
 # Config needed in config.py:
 #   WFP_MERCHANT_ACCOUNT = 'gomonclinic_com'  # PROD: gomonclinic_com, TEST: test_merch_n1
-#   WFP_MERCHANT_SECRET = '6ab464c63093a95b5f6a04ceb2f9f118977749fe'
+#   WFP_MERCHANT_SECRET = 'your-wayforpay-merchant-secret'
 #   WFP_MERCHANT_DOMAIN = 'drgomon.beauty'
 #
 # WayForPay URLs:
