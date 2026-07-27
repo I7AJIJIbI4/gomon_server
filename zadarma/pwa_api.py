@@ -1877,7 +1877,7 @@ def admin_client_card(phone):
         for s in services:
             visits.append({
                 'date': s.get('date', ''),
-                'time': '{:02d}:00'.format(s['hour']) if s.get('hour') is not None else '',
+                'time': '{:02d}:{:02d}'.format(s['hour'], s.get('minute') or 0) if s.get('hour') is not None else '',
                 'service': s.get('service', ''),
                 'specialist': s.get('specialist', ''),
                 'status': s.get('status', ''),
@@ -2001,7 +2001,7 @@ def admin_visit_detail():
             try:
                 for s in json.loads(cl['services_json'] or '[]'):
                     if s.get('date') == date and s.get('service') == procedure and s.get('hour') is not None:
-                        result_time = '{:02d}:00'.format(s['hour'])
+                        result_time = '{:02d}:{:02d}'.format(s['hour'], s.get('minute') or 0)
                         break
             except Exception:
                 pass
