@@ -3008,8 +3008,9 @@ async function _openVisitDetail(phone, idx) {
   try {
     var d = await api('/admin/visit-detail?phone=' + encodeURIComponent(phone) +
       '&date=' + encodeURIComponent(v.date || '') + '&procedure=' + encodeURIComponent(v.service || v.procedure_name || ''));
+    var visitTime = d.time || v.time || '';
     var rows = [
-      ['Дата', (d.date || '—') + (d.time ? ' ' + d.time : '')],
+      ['Дата', (d.date || '—') + (visitTime ? ' ' + visitTime : '')],
       ['Процедура', d.procedure || '—'],
     ];
     if (d.cashback_drug) rows.push(['Препарат', d.cashback_drug]);

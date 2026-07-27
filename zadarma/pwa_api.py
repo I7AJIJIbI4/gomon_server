@@ -1993,6 +1993,18 @@ def admin_visit_detail():
             (p, tail, date, procedure)).fetchone()
         if m and m['time']:
             result_time = m['time']
+    if not result_time:
+        cl = conn.execute(
+            "SELECT services_json FROM clients WHERE phone=? OR phone LIKE ?",
+            (p, tail)).fetchone()
+        if cl:
+            try:
+                for s in json.loads(cl['services_json'] or '[]'):
+                    if s.get('date') == date and s.get('service') == procedure and s.get('hour') is not None:
+                        result_time = '{:02d}:00'.format(s['hour'])
+                        break
+            except Exception:
+                pass
     conn.close()
 
     price = None
