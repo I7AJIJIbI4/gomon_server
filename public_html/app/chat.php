@@ -500,6 +500,27 @@ if (file_exists($prices_file)) {
     }
 }
 
+// ── 4b. Вільні проміжки сьогодні (виняток "немає часу сьогодні") ──
+$spec_names = ['victoria' => 'Вікторія', 'anastasia' => 'Анастасія'];
+$gap_lines = [];
+foreach ($spec_names as $spec_key => $spec_name) {
+    $ch = curl_init('http://127.0.0.1:5001/api/internal/free-gaps-today?specialist=' . $spec_key);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+    if ($resp) {
+        $data = json_decode($resp, true);
+        if ($data && !empty($data['known'])) {
+            $gaps = $data['gaps'] ?? [];
+            $gap_lines[] = "{$spec_name}: " . (count($gaps) ? implode(', ', $gaps) : 'вільних проміжків немає');
+        }
+    }
+}
+if ($gap_lines) {
+    $system_prompt .= "\n\n---\n## Вільні проміжки сьогодні (" . date('Y-m-d') . ")\n" . implode("\n", $gap_lines);
+}
+
 // ── 5. Контекст канала (сайт / додаток) ──────────────────────
 if ($source === 'site') {
     $system_prompt .= "\n\n---\n## Контекст: Сайт drgomon.beauty\nТи спілкуєшся з відвідувачем сайту. Для запису, консультації або зв'язку з лікарем — направляй в [Instagram Direct](https://ig.me/m/dr.gomon) або [Telegram](https://t.me/DrGomonCosmetology). Також можна зателефонувати 073-310-31-10. Рекомендуй додаток https://drgomon.beauty/app — там кешбек 3% і зручне відстеження записів.";

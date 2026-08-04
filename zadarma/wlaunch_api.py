@@ -672,6 +672,158 @@ def test_wlaunch_connection():
         return False
 
 
+# \u2500\u2500\u2500 Today's free-gap availability (AI "no time today" exception) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+WEEKDAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
+_SCHEDULE_CACHE = {}  # date_str -> (fetched_at_ts, raw_response)
+SCHEDULE_CACHE_TTL = 300  # 5 min
+
+
+def _fetch_schedule_raw(date_str):
+    """GET /resource/schedule for a single date (WLaunch requires end > start), cached briefly."""
+    import time as _time
+    now_ts = _time.time()
+    cached = _SCHEDULE_CACHE.get(date_str)
+    if cached and now_ts - cached[0] < SCHEDULE_CACHE_TTL:
+        return cached[1]
+    branch_id = get_branch_id()
+    if not branch_id:
+        return None
+    url = "{}/company/{}/branch/{}/resource/schedule".format(WLAUNCH_API_URL, COMPANY_ID, branch_id)
+    end_date = (datetime.strptime(date_str, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+    try:
+        resp = requests.get(url, headers=HEADERS, params={'start': date_str, 'end': end_date}, timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        _SCHEDULE_CACHE[date_str] = (now_ts, data)
+        return data
+    except Exception as e:
+        logger.error("WLaunch schedule fetch error: {}".format(e))
+        return None
+
+
+def _parse_resource_frames_for_date(resource_block, date_str, weekday_name):
+    """Day-specific frames win over the recurring weekly cycle when present for this date."""
+    day_frames_today = [f for f in resource_block.get('day_frames', [])
+                         if f.get('active') and f.get('date') == date_str]
+    frames = day_frames_today if day_frames_today else [
+        f for f in resource_block.get('cycle_frames', [])
+        if f.get('active') and f.get('day') == weekday_name]
+    return [(f['start_time'] // 60, f['end_time'] // 60, f['type']) for f in frames]
+
+
+def _subtract_intervals(base, cuts):
+    """base, cuts: lists of (start_min, end_min). Returns base with each cut interval removed."""
+    result = list(base)
+    for cs, ce in cuts:
+        next_result = []
+        for s, e in result:
+            if ce <= s or cs >= e:
+                next_result.append((s, e))
+                continue
+            if cs > s:
+                next_result.append((s, cs))
+            if ce < e:
+                next_result.append((ce, e))
+        result = next_result
+    return result
+
+
+def _get_booked_intervals_today(specialist, date_str):
+    """Already-booked minute intervals today for a specialist: WLaunch-synced visits,
+    manual appointments, and locally-tracked breaks (defensive \u2014 breaks should already
+    be mirrored to WLaunch as OFF frames, but double-subtracting is harmless)."""
+    import sqlite3
+    DB_PATH = '/opt/gomon/app/zadarma/users.db'
+    intervals = []
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        for (sj,) in conn.execute("SELECT services_json FROM clients WHERE services_json IS NOT NULL").fetchall():
+            try:
+                items = json.loads(sj)
+            except Exception:
+                continue
+            for it in items:
+                if it.get('date') != date_str or it.get('specialist') != specialist:
+                    continue
+                if (it.get('status') or '').upper() in ('CANCELLED', 'NO_SHOW'):
+                    continue
+                h = it.get('hour')
+                if h is None:
+                    continue
+                start = h * 60 + (it.get('minute') or 0)
+                intervals.append((start, start + (it.get('duration_min') or 60)))
+
+        for t, dur in conn.execute(
+                "SELECT time, duration FROM manual_appointments WHERE date=? AND specialist=? AND status != 'CANCELLED'",
+                (date_str, specialist)).fetchall():
+            if not t:
+                continue
+            hh, mm = t.split(':')
+            start = int(hh) * 60 + int(mm)
+            intervals.append((start, start + (dur or 60)))
+
+        for tf, tt in conn.execute(
+                "SELECT time_from, time_to FROM specialist_breaks WHERE date=? AND specialist=?",
+                (date_str, specialist)).fetchall():
+            if not tf or not tt:
+                continue
+            fh, fm = tf.split(':')
+            th, tm = tt.split(':')
+            intervals.append((int(fh) * 60 + int(fm), int(th) * 60 + int(tm)))
+        conn.close()
+    except Exception as e:
+        logger.error("booked intervals lookup error: {}".format(e))
+    return intervals
+
+
+def get_free_gaps_today(specialist):
+    """Free minute-of-day gaps today for a specialist, only the part still ahead of now.
+    Returns None when unable to determine (WLaunch unreachable, no schedule data, etc.) \u2014
+    callers must treat None as \"unknown\" and skip the today-availability exception entirely,
+    falling back to the normal always-defer-to-doctor behavior."""
+    from tz_utils import kyiv_now
+    now = kyiv_now()
+    date_str = now.strftime('%Y-%m-%d')
+    now_min = now.hour * 60 + now.minute
+
+    resources = get_wlaunch_resources()
+    resource_id = resources.get(specialist)
+    if not resource_id:
+        return None
+
+    data = _fetch_schedule_raw(date_str)
+    if not data:
+        return None
+
+    block = next((b for b in data.get('content', []) if b.get('resource_id') == resource_id), None)
+    if not block:
+        return None
+
+    weekday_name = WEEKDAY_NAMES[now.weekday()]
+    frames = _parse_resource_frames_for_date(block, date_str, weekday_name)
+    on_intervals = [(s, e) for s, e, t in frames if t == 'ON']
+    off_intervals = [(s, e) for s, e, t in frames if t == 'OFF']
+    open_intervals = _subtract_intervals(on_intervals, off_intervals)
+
+    booked = _get_booked_intervals_today(specialist, date_str)
+    free = _subtract_intervals(open_intervals, booked)
+
+    result = []
+    for s, e in free:
+        if e <= now_min:
+            continue
+        result.append((max(s, now_min), e))
+    return result
+
+
+def format_free_gaps(gaps):
+    """[(start_min, end_min), ...] -> [\"14:00-14:45 (45\u0445\u0432)\", ...]"""
+    def _fmt(m):
+        return '{:02d}:{:02d}'.format(m // 60, m % 60)
+    return ['{}-{} ({}\u0445\u0432)'.format(_fmt(s), _fmt(e), e - s) for s, e in gaps if e > s]
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     if test_wlaunch_connection():

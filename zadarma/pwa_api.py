@@ -1030,6 +1030,23 @@ def _ig_process_reply(sender_id):
         except Exception:
             pass
 
+        # Free gaps today (for the "no time left today" exception — see rule in base prompt)
+        try:
+            from wlaunch_api import get_free_gaps_today, format_free_gaps
+            _spec_names = {'victoria': 'Вікторія', 'anastasia': 'Анастасія'}
+            _gap_lines = []
+            for _spec, _name in _spec_names.items():
+                _gaps = get_free_gaps_today(_spec)
+                if _gaps is None:
+                    continue
+                _formatted = format_free_gaps(_gaps)
+                _gap_lines.append('{}: {}'.format(_name, ', '.join(_formatted) if _formatted else 'вільних проміжків немає'))
+            if _gap_lines:
+                system_prompt += '\n\n---\n## Вільні проміжки сьогодні ({})\n{}'.format(
+                    kyiv_now().strftime('%Y-%m-%d'), '\n'.join(_gap_lines))
+        except Exception:
+            pass
+
         # Client context: resolve IG sender → phone → appointments
         try:
             conn_cl = sqlite3.connect(DB_PATH, timeout=5)
@@ -1956,6 +1973,21 @@ def admin_client_card(phone):
         'visits_count': max(row['visits_count'] or 0, len(visits)),
         'visits': visits,
     })
+
+@app.route('/api/internal/free-gaps-today', methods=['GET'])
+def internal_free_gaps_today():
+    """Internal-only: today's free minute gaps for a specialist, for the AI
+    'no time left today' exception. Used by chat.php (PHP can't import wlaunch_api)."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    specialist = request.args.get('specialist', '')
+    if specialist not in ('victoria', 'anastasia'):
+        return jsonify({'error': 'invalid_specialist'}), 400
+    from wlaunch_api import get_free_gaps_today, format_free_gaps
+    gaps = get_free_gaps_today(specialist)
+    if gaps is None:
+        return jsonify({'known': False, 'gaps': []})
+    return jsonify({'known': True, 'gaps': format_free_gaps(gaps)})
 
 @app.route('/api/admin/visit-detail', methods=['GET'])
 @require_admin

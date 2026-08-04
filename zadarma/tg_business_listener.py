@@ -282,6 +282,24 @@ def _build_system_prompt(client_phone=None):
     except Exception:
         pass
 
+    # Free gaps today (for the "no time left today" exception — see rule in base prompt)
+    try:
+        from wlaunch_api import get_free_gaps_today, format_free_gaps
+        from tz_utils import kyiv_now as _kyiv_now_gaps
+        _spec_names = {'victoria': 'Вікторія', 'anastasia': 'Анастасія'}
+        _lines = []
+        for _spec, _name in _spec_names.items():
+            _gaps = get_free_gaps_today(_spec)
+            if _gaps is None:
+                continue
+            _formatted = format_free_gaps(_gaps)
+            _lines.append('{}: {}'.format(_name, ', '.join(_formatted) if _formatted else 'вільних проміжків немає'))
+        if _lines:
+            prompt += '\n\n---\n## Вільні проміжки сьогодні ({})\n{}'.format(
+                _kyiv_now_gaps().strftime('%Y-%m-%d'), '\n'.join(_lines))
+    except Exception as e:
+        logger.warning('Free gaps lookup error: {}'.format(e))
+
     # Telegram context + escalation rules
     prompt += ('\n\n---\n## Контекст: Telegram Business (DM з @DrGomonCosmetologyBot)'
                '\nТи спілкуєшся з клієнтом у Telegram бізнес-акаунті Dr. Gomon Cosmetology. '
