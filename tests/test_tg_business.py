@@ -252,13 +252,18 @@ def test_check_ai_should_reply_rate_limited():
     """10+ AI replies today → rate_limited."""
     cid = 80003
     conv = 'tg_{}'.format(cid)
-    from tz_utils import kyiv_now
-    today = kyiv_now().strftime('%Y-%m-%d')
+    from datetime import datetime, timedelta
+    # Must be older than the 60s cooldown window but still "today" (Kyiv date) —
+    # a fixed wall-clock string (e.g. "10:00:00") is NOT safe here: the cooldown
+    # check compares created_at against real UTC datetime('now', '-60 seconds') as
+    # a plain string, so a hardcoded clock time sorts as "recent" whenever the
+    # test happens to run before that hour in UTC, false-triggering 'cooldown'.
+    ts = (datetime.utcnow() - timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S')
     c = _conn()
     for i in range(10):
         c.execute(
             "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,1,?)",
-            (conv, 'ai_bot', 'Reply {}'.format(i), '{} 10:00:00'.format(today))
+            (conv, 'ai_bot', 'Reply {}'.format(i), ts)
         )
     c.commit()
     c.close()
