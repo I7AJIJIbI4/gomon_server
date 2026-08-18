@@ -4657,24 +4657,25 @@ def cancel_my_appointment():
     from wlaunch_api import get_branch_id as _get_bid
     _branch_id = _get_bid()
 
-    # Extract specialist BEFORE updating local DB (so status is still CONFIRMED)
+    # Extract specialist + time BEFORE updating local DB (so status is still CONFIRMED)
     _client = get_client(phone)
     _client_name = ((_client.get('first_name','') + ' ' + _client.get('last_name','')).strip()
                     if _client else '')
     _specialist = None
-    if _client:
-        for _it in json.loads(_client.get('services_json','[]') or '[]'):
-            if _it.get('date') == date and (not service or _it.get('service') == service):
-                _specialist = _it.get('specialist')
-                break
+    _appt_time = ''
 
     # Знаходимо WLaunch ID якщо не переданий або manual_
     if appt_id and appt_id.startswith('manual_'):
-        # Manual appointment — look up real WLaunch ID
+        # Manual appointment — look up real WLaunch ID + specialist/time
         _manual_id = appt_id.replace('manual_', '')
         _ma_conn = sqlite3.connect(DB_PATH, timeout=5)
-        _ma_row = _ma_conn.execute('SELECT wlaunch_id, notes FROM manual_appointments WHERE id=?', (_manual_id,)).fetchone()
+        _ma_row = _ma_conn.execute(
+            'SELECT wlaunch_id, notes, specialist, time FROM manual_appointments WHERE id=?',
+            (_manual_id,)).fetchone()
         _ma_conn.close()
+        if _ma_row:
+            _specialist = _ma_row[2] or None
+            _appt_time = _ma_row[3] or ''
         if _ma_row and _ma_row[0]:
             appt_id = _ma_row[0]
         elif _ma_row and _ma_row[1]:
@@ -4687,6 +4688,14 @@ def cancel_my_appointment():
             appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
     elif not appt_id:
         appt_id = _find_wlaunch_appt_id(phone, date, service, branch_id=_branch_id)
+
+    if not _appt_time and _client:
+        for _it in json.loads(_client.get('services_json','[]') or '[]'):
+            if _it.get('date') == date and (not service or _it.get('service') == service):
+                _specialist = _it.get('specialist')
+                if _it.get('hour') is not None:
+                    _appt_time = '{:02d}:{:02d}'.format(_it['hour'], _it.get('minute') or 0)
+                break
 
     if not appt_id:
         return jsonify({'error': 'appointment_not_found'}), 404
@@ -4711,7 +4720,7 @@ def cancel_my_appointment():
             'procedure_name': service,
             'specialist':     _specialist,
             'date':           date,
-            'time':           '',
+            'time':           _appt_time,
             'duration_min':   60,
         })
     except Exception as _e:

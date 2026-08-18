@@ -709,7 +709,10 @@ def send_daily_summary():
     lines = ['📊 <b>Повідомлення за {}</b>'.format(today_display), '']
 
     # Group notification_log by type
-    # Don't count push failures as errors if TG/SMS succeeded for same phone+type
+    # Don't count a channel failure as an error if another channel succeeded for the
+    # same phone+type — Push/TG/SMS are independent-then-cascading, so e.g. a TG
+    # failure (blocked bot) with a successful SMS fallback is the cascade working as
+    # designed, not a real delivery failure.
     sent_keys = set()  # (phone, type) where at least one channel succeeded
     for e in notif_entries:
         if e['status'] == 'sent':
@@ -720,8 +723,8 @@ def send_daily_summary():
     best_per_key = {}  # (phone, type) → entry with best channel
     for e in notif_entries:
         if e['status'] != 'sent':
-            # Push fail with successful TG/SMS = not a real error
-            if e['channel'] == 'push' and (e['phone'], e['type']) in sent_keys:
+            # Any channel fail with a successful channel elsewhere = not a real error
+            if (e['phone'], e['type']) in sent_keys:
                 continue
             key = (e['phone'], e['type'], 'fail')
             best_per_key[key] = e
