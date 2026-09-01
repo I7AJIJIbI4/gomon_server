@@ -157,3 +157,7 @@ merge_descriptions.py
 prices_*.json
 procedure_descriptions.json
 google-play/gomon-release-new.keystore
+
+# === PLAYWRIGHT ARTIFACTS ===
+playwright-report/
+test-results/
