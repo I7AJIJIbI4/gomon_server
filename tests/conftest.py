@@ -48,6 +48,11 @@ def _make_config():
     m.PIN_AUTH             = {'380000000001': '1234'}
     m.ADMIN_USER_IDS       = [573368771]
     m.get_ig_token         = lambda: 'ig_test_token'
+    m.ICS_KEYS             = {
+        'ics_key_superadmin': {'phone': '380733103110', 'role': 'superadmin', 'specialist': ''},
+        'ics_key_victoria':   {'phone': '380996093860', 'role': 'full',       'specialist': 'victoria'},
+        'ics_key_anastasia':  {'phone': '380685129121', 'role': 'specialist', 'specialist': 'anastasia'},
+    }
     return m
 
 
