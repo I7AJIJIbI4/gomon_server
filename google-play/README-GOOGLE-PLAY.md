@@ -16,15 +16,15 @@
 ## Дані підпису (ЗБЕРІГАЙ ОКРЕМО)
 
 ```
-Keystore:     gomon-release.keystore
+Keystore:     gomon-release.keystore (СТАРИЙ, замінений на gomon-release-new.keystore після скидання upload key)
 Alias:        gomon
-Store pass:   GomonClinic2026
-Key pass:     GomonClinic2026
+Store pass:   не в git — див. окреме сховище паролів
+Key pass:     не в git — див. окреме сховище паролів
 Validity:     10000 днів (~27 років)
 SHA-256:      B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:31:E5:ED:A6:B0:69:9A:EC:55:0F
 ```
 
-**ВАЖЛИВО**: Якщо втратиш keystore — НЕ ЗМОЖЕШ оновити додаток у Google Play. Зроби бекап!
+**ВАЖЛИВО**: Якщо втратиш keystore (актуальний — `gomon-release-new.keystore`) — НЕ ЗМОЖЕШ оновити додаток у Google Play. Зроби бекап! Пароль/keystore ніколи не тримати в git.
 
 ---
 
@@ -56,10 +56,10 @@ SHA-256:      B2:9C:C6:35:F1:7F:58:DB:0A:56:84:23:D8:31:F3:EB:CA:1E:40:AE:55:86:
 | Notifications | `enabled` |
 | Min SDK | `23` (Android 6.0+) |
 | Monochrome icon URL | `https://www.gomonclinic.com/app/icons/badge-white.png` |
-| Signing key | **Use mine** → завантаж `gomon-release.keystore` |
+| Signing key | **Use mine** → завантаж актуальний keystore (не в git) |
 | Key alias | `gomon` |
-| Key password | `GomonClinic2026` |
-| Store password | `GomonClinic2026` |
+| Key password | не в git — див. окреме сховище паролів |
+| Store password | не в git — див. окреме сховище паролів |
 | Notification delegation | Enable |
 | Location/Billing/ChromeOS/Meta Quest | **Disable** |
 | Fallback behavior | Custom Tabs |

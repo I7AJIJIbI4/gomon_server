@@ -3071,11 +3071,7 @@ def admin_break_delete(break_id):
 
 
 # Безстрокові ключі для Google Calendar підписки (не протухають, можна відкликати)
-ICS_KEYS = {
-    'rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw': {'phone': '380733103110', 'role': 'superadmin', 'specialist': ''},
-    '3zIZzKlBoW37t_-T7zjmhQTDunK9bQUVde3JiQGg4rk': {'phone': '380996093860', 'role': 'full',       'specialist': 'victoria'},
-    'z_eszoPbMUFTt_TKiGUkI6ZOkaZGu4P7YfT8-yJLX8k': {'phone': '380685129121', 'role': 'specialist',  'specialist': 'anastasia'},
-}
+from config import ICS_KEYS
 
 @app.route('/api/admin/calendar.ics')
 def admin_calendar_ics():
@@ -3083,10 +3079,7 @@ def admin_calendar_ics():
     iCalendar feed — підписка в Google Calendar.
     Auth: ?key= (безстроковий) або ?token= (сесійний) або Authorization header.
 
-    URL для Google Calendar:
-      superadmin: /api/admin/calendar.ics?key=rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw
-      victoria:   /api/admin/calendar.ics?key=3zIZzKlBoW37t_-T7zjmhQTDunK9bQUVde3JiQGg4rk
-      anastasia:  /api/admin/calendar.ics?key=z_eszoPbMUFTt_TKiGUkI6ZOkaZGu4P7YfT8-yJLX8k
+    Ключі per-role — див. ICS_KEYS в config.py (НЕ в git).
     """
     # 1. Безстроковий ключ (для Google Calendar)
     ics_key = request.args.get('key', '')

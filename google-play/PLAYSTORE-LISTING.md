@@ -241,6 +241,6 @@ AI-асистент GomonAI:
 
 | Хто | URL |
 |-----|-----|
-| Superadmin (всі) | `https://www.gomonclinic.com/api/admin/calendar.ics?key=rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw` |
-| Вікторія | `https://www.gomonclinic.com/api/admin/calendar.ics?key=3zIZzKlBoW37t_-T7zjmhQTDunK9bQUVde3JiQGg4rk` |
-| Анастасія | `https://www.gomonclinic.com/api/admin/calendar.ics?key=z_eszoPbMUFTt_TKiGUkI6ZOkaZGu4P7YfT8-yJLX8k` |
+| Superadmin (всі) | `https://www.gomonclinic.com/api/admin/calendar.ics?key=<ICS_KEYS у config.py>` |
+| Вікторія | `https://www.gomonclinic.com/api/admin/calendar.ics?key=<ICS_KEYS у config.py>` |
+| Анастасія | `https://www.gomonclinic.com/api/admin/calendar.ics?key=<ICS_KEYS у config.py>` |

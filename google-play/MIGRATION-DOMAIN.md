@@ -186,8 +186,8 @@ curl -sI https://www.drgomon.com/merchant-feed.xml | head -3
 curl -sI https://www.gomonclinic.com/app/ | head -5
 # Має бути: 301 → https://www.drgomon.com/app/
 
-# Google Calendar feeds (ключі ті самі)
-curl -s "https://www.drgomon.com/api/admin/calendar.ics?key=rtsqIeZt6zJICZOIHOQW545DYI3sRxajum-oGL3EEnw" | head -5
+# Google Calendar feeds (ключі ті самі — див. ICS_KEYS у config.py)
+curl -s "https://www.drgomon.com/api/admin/calendar.ics?key=<ICS_KEYS у config.py>" | head -5
 ```
 
 ---
