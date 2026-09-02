@@ -50,6 +50,7 @@
 | `zadarma/notifier.py` | **Диспетчер сповіщень**: Push→TG→SMS. 4 типи: reminder_24h, post_visit, cancellation (client+spec), spec_new_appt |
 | `zadarma/appt_reminder.py` | Cron-скрипт: `--reminder` (10:00/18:00), `--feedback` (20:00), `--specialist` (20:00, активно) |
 | `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
+| `zadarma/ig_health.py` | Cron: перевіряє IG-токен через graph.instagram.com, TG-алерт за 7 днів до кінця і при протуханні. `--dry-run` не пише прапорці і не шле TG |
 | `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
 ### Systemd Services
@@ -375,6 +376,7 @@ APP=/opt/gomon/app/zadarma
 30 21 * * *     cd $APP && $VENV photo_reminder.py --create     # Drive папки + TG
 0 11 * * *      cd $APP && $VENV photo_reminder.py --check      # Перевірка фото
 0 7,19 * * *    cd $APP && $VENV photo_cache.py                 # Кеш фото
+0 10 * * *      cd $APP && $VENV ig_health.py               # Термін IG-токена → TG-алерт
 0 3 * * *       SQLite backup → /opt/gomon/backups/ (14 днів)
 ```
 
@@ -930,7 +932,7 @@ claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claud
 
 ### Архітектура
 
-Уніфікований inbox для **Telegram Business** + **Instagram** (IG поки read-only, App Review pending).
+Уніфікований inbox для **Telegram Business** + **Instagram**. Обидва канали в проді: приймають вхідні, віддають відповіді адміна та AI.
 
 **Backend endpoints** (pwa_api.py, всі `@require_admin`):
 | Endpoint | Метод | Опис |
@@ -1054,7 +1056,7 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 ### Відомі обмеження (не виправлено, прийнятні)
 
 - **PTR в TWA** — не працює, задокументовано в TODO_PTR.md
-- **IG messenger** — App Review pending, receive не працює
+- **IG токен живе ~60 днів** — після протухання вхідні йдуть, AI генерує відповідь, а send падає з 401 і клієнт мовчки лишається без відповіді. Слідкує `ig_health.py` (cron, TG-алерт)
 - **Safari voice recording** — обмежена підтримка MediaRecorder codecs
 - **Calendar timezone** — "now" лінія використовує device time (не Kyiv)
 - **Conversation list** — LIMIT 50, без пагінації
@@ -1066,13 +1068,18 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 - **Calendar onclick ID** — завжди передавати як string: `openApptAction('id')` + порівнювати `String(x.id) === String(id)`. Працює для numeric (manual) і string (WLaunch) IDs
 - **CSS `transform` на hover** — НЕ видаляти `.adm-tl-appt:hover{transform:scale(1.01)}` — без нього інші CSS зміни можуть зламати stacking order
 
-### Instagram AI — план (після App Review)
+### Instagram AI — у проді
 
-Коли IG App Review пройде, додамо AI auto-reply для Instagram DM:
-1. Webhook endpoint для вхідних IG messages (замість polling)
-2. Та ж `_build_system_prompt()` + `_call_anthropic()` логіка з контекстом "Instagram"
-3. Відповідь через Graph API v25.0 `/me/messages`
+AI auto-reply для Instagram Direct працює (щонайменше з квітня 2026, не «план»):
+1. Вхідні IG messages приходять вебхуком (не polling)
+2. Той самий `_build_system_prompt()` + `_call_anthropic()`, контекст «Instagram»
+3. Відповідь через `https://graph.instagram.com/v25.0/me/messages` — хост саме `graph.instagram.com`, бо токен формату `IGAA...`; на `graph.facebook.com` він дає «Cannot parse access token»
 4. Ескалація аналогічна TG
+5. Запис у `messages` (`sender_id='ai_bot'`, `platform='instagram'`) — **тільки** при HTTP 200, тож провалене надсилання не лишає фантомних «відповіли»
+
+**Токен:** `private_data/ig_token.txt`, живе ~60 днів, оновлюється вручну через Meta Console (Manage messaging & content on Instagram → Step 2 «Generate access tokens» → dr.gomon). Дата генерації = mtime файлу.
+
+> **Інцидент 21.08–02.09.2026:** токен протух 21.08 о 12:37 Київ (згенерований 22.06). 12 днів жодної AI-відповіді в Direct, 59 провалених надсилань з 401, адміни відповідали вручну. Ніхто не помітив, бо моніторингу не було. Звідси `ig_health.py`.
 
 ---
 
