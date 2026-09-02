@@ -110,7 +110,8 @@ zadarma/pwa_api.pid
 Thumbs.db
 
 # === CLAUDE ===
-.claude/
+.claude/*
+!.claude/skills/
 
 # === VIRTUAL ENVS ===
 venv/
