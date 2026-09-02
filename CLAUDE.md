@@ -361,7 +361,7 @@ Cron (09:00 і 21:00)
 
 ## Cron (crontab -l)
 
-Всі часи — **Kyiv** (`TZ=Europe/Kyiv` в crontab).
+Всі часи в crontab — **UTC** (сервер у `Etc/UTC`, рядка `TZ=` в crontab немає — Ubuntu cron його ігнорує). Kyiv = UTC+3 влітку. Нижче наведено UTC-час.
 
 ```
 TZ=Europe/Kyiv
@@ -376,7 +376,7 @@ APP=/opt/gomon/app/zadarma
 30 21 * * *     cd $APP && $VENV photo_reminder.py --create     # Drive папки + TG
 0 11 * * *      cd $APP && $VENV photo_reminder.py --check      # Перевірка фото
 0 7,19 * * *    cd $APP && $VENV photo_cache.py                 # Кеш фото
-0 10 * * *      cd $APP && $VENV ig_health.py               # Термін IG-токена → TG-алерт
+0 7 * * *       cd $APP && $VENV ig_health.py                # Термін IG-токена → TG-алерт (10:00 Kyiv)
 0 3 * * *       SQLite backup → /opt/gomon/backups/ (14 днів)
 ```
 

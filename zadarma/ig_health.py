@@ -14,7 +14,7 @@ in August 2026). Nothing else monitors it.
 Alerts are idempotent via flag files, mirroring anthropic_health.py.
 
 Schedule via cron, e.g.:
-  0 10 * * *  cd /opt/gomon/app/zadarma && /opt/gomon/venv/bin/python ig_health.py >> /var/log/gomon/ig_health.log 2>&1
+  0 7 * * *  cd /opt/gomon/app/zadarma && /opt/gomon/venv/bin/python ig_health.py >> /var/log/gomon/ig_health.log 2>&1
 
 Renewal is manual (Meta Console -> Manage messaging & content on Instagram ->
 Step 2 "Generate access tokens" -> dr.gomon), then write the token into
