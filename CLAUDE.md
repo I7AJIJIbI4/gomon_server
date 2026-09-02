@@ -400,6 +400,8 @@ APP=/opt/gomon/app/zadarma
 
 Код знаходиться на сервері у `/opt/gomon/app/` (git repo). Деплой через `git pull` + restart.
 
+**Remote на сервері — SSH, не HTTPS.** `git@github.com:I7AJIJIbI4/gomon_server.git` через read-only deploy key `/root/.ssh/id_ed25519_github_deploy` (прописаний у `/root/.ssh/config`). Анонімний HTTPS перестав працювати 02.09.2026: GitHub віддає 200 на `GET /info/refs`, але 401 на `POST /git-upload-pack` — виглядає як тротлінг анонімного git-трафіку з IP дата-центру. Симптом оманливий: git просить `Username for https://github.com`, хоча репозиторій публічний і `curl` з того ж сервера дає 200.
+
 ### Зміни в API (pwa_api.py)
 ```bash
 # 1. На сервері: pull змін
