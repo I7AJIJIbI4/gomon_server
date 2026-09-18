@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify
 
 sys.path.insert(0, '/home/gomoncli/zadarma')
 from user_db import add_or_update_client
+from wlaunch_api import parse_appt_time
 import requests
 from config import WLAUNCH_API_KEY, COMPANY_ID
 
@@ -89,16 +90,8 @@ def fetch_client_appointments(client_phone):
                 service_name = ', '.join(s.get('name', '') for s in services_list if s.get('name'))
                 
                 start_time = appt.get('start_time', '')
-                visit_date = ''
-                visit_hour = None
-                
-                if start_time:
-                    try:
-                        visit_date = start_time[:10]
-                        if len(start_time) >= 13:
-                            visit_hour = int(start_time[11:13])
-                    except Exception:
-                        pass
+                # DST-correct UTC->Kyiv conversion, keeps minutes
+                visit_date, visit_hour, visit_minute = parse_appt_time(start_time)
                 
                 appt_status = (appt.get('status') or '').upper()
                 
@@ -106,6 +99,7 @@ def fetch_client_appointments(client_phone):
                     'appt_id': appt.get('id', ''),
                     'date': visit_date,
                     'hour': visit_hour,
+                    'minute': visit_minute,
                     'service': service_name,
                     'status': appt_status
                 })

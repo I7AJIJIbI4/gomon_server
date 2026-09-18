@@ -146,6 +146,7 @@ def fetch_all_clients():
             duration_min = (appt.get("duration") or 0) // 60 or 60
 
             entry = {"appt_id": appt.get("id",""), "date": visit_date, "hour": visit_hour,
+                     "minute": visit_minute,
                      "service": service_name, "status": appt_status, "specialist": specialist,
                      "duration_min": duration_min}
 

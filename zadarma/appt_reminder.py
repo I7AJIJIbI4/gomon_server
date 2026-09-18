@@ -312,7 +312,7 @@ def _get_wlaunch_appts(for_date_str):
                 'procedure_name': it.get('service') or '',
                 'specialist':     it.get('specialist') or '',
                 'date':           for_date_str,
-                'time':           '{:02d}:00'.format(hour) if hour is not None else '',
+                'time':           '{:02d}:{:02d}'.format(hour, it.get('minute') or 0) if hour is not None else '',
                 'duration_min':   it.get('duration_min') or 60,
                 'source':         'wlaunch',
             })
@@ -673,7 +673,7 @@ def run_specialist_notifications(dry_run=False):
                 'procedure_name': it.get('service') or '',
                 'specialist':     it.get('specialist') or '',
                 'date':           appt_date,
-                'time':           '{:02d}:00'.format(hour) if hour is not None else '',
+                'time':           '{:02d}:{:02d}'.format(hour, it.get('minute') or 0) if hour is not None else '',
                 'duration_min':   it.get('duration_min') or 60,
                 'source':         'wlaunch',
             })

@@ -289,7 +289,7 @@ def _get_todays_appointments(date_str):
                 'client_phone': r['phone'] or '',
                 'procedure': s.get('service', ''),
                 'specialist': s.get('specialist', ''),
-                'time': '{:02d}:00'.format(s['hour']) if s.get('hour') is not None else '',
+                'time': '{:02d}:{:02d}'.format(s['hour'], s.get('minute') or 0) if s.get('hour') is not None else '',
                 'drive_url': None,
                 'source': 'wlaunch',
             })

@@ -338,7 +338,7 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None, 
             hour = it.get('hour')
             if hour is None:
                 continue
-            s = hour * 60
+            s = hour * 60 + (it.get('minute') or 0)
             e = s + (it.get('duration_min') or 60)
             if new_start < e and s < new_end:
                 return True

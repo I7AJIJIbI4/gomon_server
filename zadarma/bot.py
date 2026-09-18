@@ -1392,7 +1392,7 @@ async def my_services_command(update, context: ContextTypes.DEFAULT_TYPE):
                         proc_name = '~' + proc_name + '~ (скасовано)'
                     appointments.append({
                         'date': s.get('date', ''),
-                        'time': '{:02d}:00'.format(int(s['hour'])) if s.get('hour') is not None else '',
+                        'time': '{:02d}:{:02d}'.format(int(s['hour']), int(s.get('minute') or 0)) if s.get('hour') is not None else '',
                         'procedure': proc_name,
                         'specialist': SPECIALIST_NAMES.get(
                             (s.get('specialist') or '').lower(), ''

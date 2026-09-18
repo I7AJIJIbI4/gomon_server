@@ -277,7 +277,7 @@ def send_appt_push_reminders(dry_run=False):
 
             # Формуємо час у повідомленні (hour вже в київському часі після sync)
             if appt_hour_utc is not None:
-                time_str = ' \u043e {:02d}:00'.format(appt_hour_utc)
+                time_str = ' \u043e {:02d}:{:02d}'.format(appt_hour_utc, entry.get('minute') or 0)
             else:
                 time_str = ''
 

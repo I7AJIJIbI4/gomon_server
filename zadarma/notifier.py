@@ -341,7 +341,7 @@ def _appt_vars(appt):
     spec = SPECIALIST_INFO.get(appt.get('specialist'), _UNKNOWN_SPEC)
     # time: manual_appointments має поле 'time', WLaunch — 'hour'
     raw_time = appt.get('time') or (
-        '{:02d}:00'.format(appt['hour']) if appt.get('hour') is not None else ''
+        '{:02d}:{:02d}'.format(appt['hour'], appt.get('minute') or 0) if appt.get('hour') is not None else ''
     )
     date_str = appt.get('date', '')
     return {
