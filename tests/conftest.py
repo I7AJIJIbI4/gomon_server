@@ -40,6 +40,7 @@ def _make_config():
     m.WAYFORPAY_SECRET     = 'test_secret'
     m.WFP_MERCHANT_ACCOUNT = 'test_merchant'
     m.WFP_MERCHANT_SECRET  = 'test_secret'
+    m.WFP_MERCHANT_DOMAIN  = 'drgomon.beauty'
     m.VAPID_PRIVATE_KEY    = 'test_vapid_priv'
     m.VAPID_PUBLIC_KEY     = 'test_vapid_pub'
     m.VAPID_EMAIL          = 'test@example.com'
@@ -64,6 +65,8 @@ def _make_wlaunch():
     m.parse_appt_time            = lambda t: t
     m.create_wlaunch_appointment = lambda *a, **kw: {'id': 'wl-mock-id'}
     m.get_wlaunch_resources      = lambda: []
+    m.get_free_gaps_today        = lambda specialist: None
+    m.format_free_gaps           = lambda gaps: []
     m.WLAUNCH_API_BEARER         = 'Bearer wl_test_api_key'
     return m
 
@@ -229,6 +232,20 @@ _cb_conn.execute(
     'CREATE TABLE IF NOT EXISTS deposit_deductions ('
     '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, amount REAL,'
     "  reason TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now')))"
+)
+_cb_conn.execute(
+    'CREATE TABLE IF NOT EXISTS notification_log ('
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, type TEXT NOT NULL,'
+    '  reference TEXT NOT NULL, channel TEXT NOT NULL, status TEXT DEFAULT "sent",'
+    '  sent_at TEXT NOT NULL, message_preview TEXT,'
+    '  UNIQUE(phone, type, reference, channel))'
+)
+_cb_conn.execute(
+    'CREATE TABLE IF NOT EXISTS sms_reminders ('
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT NOT NULL,'
+    '  phone TEXT NOT NULL, service TEXT NOT NULL, visit_date TEXT NOT NULL,'
+    '  sent_date TEXT NOT NULL, status TEXT DEFAULT "sent", template_category TEXT,'
+    '  UNIQUE(client_id, service, visit_date))'
 )
 _cb_conn.commit()
 _cb_conn.close()

@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 sys.path.append('/opt/gomon/app/zadarma')
 try:
@@ -30,6 +31,13 @@ except ImportError:
         return False
 
 app = Flask(__name__)
+# Behind nginx every request arrives from 127.0.0.1, which made the localhost
+# guards on /api/internal/* and /api/chat/cancel-appointment accept public
+# traffic. nginx appends the real client IP to X-Forwarded-For, so trusting
+# exactly one hop restores a truthful request.remote_addr. Internal callers
+# (chat.php, tg_business_listener) hit 127.0.0.1:5001 directly and send no
+# X-Forwarded-For, so they keep resolving to 127.0.0.1.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
 CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com', 'https://drgomon.beauty', 'https://www.drgomon.beauty'])
 
@@ -295,6 +303,14 @@ def _audit_appointment(appt_id, phone, client_name, procedure, specialist, date,
         pass
 
 
+def _int_param(raw, default):
+    """Numeric query/body param that must not 500 the request on garbage input."""
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 def _time_to_min(t):
     """Convert 'HH:MM' string to minutes since midnight."""
     try:
@@ -310,7 +326,8 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None, 
     exclude_wl_id: WLaunch appointment ID to skip (the WLaunch copy of the same appointment)
     """
     # Check manual_appointments
-    q = "SELECT time, duration FROM manual_appointments WHERE specialist=? AND date=? AND status!='CANCELLED'"
+    q = ("SELECT time, duration FROM manual_appointments WHERE specialist=? AND date=? "
+         "AND status NOT IN ('CANCELLED', 'NO_SHOW')")
     params = [specialist, date]
     if exclude_id is not None:
         q += ' AND id != ?'
@@ -333,7 +350,7 @@ def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None, 
             # Skip WLaunch copy of the appointment being edited
             if exclude_wl_id and it.get('appt_id') == exclude_wl_id:
                 continue
-            if (it.get('status') or '').upper() == 'CANCELLED':
+            if (it.get('status') or '').upper() in ('CANCELLED', 'NO_SHOW'):
                 continue
             hour = it.get('hour')
             if hour is None:
@@ -2262,7 +2279,7 @@ def admin_month_visits():
 @require_admin
 def admin_notif_history():
     """Get notification history from notification_log + sms_reminders."""
-    days = int(request.args.get('days', 7))
+    days = _int_param(request.args.get('days', 7), 7)
     from tz_utils import kyiv_now
     from datetime import timedelta
     cutoff = (kyiv_now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -4573,7 +4590,7 @@ def chat_cancel_appointment():
     if not client:
         return jsonify({'error': 'Клієнта не знайдено в базі.'}), 404
 
-    client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()
+    client_name = (((client.get('first_name') or '') + ' ' + (client.get('last_name') or '')).strip()
                    if client else '')
     services = json.loads(client.get('services_json', '[]') or '[]')
 
@@ -4652,7 +4669,7 @@ def cancel_my_appointment():
 
     # Extract specialist + time BEFORE updating local DB (so status is still CONFIRMED)
     _client = get_client(phone)
-    _client_name = ((_client.get('first_name','') + ' ' + _client.get('last_name','')).strip()
+    _client_name = (((_client.get('first_name') or '') + ' ' + (_client.get('last_name') or '')).strip()
                     if _client else '')
     _specialist = None
     _appt_time = ''
@@ -4806,7 +4823,7 @@ def admin_messages_thread(conv_id):
     if not re.match(r'^[a-z]{2,10}_[A-Za-z0-9_-]+$', conv_id):
         return jsonify({'error': 'invalid_conv_id'}), 400
 
-    limit = min(int(request.args.get('limit', 50)), 200)
+    limit = min(_int_param(request.args.get('limit', 50), 50), 200)
     before_id = request.args.get('before_id', '')
 
     conn = sqlite3.connect(DB_PATH)
@@ -5260,7 +5277,7 @@ def _do_deposit_create(phone):
         amount_uah = float(data.get('amount', 0))
     except (ValueError, TypeError):
         return jsonify({'error': 'invalid_amount'}), 400
-    installments = int(data.get('installments', 0))  # 0 = regular payment, 2-12 = installment months
+    installments = _int_param(data.get('installments', 0), 0)  # 0 = regular payment, 2-12 = installment months
 
     if amount_uah < 100 or amount_uah > 50000:
         return jsonify({'error': 'invalid_amount', 'min': 100, 'max': 50000}), 400
@@ -5271,7 +5288,7 @@ def _do_deposit_create(phone):
         return jsonify({'error': 'installments_min_1000'}), 400
 
     client = get_client(phone)
-    client_name = ((client.get('first_name', '') + ' ' + client.get('last_name', '')).strip()) if client else ''
+    client_name = ((client.get('first_name') or '') + ' ' + (client.get('last_name') or '')).strip() if client else ''
     first_name = client_name.split()[0] if client_name else ''
     last_name = ' '.join(client_name.split()[1:]) if len(client_name.split()) > 1 else ''
     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET, WFP_MERCHANT_DOMAIN
@@ -5348,7 +5365,8 @@ def deposit_callback():
     sign_params = [merchant_account, order_ref, amount, currency, auth_code,
                    data.get('cardPan', ''), tx_status, reason_code]
     expected_sign = _wfp_sign(sign_params, WFP_MERCHANT_SECRET)
-    if received_sign != expected_sign:
+    import hmac as _hmac
+    if not _hmac.compare_digest(str(received_sign), str(expected_sign)):
         logger.warning('WFP callback invalid signature for order {}'.format(order_ref))
         return jsonify({'orderReference': order_ref, 'status': 'refuse', 'time': int(time.time())})
     # Update deposit
