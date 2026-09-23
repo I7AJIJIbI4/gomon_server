@@ -177,6 +177,22 @@ def _already_sent(phone, type_, reference, channel):
     finally:
         conn.close()
 
+def _sent_under_other_reference(phone, type_, ref_prefix, current_reference):
+    """True if the same appointment was already announced under a different
+    reference — i.e. it has been rescheduled since that notification."""
+    _ensure_notification_log()
+    conn = _db()
+    try:
+        row = conn.execute(
+            'SELECT 1 FROM notification_log WHERE phone=? AND type=? '
+            'AND reference LIKE ? AND reference != ?',
+            (phone, type_, ref_prefix + '|%', current_reference)).fetchone()
+        return row is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
 # ─── Telegram ────────────────────────────────────────────────────────────────
 
 def _get_tg_id(phone):

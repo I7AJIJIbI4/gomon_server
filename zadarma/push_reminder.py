@@ -270,7 +270,10 @@ def send_appt_push_reminders(dry_run=False):
                 stats['skipped'] += 1
                 continue
 
-            reference = 'appt|{}'.format(appt_date_str)
+            # Time in the key: a client with two appointments the same day
+            # must get a push for each, not just the first.
+            reference = 'appt|{}|{:02d}:{:02d}'.format(
+                appt_date_str, appt_hour_utc or 0, entry.get('minute') or 0)
             if is_push_already_sent(phone, 'appt', reference):
                 stats['skipped'] += 1
                 continue

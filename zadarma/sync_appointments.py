@@ -186,6 +186,16 @@ def sync_recent_appointments(days_back=7, days_forward=90):
                 elif old.get('status') != e.get('status'):
                     action = 'status_changed'
                     prev_status = old.get('status')
+                elif (old.get('date'), old.get('hour'), old.get('minute')) !=                      (e.get('date'), e.get('hour'), e.get('minute')):
+                    # Moved in WLaunch. Without this branch the merge updated the
+                    # entry silently: no audit row, and the specialist kept the
+                    # time from the original notification. There is no prev_time
+                    # column, so prev_status carries the old slot; `action` says
+                    # how to read it.
+                    action = 'rescheduled'
+                    prev_status = '{} {}:{:02d}'.format(
+                        old.get('date', ''), old.get('hour') or 0,
+                        old.get('minute') or 0)
                 else:
                     by_id[aid] = e
                     continue

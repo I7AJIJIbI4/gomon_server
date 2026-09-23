@@ -321,22 +321,28 @@ def _get_wlaunch_appts(for_date_str):
 
 def _collect_appts(for_date_str):
     """
-    Збирає записи з обох джерел, дедуплікує за (phone, date).
-    Пріоритет: manual > wlaunch (якщо обидва є для того самого клієнта і дати).
+    Збирає записи з обох джерел, дедуплікує manual↔wlaunch копії того самого
+    запису — але зберігає всі записи клієнта, якщо їх на день декілька.
+    Пріоритет: manual > wlaunch.
     """
     manual  = _get_manual_appts(for_date_str)
     wlaunch = _get_wlaunch_appts(for_date_str)
 
-    seen = set()
-    result = []
-    for a in manual + wlaunch:
+    # manual-запис може бути копією WLaunch-запису: напряму через wlaunch_id,
+    # або (для старих manual без ID) збігом телефону і часу.
+    manual_wl_ids = {a.get('wlaunch_id') for a in manual if a.get('wlaunch_id')}
+    manual_keys   = {((a.get('client_phone') or '')[-9:], a.get('time', ''))
+                     for a in manual}
+
+    result = [a for a in manual if a.get('client_phone')]
+    for a in wlaunch:
         phone = a.get('client_phone', '')
         if not phone:
             continue
-        key = (phone[-9:], for_date_str)   # останні 9 цифр → universal dedup
-        if key in seen:
+        if a.get('appt_id') and a['appt_id'] in manual_wl_ids:
             continue
-        seen.add(key)
+        if (phone[-9:], a.get('time', '')) in manual_keys:
+            continue
         result.append(a)
     return result
 
@@ -697,7 +703,8 @@ def run_specialist_notifications(dry_run=False):
     _spec_new_appt_enabled.setdefault('anastasia', True)
 
     # Group new (not yet notified) appointments by specialist, send one message per specialist
-    from notifier import _already_sent, _log, _get_tg_id, _send_tg, SPECIALIST_INFO
+    from notifier import (_already_sent, _log, _get_tg_id, _send_tg,
+                          _sent_under_other_reference, SPECIALIST_INFO)
     new_by_spec = {}
     for appt in appts:
         spec = appt.get('specialist', '')
@@ -706,9 +713,12 @@ def run_specialist_notifications(dry_run=False):
         if not _spec_new_appt_enabled.get(spec, True):
             skipped += 1
             continue
-        ref = appt.get('id', '')
-        if not ref:
+        appt_id = appt.get('id', '')
+        if not appt_id:
             continue
+        # Date+time in the reference so a rescheduled appointment gets announced
+        # again instead of being silently swallowed by the dedup.
+        ref = '{}|{}|{}'.format(appt_id, appt.get('date', ''), appt.get('time', ''))
         spec_info = SPECIALIST_INFO.get(spec)
         if not spec_info:
             continue
@@ -716,6 +726,8 @@ def run_specialist_notifications(dry_run=False):
         if _already_sent(spec_phone, 'spec_new', ref, 'tg'):
             skipped += 1
             continue
+        appt['_ref']   = ref
+        appt['_moved'] = _sent_under_other_reference(spec_phone, 'spec_new', appt_id, ref)
         if spec not in new_by_spec:
             new_by_spec[spec] = []
         new_by_spec[spec].append(appt)
@@ -733,17 +745,29 @@ def run_specialist_notifications(dry_run=False):
             if not tg_id:
                 failed += len(spec_appts)
                 continue
-            # Build one grouped message
-            lines = ['📋 {} нових записів:'.format(len(spec_appts)), '']
-            for a in sorted(spec_appts, key=lambda x: (x.get('date',''), x.get('time',''))):
-                lines.append('{} о {} — {} ({})'.format(
+            # Build one grouped message — new appointments and moved ones apart
+            def _fmt(a):
+                return '{} о {} — {} ({})'.format(
                     a.get('date',''), (a.get('time','') or '?')[:5],
-                    a.get('client_name',''), a.get('procedure_name','')))
+                    a.get('client_name',''), a.get('procedure_name',''))
+            _sort = lambda xs: sorted(xs, key=lambda x: (x.get('date',''), x.get('time','')))
+            _fresh = [a for a in spec_appts if not a.get('_moved')]
+            _moved = [a for a in spec_appts if a.get('_moved')]
+            lines = []
+            if _fresh:
+                lines += ['📋 {} нових записів:'.format(len(_fresh)), '']
+                lines += [_fmt(a) for a in _sort(_fresh)]
+            if _moved:
+                if lines:
+                    lines.append('')
+                lines += ['🔄 {} перенесено:'.format(len(_moved)), '']
+                lines += [_fmt(a) for a in _sort(_moved)]
             ok = _send_tg(tg_id, '\n'.join(lines))
             if ok:
                 _grouped_text = '\n'.join(lines)
                 for a in spec_appts:
-                    _log(spec_phone, 'spec_new', a.get('id',''), 'tg', 'sent', _grouped_text[:100])
+                    _log(spec_phone, 'spec_new', a.get('_ref', a.get('id','')),
+                         'tg', 'sent', _grouped_text[:100])
                 sent += len(spec_appts)
                 logger.info('  {} — {} нових записів відправлено одним повідомленням'.format(spec, len(spec_appts)))
             else:
