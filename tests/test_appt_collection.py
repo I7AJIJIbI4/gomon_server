@@ -206,3 +206,15 @@ def test_unchanged_appointment_is_skipped(notif_db):
     ref = 'wl-b|2026-09-19|09:00'
     nt._log('380996093860', 'spec_new', ref, 'tg', 'sent', 'announced')
     assert nt._already_sent('380996093860', 'spec_new', ref, 'tg') is True
+
+
+def test_legacy_bare_reference_counts_as_announced(notif_db):
+    """The reference gained date+time in this change. Rows written before that
+    are keyed on the bare appt_id — they must still suppress a re-announcement,
+    otherwise every known appointment is blasted out once on deploy."""
+    nt = _load_real('notifier_reschedule', 'notifier.py', db_path=notif_db)
+    nt._log('380685129121', 'spec_new', 'wl-legacy', 'tg', 'sent', 'announced')
+    assert nt._already_sent('380685129121', 'spec_new', 'wl-legacy', 'tg') is True
+    # and the new-format reference for the same appointment is not yet logged
+    assert nt._already_sent(
+        '380685129121', 'spec_new', 'wl-legacy|2026-09-24|11:00', 'tg') is False

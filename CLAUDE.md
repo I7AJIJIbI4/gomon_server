@@ -1068,6 +1068,8 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 - **`doRefresh()` в PTR IIFE** — не ламати `try { if/else if } catch` структуру. Syntax error вбиває ВСЕ нижче, включаючи `_fmtDateStr` і весь admin функціонал
 - **Phone display regex** — `/^380/` → `'0'` (НЕ `/^38/` — це дає `00...`)
 - **Calendar onclick ID** — завжди передавати як string: `openApptAction('id')` + порівнювати `String(x.id) === String(id)`. Працює для numeric (manual) і string (WLaunch) IDs
+- **`request.remote_addr` за nginx** — НЕ прибирати `ProxyFix(app.wsgi_app, x_for=1)` з `pwa_api.py`. Без нього nginx-проксі робить `remote_addr` рівним `127.0.0.1` для КОЖНОГО запиту з інтернету, і всі localhost-гарди (`/api/internal/*`, `/api/deposit/reconcile`, `/api/deposit/create-internal`, `/api/chat/cancel-appointment`, `/api/webhook/ig-*`) пускають публічний трафік. Легітимні виклики йдуть напряму на `127.0.0.1:5001` без `X-Forwarded-For`, тому їх ProxyFix не зачіпає. Перевірка: `curl -s https://drgomon.beauty/api/internal/free-gaps-today` має дати `403 forbidden`, не `400`.
+- **`notification_log.reference` для `spec_new`** — формат `appt_id|date|time`, щоб перенесення запису оголошувалось повторно. Старі рядки (до 23.09.2026) мають голий `appt_id` і окремо перевіряються як «вже надіслано» — не видаляти цю перевірку, інакше при деплої спеціалісти отримають пачку вже відомих записів як «нові».
 - **CSS `transform` на hover** — НЕ видаляти `.adm-tl-appt:hover{transform:scale(1.01)}` — без нього інші CSS зміни можуть зламати stacking order
 
 ### Instagram AI — у проді

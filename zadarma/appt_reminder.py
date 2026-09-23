@@ -726,6 +726,13 @@ def run_specialist_notifications(dry_run=False):
         if _already_sent(spec_phone, 'spec_new', ref, 'tg'):
             skipped += 1
             continue
+        # Legacy rows, written before the reference carried date+time, are keyed
+        # on the bare appt_id. Treat them as announced: they do not record the
+        # slot they were sent for, so a move is undetectable, and re-announcing
+        # every already-known appointment once would be worse than missing one.
+        if _already_sent(spec_phone, 'spec_new', appt_id, 'tg'):
+            skipped += 1
+            continue
         appt['_ref']   = ref
         appt['_moved'] = _sent_under_other_reference(spec_phone, 'spec_new', appt_id, ref)
         if spec not in new_by_spec:
