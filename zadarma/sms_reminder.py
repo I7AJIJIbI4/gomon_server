@@ -776,8 +776,13 @@ def send_daily_summary():
             lines.append('  ⚠️ Помилок: {}'.format(total_remind_err))
         lines.append('')
 
-    # Total
-    grand_total = total_notif + total_remind
+    # Total — must equal the sum of the per-type numbers printed above, which are
+    # deduplicated per (phone, type). len(notif_entries) counts raw notification_log
+    # rows and overcounts twice over: one notification delivered on several channels
+    # is one message (push+tg for the same feedback), and spec_new writes one row per
+    # appointment for a single grouped "N нових записів" message.
+    total_shown = sum(d['sent'] for d in by_type.values())
+    grand_total = total_shown + total_remind
     lines.append('📊 <b>Всього за день: {}</b>'.format(grand_total))
 
     text = '\n'.join(lines)
@@ -791,7 +796,8 @@ def send_daily_summary():
     except Exception:
         pass
 
-    logger.info('Daily summary: {} notif + {} reminders'.format(total_notif, total_remind))
+    logger.info('Daily summary: {} msg from {} log rows + {} reminders'.format(
+        total_shown, total_notif, total_remind))
 
 
 if __name__ == '__main__':
