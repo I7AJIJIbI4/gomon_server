@@ -594,8 +594,11 @@ def check_pending_cashback_reminders():
                 logger.info('Cashback skip (not app user): {} {}'.format(phone, proc))
                 try:
                     from notifier import send_post_visit
-                    send_post_visit({'client_phone': phone, 'client_name': name or '', 'procedure_name': drug or proc, 'specialist': specialist or '', 'date': date, 'time': time_str or '', 'duration_min': 60})
-                    logger.info('Post-visit sent (no cashback, not app user): {} {}'.format(phone, proc))
+                    _r = send_post_visit({'client_phone': phone, 'client_name': name or '', 'procedure_name': drug or proc, 'specialist': specialist or '', 'date': date, 'time': time_str or '', 'duration_min': 60})
+                    if (_r or {}).get('skipped') == 'stale':
+                        logger.info('Post-visit skipped (stale visit, not app user): {} {} {}'.format(phone, proc, date))
+                    else:
+                        logger.info('Post-visit sent (no cashback, not app user): {} {}'.format(phone, proc))
                 except Exception as _nf:
                     logger.warning('post_visit non-app user error: {}'.format(_nf))
                 continue
@@ -631,8 +634,9 @@ def check_pending_cashback_reminders():
                 'time': time_str or '',
                 'duration_min': 60,
             }
-            send_post_visit(appt)
+            _sent = (send_post_visit(appt) or {}).get('skipped') != 'stale'
         except Exception as _nf:
+            _sent = False
             logger.warning('post_visit for confirmed cashback error: {}'.format(_nf))
 
         # Mark notified
@@ -641,7 +645,8 @@ def check_pending_cashback_reminders():
             conn3.execute("UPDATE photo_tasks SET cashback_status='notified', cashback_notified_at=datetime('now') WHERE id=?", (rid,))
             conn3.commit()
             conn3.close()
-            logger.info('Post-visit (drug cashback) sent: {} {} ₴{:.0f} cb={:.0f}'.format(phone, drug or proc, price, amount))
+            logger.info('Cashback accrued, post-visit {}: {} {} ₴{:.0f} cb={:.0f}'.format(
+                'sent' if _sent else 'skipped (stale visit)', phone, drug or proc, price, amount))
         except Exception:
             pass
 

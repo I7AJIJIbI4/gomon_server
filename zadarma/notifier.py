@@ -24,6 +24,10 @@ logger = logging.getLogger('notifier')
 
 DB_PATH = '/home/gomoncli/zadarma/users.db'
 
+# Подяка+відгук має сенс лише поки візит свіжий. Якщо підтвердження препарату
+# у боті затрималось (беклог кнопок), кешбек нараховуємо, а повідомлення — ні.
+POST_VISIT_MAX_AGE_DAYS = 7
+
 # ─── Дані спеціалістів ────────────────────────────────────────────────────────
 SPECIALIST_INFO = {
     'victoria': {
@@ -746,10 +750,23 @@ def send_reminder_24h(appt):
     return results
 
 
+def _is_stale_visit(date_str):
+    """True якщо візит старіший за POST_VISIT_MAX_AGE_DAYS днів.
+
+    Невідому/майбутню дату не вважаємо старою — хай іде звичайним шляхом.
+    """
+    try:
+        visit = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return False
+    return (kyiv_now().date() - visit).days > POST_VISIT_MAX_AGE_DAYS
+
+
 def send_post_visit(appt):
     """
     Подяка + відгук через 2 години після процедури.
     Дедуплікація: один раз на (phone, date).
+    Візити старші за POST_VISIT_MAX_AGE_DAYS днів пропускаємо.
 
     Канали: Push + TG + SMS fallback.
     Для app users — додає інфо про кешбек і баланс.
@@ -761,6 +778,10 @@ def send_post_visit(appt):
     ref = 'feedback|{}'.format(appt.get('date', ''))
     if not phone:
         return {}
+    if _is_stale_visit(appt.get('date', '')):
+        logger.info('skip post_visit (stale visit): phone={} date={}'.format(
+            phone, appt.get('date')))
+        return {'skipped': 'stale'}
     if _already_sent(phone, 'feedback', ref, 'push'):
         return {'skipped': True}
     tg, sms, push_title, push_body = fmt_post_visit(appt)
