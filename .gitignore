@@ -112,6 +112,7 @@ Thumbs.db
 # === CLAUDE ===
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 
 # === VIRTUAL ENVS ===
 venv/
