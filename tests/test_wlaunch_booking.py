@@ -309,3 +309,70 @@ class TestCreateRouteInvariants:
         assert rv.get_json().get('error') == 'conflict'
         assert cancelled == ['wl-orphan'], 'запис у WLaunch лишився сиротою'
         assert _manual_count('wlaunch_id=?', ('wl-orphan',)) == 0
+
+
+# ── 4. HTTP-оболонка онлайн-запису ────────────────────────────────────────────
+
+class TestBookingEndpoints:
+    """Потік клієнта: послуги → (опційно) спеціаліст → дата і час."""
+
+    def test_create_requires_authentication(self, client):
+        rv = client.post('/api/booking/create', json={'service': 'X'})
+        assert rv.status_code in (401, 403)
+
+    def test_phone_is_taken_from_the_session_not_the_body(self, client, client_token,
+                                                          client_phone):
+        """Інакше будь-хто записував би чужим номером."""
+        seen = {}
+
+        def _fake(**kw):
+            seen.update(kw)
+            return {'wlaunch_id': 'wl-x', 'local_id': 1, 'service': kw['service_name'],
+                    'specialist': 'victoria', 'date': kw['date'], 'time': kw['time_str'],
+                    'duration_min': 30}
+
+        stub = type(sys)('booking')
+        stub.create_booking = _fake
+
+        class _E(Exception):
+            def __init__(self, code, message):
+                self.code, self.message = code, message
+        stub.BookingError = _E
+
+        with patch.dict(sys.modules, {'booking': stub}):
+            rv = client.post('/api/booking/create', headers=auth(client_token), json={
+                'name': 'Тест', 'service': 'Біорепарація шкіри',
+                'date': '2099-05-05', 'time': '10:00',
+                'phone': '380000000000',          # спроба підміни
+            })
+        assert rv.status_code == 200
+        assert seen['phone'] == client_phone
+        assert seen['phone'] != '380000000000'
+
+    def test_booking_error_maps_to_a_useful_status(self, client, client_token):
+        class _E(Exception):
+            def __init__(self, code, message):
+                self.code, self.message = code, message
+
+        def _fake(**kw):
+            raise _E('slot_taken', 'Цей час щойно зайняли')
+
+        stub = type(sys)('booking')
+        stub.create_booking = _fake
+        stub.BookingError = _E
+
+        with patch.dict(sys.modules, {'booking': stub}):
+            rv = client.post('/api/booking/create', headers=auth(client_token), json={
+                'name': 'Тест', 'service': 'Біорепарація шкіри',
+                'date': '2099-05-05', 'time': '10:00'})
+        assert rv.status_code == 409
+        assert rv.get_json()['error'] == 'slot_taken'
+
+    def test_slots_rejects_a_bad_date(self, client):
+        rv = client.get('/api/booking/slots?service=X&from=05.05.2099')
+        assert rv.status_code == 400
+        assert rv.get_json()['error'] == 'invalid_params'
+
+    def test_slots_requires_a_service(self, client):
+        rv = client.get('/api/booking/slots?from=2099-05-05')
+        assert rv.status_code == 400

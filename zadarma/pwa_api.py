@@ -38,6 +38,11 @@ app = Flask(__name__)
 # (chat.php, tg_business_listener) hit 127.0.0.1:5001 directly and send no
 # X-Forwarded-For, so they keep resolving to 127.0.0.1.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
+# Примітиви запису живуть у booking.py — одна реалізація на всі канали
+from booking import (time_to_min as _time_to_min,
+                     check_overlap as _check_overlap,
+                     cancel_wlaunch_appt as _cancel_wlaunch_appt)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
 CORS(app, origins=['https://gomonclinic.com', 'https://www.gomonclinic.com', 'https://drgomon.beauty', 'https://www.drgomon.beauty'])
 
@@ -289,18 +294,11 @@ def init_messages_db():
 init_messages_db()
 
 
-def _audit_appointment(appt_id, phone, client_name, procedure, specialist, date, time_str, status, prev_status, action, source):
-    """Log appointment change to audit table (fire-and-forget)."""
-    try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
-        conn.execute(
-            "INSERT INTO appointment_audit_log (appt_id, phone, client_name, procedure_name, specialist, date, time, status, prev_status, action, source, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
-            (str(appt_id), phone or '', client_name or '', procedure or '', specialist or '', date or '', time_str or '', status or '', prev_status or '', action, source))
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+def _audit_appointment(*args, **kwargs):
+    """Слід у appointment_audit_log — канонічна реалізація в booking.py."""
+    from booking import audit_appointment
+    kwargs.setdefault('db_path', DB_PATH)
+    return audit_appointment(*args, **kwargs)
 
 
 def _int_param(raw, default):
@@ -310,64 +308,6 @@ def _int_param(raw, default):
     except (TypeError, ValueError):
         return default
 
-
-def _time_to_min(t):
-    """Convert 'HH:MM' string to minutes since midnight."""
-    try:
-        h, m = map(int, (t or '00:00').split(':'))
-        return h * 60 + m
-    except Exception:
-        return 0
-
-
-def _check_overlap(conn, specialist, date, new_start, new_end, exclude_id=None, exclude_wl_id=None):
-    """Return True if specialist already has a non-cancelled appointment overlapping [new_start, new_end) on date.
-    exclude_id: manual appointment ID to skip (for editing)
-    exclude_wl_id: WLaunch appointment ID to skip (the WLaunch copy of the same appointment)
-    """
-    # Check manual_appointments
-    q = ("SELECT time, duration FROM manual_appointments WHERE specialist=? AND date=? "
-         "AND status NOT IN ('CANCELLED', 'NO_SHOW')")
-    params = [specialist, date]
-    if exclude_id is not None:
-        q += ' AND id != ?'
-        params.append(exclude_id)
-    for row in conn.execute(q, params).fetchall():
-        s = _time_to_min(row[0] or '00:00')
-        e = s + (row[1] or 60)
-        if new_start < e and s < new_end:
-            return True
-    # Check WLaunch appointments from services_json (pre-filter by date AND specialist)
-    for row in conn.execute('SELECT services_json FROM clients WHERE services_json LIKE ? AND services_json LIKE ?',
-                            ('%' + date + '%', '%' + specialist + '%')).fetchall():
-        try:
-            items = json.loads(row[0] or '[]')
-        except Exception:
-            items = []
-        for it in items:
-            if it.get('date') != date or it.get('specialist') != specialist:
-                continue
-            # Skip WLaunch copy of the appointment being edited
-            if exclude_wl_id and it.get('appt_id') == exclude_wl_id:
-                continue
-            if (it.get('status') or '').upper() in ('CANCELLED', 'NO_SHOW'):
-                continue
-            hour = it.get('hour')
-            if hour is None:
-                continue
-            s = hour * 60 + (it.get('minute') or 0)
-            e = s + (it.get('duration_min') or 60)
-            if new_start < e and s < new_end:
-                return True
-    # Check specialist_breaks
-    for row in conn.execute(
-        'SELECT time_from, time_to FROM specialist_breaks WHERE specialist=? AND date=?',
-        (specialist, date)).fetchall():
-        s = _time_to_min(row[0])
-        e = _time_to_min(row[1])
-        if new_start < e and s < new_end:
-            return True
-    return False
 
 def save_lead(phone: str, procedure: str, source: str = 'app'):
     """Зберігає потенційного клієнта якщо він ще не в clients."""
@@ -1330,6 +1270,112 @@ def get_my_appointments():
     return jsonify({'appointments': upcoming + cancelled + done})
 
 # ── PRICES ──
+
+# ── ОНЛАЙН-ЗАПИС ──────────────────────────────────────────────────────────────
+# Потік клієнта: перелік послуг → (для відбілювання) спеціаліст → дата і час.
+# Вся логіка — у booking.py; тут лише HTTP-оболонка.
+
+_BOOKING_HITS = {}
+_BOOKING_RATE = 60          # запитів на IP за вікно
+_BOOKING_WINDOW = 300       # вікно, с
+
+
+def _booking_rate_ok():
+    """Публічні endpoint-и б'ють у WLaunch, тож потрібен запобіжник."""
+    import time as _t
+    ip = request.remote_addr or '?'
+    now = _t.time()
+    hits = [t for t in _BOOKING_HITS.get(ip, []) if now - t < _BOOKING_WINDOW]
+    if len(hits) >= _BOOKING_RATE:
+        _BOOKING_HITS[ip] = hits
+        return False
+    hits.append(now)
+    _BOOKING_HITS[ip] = hits
+    if len(_BOOKING_HITS) > 5000:
+        _BOOKING_HITS.clear()
+    return True
+
+
+@app.route('/api/booking/services', methods=['GET'])
+def booking_services():
+    """Меню запису: послуга, «від XX грн» і перелік препаратів для опису."""
+    if not _booking_rate_ok():
+        return jsonify({'error': 'rate_limited'}), 429
+    try:
+        from wl_catalog import get_bookable_services
+        out = []
+        for s in get_bookable_services():
+            drugs = []
+            try:
+                from photo_reminder import _get_drugs_for_procedure
+                drugs = [{'name': d['name'], 'price': d['price']}
+                         for d in _get_drugs_for_procedure(s['name']) if d.get('price')]
+            except Exception:
+                pass
+            out.append({
+                'name': s['name'],
+                'duration_min': s['duration_min'],
+                'price_from': s['price_from'],
+                'price_to': s['price_to'],
+                'specialists': s['specialists'],
+                'specialist_choice': s['specialist_choice'],
+                'drugs': drugs,
+            })
+        return jsonify(out)
+    except Exception as e:
+        logger.error('booking_services error: {}'.format(e))
+        return jsonify({'error': 'server_error'}), 500
+
+
+@app.route('/api/booking/slots', methods=['GET'])
+def booking_slots_route():
+    """Вільні слоти. `open:false` — розклад на цей день ще не відкрито."""
+    if not _booking_rate_ok():
+        return jsonify({'error': 'rate_limited'}), 429
+    service = (request.args.get('service') or '').strip()
+    specialist = (request.args.get('specialist') or '').strip() or None
+    date_from = (request.args.get('from') or '').strip()
+    date_to = (request.args.get('to') or date_from).strip()
+    _d = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    if not service or not _d.match(date_from) or not _d.match(date_to):
+        return jsonify({'error': 'invalid_params'}), 400
+    try:
+        from booking_slots import get_free_slots
+        return jsonify(get_free_slots(service, date_from, date_to, specialist=specialist))
+    except ValueError as e:
+        return jsonify({'error': 'invalid_params', 'detail': str(e)}), 400
+    except Exception as e:
+        logger.error('booking_slots error: {}'.format(e))
+        return jsonify({'error': 'server_error'}), 500
+
+
+@app.route('/api/booking/create', methods=['POST'])
+@require_auth
+def booking_create():
+    """Створити запис. Телефон береться із сесії, не з тіла запиту."""
+    d = request.get_json() or {}
+    from booking import create_booking, BookingError
+    try:
+        res = create_booking(
+            phone=request.user_phone,
+            client_name=(d.get('name') or '').strip(),
+            service_name=(d.get('service') or '').strip(),
+            date=(d.get('date') or '').strip(),
+            time_str=(d.get('time') or '').strip(),
+            specialist=(d.get('specialist') or '').strip() or None,
+            source=(d.get('source') or 'web').strip()[:16],
+            notes=(d.get('notes') or '').strip()[:300],
+        )
+        return jsonify(dict(res, ok=True))
+    except BookingError as e:
+        status = 409 if e.code in ('slot_taken', 'schedule_closed', 'wlaunch_rejected') else 400
+        if e.code in ('wlaunch_unavailable', 'db_error'):
+            status = 503
+        return jsonify({'error': e.code, 'detail': e.message}), status
+    except Exception as e:
+        logger.error('booking_create error: {}'.format(e))
+        return jsonify({'error': 'server_error'}), 500
+
 
 @app.route('/api/prices', methods=['GET'])
 def get_prices():
@@ -4495,33 +4541,6 @@ def _find_wlaunch_appt_id(phone, date_str, service, branch_id=None):
     except Exception as e:
         logger.error("cancel: search error: {}".format(e))
     return None
-
-
-def _cancel_wlaunch_appt(appt_id, branch_id=None):
-    """Скасовує запис у WLaunch через POST {"appointment": {"id": ..., "status": "CANCELLED"}}"""
-
-    from config import WLAUNCH_API_KEY, COMPANY_ID, WLAUNCH_API_URL
-    headers = {
-        "Authorization": "Bearer " + WLAUNCH_API_KEY,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    }
-    if not branch_id:
-        from wlaunch_api import get_branch_id
-        branch_id = get_branch_id()
-    if not branch_id:
-        return False, "no_branch"
-
-    url = "{}/company/{}/branch/{}/appointment/{}".format(WLAUNCH_API_URL, COMPANY_ID, branch_id, appt_id)
-    try:
-        resp = _req.post(url, headers=headers,
-                         json={"appointment": {"id": appt_id, "status": "CANCELLED"}},
-                         timeout=10)
-        resp.raise_for_status()
-        return True, None
-    except Exception as e:
-        logger.error("cancel wlaunch: {} {}".format(e, getattr(e, 'response', None) and e.response.text))
-        return False, str(e)
 
 
 def _update_local_appt_cancelled(phone, date_str, service):
