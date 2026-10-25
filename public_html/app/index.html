@@ -1205,6 +1205,38 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
   .msg-container.chat-open .msg-chat{display:flex}
   .msg-back-btn{display:block}
 }
+
+/* ── ЗАПИС ─────────────────────────────────────────────────────────────── */
+.bk-steps{display:flex;gap:6px;margin:0 16px 16px}
+.bk-steps i{flex:1;height:2px;background:var(--border);border-radius:2px;transition:background .25s}
+.bk-steps i.on{background:var(--gold)}
+.bk-card{width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;color:inherit;
+  font:inherit;display:block}
+.bk-card:active{background:var(--surface2)}
+.bk-card .nm{font-size:16px;margin-bottom:3px}
+.bk-card .meta{color:var(--gold);font-size:14px}
+.bk-card .dur{color:var(--text3);font-size:13px;margin-left:8px}
+.bk-card .drugs{color:var(--text3);font-size:12.5px;margin-top:7px;line-height:1.45}
+.bk-day{margin-bottom:18px}
+.bk-day h4{font-size:14px;font-weight:400;color:var(--text2);margin:0 0 8px}
+.bk-slots{display:flex;flex-wrap:wrap;gap:7px}
+.bk-slot{background:var(--surface);border:1px solid var(--border);border-radius:9px;
+  padding:9px 13px;font:inherit;font-size:14px;color:var(--text);cursor:pointer}
+.bk-slot:active{border-color:var(--gold)}
+.bk-sum{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.75}
+.bk-sum b{font-weight:400;color:var(--gold)}
+.bk-btn{width:100%;background:var(--gold);border:0;border-radius:10px;padding:14px;
+  font:inherit;font-size:15px;color:#1a1612;cursor:pointer;margin-top:4px}
+.bk-btn:disabled{opacity:.5}
+.bk-back{background:none;border:0;color:var(--text3);font:inherit;font-size:13px;
+  padding:6px 0;cursor:pointer;margin-bottom:6px}
+.bk-err{color:#c96e6e;font-size:13.5px;margin:10px 0 0}
+.bk-muted{color:var(--text3);font-size:13px}
+.bk-spin{text-align:center;color:var(--text3);padding:30px 0;font-size:14px}
+.bk-ok{text-align:center;padding:20px 0}
+.bk-ok .tick{font-size:42px;color:var(--gold);line-height:1}
 </style>
 </head>
 <body>
@@ -1453,6 +1485,10 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
       <div class="news-scroll" id="home-news"></div>
       <p class="section-label">Швидкий доступ</p>
       <div class="quick-grid">
+        <div class="quick-tile" onclick="openBooking()">
+          <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/><path d="M11 13v4M9 15h4" stroke-linecap="round"/></svg>
+          <p>Записатись</p>
+        </div>
         <div class="quick-tile" onclick="go('appointments')">
           <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/><path d="M7 14h2M13 14h2M7 17h2" stroke-linecap="round"/></svg>
           <p>Мої записи</p>
@@ -1523,6 +1559,23 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
     <div class="screen-scroll">
       <div id="appts-list"></div>
     </div>
+    <nav>
+      <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
+      <button class="nav-btn active" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
+      <button class="nav-btn" onclick="go('price')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><path d="M11 7v1m0 6v1M9 9.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5" stroke-linecap="round"/></svg><span class="nav-label">Прайс</span></button>
+      <button class="nav-btn" onclick="go('map')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M11 2a6 6 0 016 6c0 4-6 12-6 12S5 12 5 8a6 6 0 016-6Z"/><circle cx="11" cy="8" r="2"/></svg><span class="nav-label">Адреса</span></button>
+      <button class="nav-btn" onclick="go('chat')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M4 4h14a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 3V6a2 2 0 012-2Z"/></svg><span class="nav-label">Чат</span></button>
+    </nav>
+  </div>
+
+  <!-- BOOKING SCREEN -->
+  <div class="screen" id="screen-booking">
+    <div class="appts-header">
+      <h2 class="screen-title">Записатись</h2>
+      <p class="screen-sub" id="bk-sub">Оберіть процедуру</p>
+    </div>
+    <div class="bk-steps"><i id="bk-s1"></i><i id="bk-s2"></i><i id="bk-s3"></i></div>
+    <div class="screen-scroll" style="padding:0 16px"><div id="bk-view"></div></div>
     <nav>
       <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
       <button class="nav-btn active" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
@@ -6193,7 +6246,7 @@ function filterPrice(q) {
 }
 
 /* ── NAV ── */
-const SCREENS = ['home','appointments','price','map','chat'];
+const SCREENS = ['home','appointments','price','map','chat','booking'];
 var _currentScreen = 'home';
 
 /* ── Drag-to-dismiss для bottom sheets ── */
@@ -6257,6 +6310,188 @@ var _currentScreen = 'home';
     document.addEventListener('touchend', onEnd);
   }, {passive: true});
 })();
+
+/* ── ЗАПИС ──────────────────────────────────────────────────────────────────
+   Той самий серверний шлях, що й на /booking, але без OTP: у додатку клієнт
+   уже авторизований, тож телефон береться з сесії, імʼя — з його картки.    */
+
+var BK = {services:[], service:null, specialist:null, date:null, time:null};
+var BK_SPEC = {victoria:'Вікторія', anastasia:'Анастасія'};
+var BK_WD = ['неділя','понеділок','вівторок','середа','четвер','пʼятниця','субота'];
+var BK_MN = ['січня','лютого','березня','квітня','травня','червня','липня','серпня',
+             'вересня','жовтня','листопада','грудня'];
+
+function _bkView(html, sub, stepN) {
+  var v = document.getElementById('bk-view');
+  if (v) v.innerHTML = html;
+  var s = document.getElementById('bk-sub');
+  if (s && sub) s.textContent = sub;
+  for (var i = 1; i <= 3; i++) {
+    var el = document.getElementById('bk-s' + i);
+    if (el) el.className = (i <= (stepN || 1) ? 'on' : '');
+  }
+  var sc = document.querySelector('#screen-booking .screen-scroll');
+  if (sc) sc.scrollTop = 0;
+}
+function _bkErr(msg) {
+  var e = document.getElementById('bk-e');
+  if (e) { e.textContent = msg; e.hidden = false; }
+}
+function _bkDate(iso) {
+  var p = iso.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
+  return +p[2] + ' ' + BK_MN[+p[1] - 1] + ', ' + BK_WD[d.getDay()];
+}
+function _bkIso(days) {
+  var d = new Date(); d.setDate(d.getDate() + days);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
+         ('0' + d.getDate()).slice(-2);
+}
+function _bkMoney(s) {
+  if (!s.price_from) return '';
+  if (s.price_to && s.price_to !== s.price_from) return 'від ' + s.price_from + ' грн';
+  return s.price_from + ' грн';
+}
+
+async function openBooking() {
+  go('booking');
+  BK.service = null; BK.specialist = null; BK.date = null; BK.time = null;
+  if (BK.services.length) return bkRenderServices();
+  _bkView('<div class="bk-spin">Завантаження…</div>', 'Оберіть процедуру', 1);
+  var r = await api('/booking/services');
+  if (!r || r.error || !r.length) {
+    return _bkView('<p class="bk-err">Не вдалося завантажити перелік послуг. Спробуйте пізніше.</p>',
+                   'Оберіть процедуру', 1);
+  }
+  BK.services = r;
+  bkRenderServices();
+}
+
+function bkRenderServices() {
+  var h = '';
+  BK.services.forEach(function(s, i) {
+    var drugs = '';
+    if (s.drugs && s.drugs.length > 1) {
+      drugs = '<div class="drugs">' + s.drugs.map(function(d) {
+        return _esc(d.name) + ' — ' + d.price + ' грн';
+      }).join(' · ') + '</div>';
+    }
+    h += '<button class="bk-card" data-i="' + i + '">' +
+           '<div class="nm">' + _esc(s.name) + '</div>' +
+           '<div><span class="meta">' + _esc(_bkMoney(s)) + '</span>' +
+           '<span class="dur">' + s.duration_min + ' хв</span></div>' + drugs +
+         '</button>';
+  });
+  _bkView(h, 'Оберіть процедуру', 1);
+  document.querySelectorAll('#bk-view .bk-card').forEach(function(b) {
+    b.onclick = function() {
+      var s = BK.services[+b.dataset.i];
+      BK.service = s; BK.specialist = null;
+      if (s.specialist_choice) bkRenderSpecialists();
+      else { BK.specialist = s.specialists[0]; bkLoadSlots(); }
+    };
+  });
+}
+
+function bkRenderSpecialists() {
+  var h = '<button class="bk-back" id="bk-bk">← Процедури</button>';
+  BK.service.specialists.forEach(function(sp) {
+    h += '<button class="bk-card" data-sp="' + _esc(sp) + '"><div class="nm">' +
+         _esc(BK_SPEC[sp] || sp) + '</div></button>';
+  });
+  _bkView(h, 'Оберіть спеціаліста', 2);
+  document.getElementById('bk-bk').onclick = bkRenderServices;
+  document.querySelectorAll('#bk-view [data-sp]').forEach(function(b) {
+    b.onclick = function() { BK.specialist = b.dataset.sp; bkLoadSlots(); };
+  });
+}
+
+async function bkLoadSlots() {
+  _bkView('<div class="bk-spin">Шукаємо вільний час…</div>', BK.service.name, 2);
+  var q = '?service=' + encodeURIComponent(BK.service.name) +
+          '&specialist=' + encodeURIComponent(BK.specialist) +
+          '&from=' + _bkIso(0) + '&to=' + _bkIso(30);
+  var days = await api('/booking/slots' + q);
+  if (!days || days.error || !days.length) {
+    return _bkView('<p class="bk-err">Не вдалося завантажити розклад. Спробуйте пізніше.</p>',
+                   BK.service.name, 2);
+  }
+  var h = '<button class="bk-back" id="bk-bk">← Назад</button>', any = false;
+  days.forEach(function(d) {
+    var times = (d.specialists || {})[BK.specialist] || [];
+    if (!times.length) return;
+    any = true;
+    h += '<div class="bk-day"><h4>' + _esc(_bkDate(d.date)) + '</h4><div class="bk-slots">' +
+         times.map(function(t) {
+           return '<button class="bk-slot" data-d="' + d.date + '" data-t="' + t + '">' + t + '</button>';
+         }).join('') + '</div></div>';
+  });
+  if (!any) {
+    h += '<p class="bk-muted">На найближчі дні вільного часу немає. Розклад відкривається ' +
+         'поступово — зазирніть за кілька днів або напишіть нам у чат.</p>';
+  }
+  _bkView(h, BK.service.name, 2);
+  document.getElementById('bk-bk').onclick = function() {
+    if (BK.service.specialist_choice) bkRenderSpecialists(); else bkRenderServices();
+  };
+  document.querySelectorAll('#bk-view .bk-slot').forEach(function(b) {
+    b.onclick = function() { BK.date = b.dataset.d; BK.time = b.dataset.t; bkRenderConfirm(); };
+  });
+}
+
+function _bkSummary() {
+  var who = (((user && user.name) || '') + ' ' + ((user && user.last_name) || '')).trim();
+  return '<div class="bk-sum">' +
+    '<div><b>' + _esc(BK.service.name) + '</b></div>' +
+    '<div>' + _esc(_bkDate(BK.date)) + ' о ' + _esc(BK.time) + '</div>' +
+    '<div>' + _esc(BK_SPEC[BK.specialist] || BK.specialist) + ' · ' +
+      BK.service.duration_min + ' хв' +
+      (_bkMoney(BK.service) ? ' · ' + _esc(_bkMoney(BK.service)) : '') + '</div>' +
+    (who ? '<div class="bk-muted">' + _esc(who) + '</div>' : '') +
+    '</div>';
+}
+
+function bkRenderConfirm() {
+  _bkView('<button class="bk-back" id="bk-bk">← Інший час</button>' + _bkSummary() +
+          '<button class="bk-btn" id="bk-go">Підтвердити запис</button>' +
+          '<p class="bk-err" id="bk-e" hidden></p>', 'Перевірте запис', 3);
+  document.getElementById('bk-bk').onclick = bkLoadSlots;
+  document.getElementById('bk-go').onclick = bkSubmit;
+}
+
+async function bkSubmit() {
+  var btn = document.getElementById('bk-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Записуємо…'; }
+  var res = await api('/booking/create', {method: 'POST', body: JSON.stringify({
+    first_name: (user && user.name) || '', last_name: (user && user.last_name) || '',
+    service: BK.service.name, specialist: BK.specialist,
+    date: BK.date, time: BK.time, source: 'app'
+  })});
+  if (res && res.ok) {
+    _bkView('<div class="bk-ok"><div class="tick">&#10003;</div>' +
+            '<h3 style="font-family:var(--serif);font-weight:400;margin:12px 0 8px">Записано</h3></div>' +
+            _bkSummary() +
+            '<p class="bk-muted">Нагадаємо напередодні.</p>' +
+            '<button class="bk-btn" id="bk-mine" style="margin-top:12px">Мої записи</button>',
+            'Готово', 3);
+    var mine = document.getElementById('bk-mine');
+    if (mine) mine.onclick = function() { go('appointments'); };
+    try {
+      await loadAppointments();
+      if (typeof renderAppointments === 'function') renderAppointments();
+    } catch (e) {}
+    return;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Підтвердити запис'; }
+  var code = (res || {}).error;
+  if (code === 'slot_taken' || code === 'conflict') {
+    _bkErr('Цей час щойно зайняли. Показуємо вільні…');
+    setTimeout(bkLoadSlots, 1400);
+  } else if (code === 'surname_required' || code === 'name_required') {
+    _bkErr('У вашій картці немає імені або прізвища — напишіть нам у чат, ми доповнимо.');
+  } else {
+    _bkErr((res || {}).detail || 'Не вдалося створити запис. Спробуйте інший час.');
+  }
+}
 
 function go(id) {
   SCREENS.forEach(s => {
@@ -7123,7 +7358,7 @@ document.addEventListener('keydown', function(e) {
 /* ── PULL-TO-REFRESH ─────────────────────────────── */
 (function(){
   const THRESHOLD = 72;   // px to trigger refresh
-  const EXCLUDED_SCREENS = ['auth'];  // never PTR on these
+  const EXCLUDED_SCREENS = ['auth','booking'];  // never PTR on these
   const MODAL_IDS = ['push-modal','install-modal','confirm-modal','promo-modal','news-modal','not-client-modal'];
 
   let startY = 0, curY = 0, pulling = false, triggered = false;

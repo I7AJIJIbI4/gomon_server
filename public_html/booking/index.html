@@ -65,12 +65,8 @@ label{display:block;font-size:13px;color:var(--text3);margin:0 0 6px}
 .btn.ghost{background:none;border:1px solid var(--border);color:var(--text2)}
 
 .hello{background:var(--bg2);border:1px solid var(--border-gold);border-radius:12px;
-  padding:12px 16px;margin-bottom:18px;font-size:14px;display:flex;
-  justify-content:space-between;align-items:center;gap:10px}
+  padding:12px 16px;margin-bottom:18px;font-size:14px}
 .hello b{font-weight:400;color:var(--gold)}
-.hello button{background:none;border:0;color:var(--text3);font:inherit;font-size:12.5px;
-  cursor:pointer;padding:4px;white-space:nowrap}
-.hello button:hover{color:var(--gold)}
 
 .summary{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.75}
@@ -233,12 +229,7 @@ function renderName(){
 }
 
 function hello(){
-  return '<div class="hello"><span>Вітаємо, <b>' + esc(state.first) + '</b></span>' +
-         '<button id="chg">Це не я</button></div>';
-}
-function bindHello(){
-  var b = document.getElementById('chg');
-  if (b) b.onclick = function(){ state.known = false; renderName(); };
+  return '<div class="hello"><span>Вітаємо, <b>' + esc(state.first) + '</b></span></div>';
 }
 
 /* ── 3. Послуги ────────────────────────────────────────────────────────── */
@@ -278,7 +269,6 @@ function renderServices(){
          '</button>';
   });
   show(h);
-  bindHello();
   [].forEach.call(view.querySelectorAll('.card'), function(b){
     b.onclick = function(){ pickService(state.services[+b.dataset.i]); };
   });
