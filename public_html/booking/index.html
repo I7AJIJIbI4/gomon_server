@@ -24,12 +24,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
 .wrap{max-width:560px;margin:0 auto;padding:24px 16px 56px}
 
 header{text-align:center;padding:12px 0 22px}
-header h1{font-family:var(--serif);font-weight:300;font-size:30px;margin:0 0 4px;
-  letter-spacing:.5px}
-header p{margin:0;color:var(--text3);font-size:13px;letter-spacing:1.5px;
-  text-transform:uppercase}
+header h1{font-family:var(--serif);font-weight:300;font-size:30px;margin:0 0 4px;letter-spacing:.5px}
+header p{margin:0;color:var(--text3);font-size:13px;letter-spacing:1.5px;text-transform:uppercase}
 
-/* кроки */
 .steps{display:flex;gap:6px;margin:0 0 22px}
 .steps i{flex:1;height:2px;background:var(--border);border-radius:2px;transition:background .25s}
 .steps i.on{background:var(--gold)}
@@ -39,7 +36,6 @@ h2{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 14px}
   font-size:13px;padding:6px 0;cursor:pointer;margin-bottom:6px}
 .back:hover{color:var(--gold)}
 
-/* картки послуг */
 .card{width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);
   border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;
   color:inherit;font:inherit;transition:border-color .2s,background .2s;display:block}
@@ -49,10 +45,8 @@ h2{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 14px}
 .card .dur{color:var(--text3);font-size:13px;margin-left:8px}
 .card .drugs{color:var(--text3);font-size:12.5px;margin-top:7px;line-height:1.45}
 
-/* дні і слоти */
 .day{margin-bottom:18px}
-.day h3{font-size:14px;font-weight:400;color:var(--text2);margin:0 0 8px;
-  text-transform:capitalize}
+.day h3{font-size:14px;font-weight:400;color:var(--text2);margin:0 0 8px;text-transform:capitalize}
 .slots{display:flex;flex-wrap:wrap;gap:7px}
 .slot{background:var(--surface);border:1px solid var(--border);border-radius:9px;
   padding:9px 13px;font:inherit;font-size:14px;color:var(--text);cursor:pointer;
@@ -69,6 +63,14 @@ label{display:block;font-size:13px;color:var(--text3);margin:0 0 6px}
   font:inherit;font-size:15px;font-weight:400;color:#1a1612;cursor:pointer;margin-top:4px}
 .btn:disabled{opacity:.5;cursor:default}
 .btn.ghost{background:none;border:1px solid var(--border);color:var(--text2)}
+
+.hello{background:var(--bg2);border:1px solid var(--border-gold);border-radius:12px;
+  padding:12px 16px;margin-bottom:18px;font-size:14px;display:flex;
+  justify-content:space-between;align-items:center;gap:10px}
+.hello b{font-weight:400;color:var(--gold)}
+.hello button{background:none;border:0;color:var(--text3);font:inherit;font-size:12.5px;
+  cursor:pointer;padding:4px;white-space:nowrap}
+.hello button:hover{color:var(--gold)}
 
 .summary{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.75}
@@ -88,20 +90,23 @@ label{display:block;font-size:13px;color:var(--text3);margin:0 0 6px}
     <p>Онлайн-запис</p>
   </header>
   <div class="steps"><i id="s1"></i><i id="s2"></i><i id="s3"></i><i id="s4"></i></div>
-  <main id="view"><div class="spin">Завантаження…</div></main>
+  <main id="view"></main>
 </div>
 
 <script>
 'use strict';
 var API = '/api';
-var state = {services:[], service:null, specialist:null, date:null, time:null,
-             token:null, phone:'', first:'', last:''};
+var state = {token:null, phone:'', first:'', last:'', known:false,
+             services:[], service:null, specialist:null, date:null, time:null};
 
 var view = document.getElementById('view');
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
 function step(n){for(var i=1;i<=4;i++){document.getElementById('s'+i).className=(i<=n?'on':'');}}
 function show(html){view.innerHTML=html;window.scrollTo(0,0);}
 function spin(t){show('<div class="spin">'+esc(t||'Завантаження…')+'</div>');}
+function err(msg){var e=document.getElementById('e');if(e){e.textContent=msg;e.hidden=false;}}
+function busy(id,on,label){var b=document.getElementById(id);if(!b)return;
+  b.disabled=on;if(label)b.textContent=label;}
 
 function api(path, opts){
   opts = opts || {};
@@ -119,15 +124,134 @@ function api(path, opts){
   });
 }
 
+/* ── 1. Телефон ────────────────────────────────────────────────────────── */
+function normPhone(raw){
+  var d = (raw || '').replace(/\D/g, '');
+  if (d.length === 10 && d.charAt(0) === '0') return '38' + d;
+  if (d.length === 9) return '380' + d;
+  if (d.length === 12 && d.slice(0, 3) === '380') return d;
+  return null;
+}
+
+function renderPhone(){
+  step(1);
+  show('<h2>Вітаємо</h2>' +
+       '<p class="muted" style="margin:-6px 0 16px">Почнемо з номера телефону — ' +
+       'якщо ви вже були у нас, підставимо ваші дані.</p>' +
+       '<label for="ph">Телефон</label>' +
+       '<input id="ph" type="tel" inputmode="tel" placeholder="0XX XXX XX XX" ' +
+         'autocomplete="tel" value="' + esc(state.phone.replace(/^38/, '')) + '">' +
+       '<button class="btn" id="go">Отримати код</button>' +
+       '<p class="err" id="e" hidden></p>');
+  document.getElementById('go').onclick = sendOtp;
+  document.getElementById('ph').focus();
+}
+
+function sendOtp(){
+  var phone = normPhone(document.getElementById('ph').value);
+  if (!phone) return err('Перевірте номер телефону');
+  state.phone = phone;
+  busy('go', true, 'Надсилаємо…');
+  api('/auth/send-otp', {method:'POST', body: JSON.stringify({phone: phone})})
+    .then(function(r){
+      busy('go', false, 'Отримати код');
+      if (r.status === 429) return err('Забагато спроб. Спробуйте за годину.');
+      if (!r.ok) return err('Не вдалося надіслати код. Спробуйте пізніше.');
+      renderCode();
+    }).catch(function(){
+      busy('go', false, 'Отримати код');
+      err('Немає звʼязку. Спробуйте ще раз.');
+    });
+}
+
+function renderCode(){
+  step(1);
+  show('<button class="back" id="bk">← Змінити номер</button>' +
+       '<h2>Код підтвердження</h2>' +
+       '<p class="muted" style="margin:-6px 0 16px">Надіслали код на ' +
+         esc('0' + state.phone.slice(3)) + '</p>' +
+       '<label for="cd">Код із повідомлення</label>' +
+       '<input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
+       '<button class="btn" id="go">Підтвердити</button>' +
+       '<p class="err" id="e" hidden></p>');
+  document.getElementById('bk').onclick = renderPhone;
+  document.getElementById('go').onclick = verifyOtp;
+  document.getElementById('cd').focus();
+}
+
+function verifyOtp(){
+  var code = document.getElementById('cd').value.replace(/\D/g, '');
+  if (code.length < 4) return err('Введіть код із повідомлення');
+  busy('go', true, 'Перевіряємо…');
+  api('/auth/verify', {method:'POST', body: JSON.stringify({phone: state.phone, code: code})})
+    .then(function(r){
+      if (!r.ok || !r.data.token) {
+        busy('go', false, 'Підтвердити');
+        return err(r.status === 429 ? 'Забагато спроб. Спробуйте пізніше.' : 'Невірний код');
+      }
+      state.token = r.data.token;
+      return loadMe();
+    }).catch(function(){
+      busy('go', false, 'Підтвердити');
+      err('Немає звʼязку. Спробуйте ще раз.');
+    });
+}
+
+/* ── 2. Хто ви ─────────────────────────────────────────────────────────── */
+function loadMe(){
+  spin('Шукаємо вас у базі…');
+  return api('/me').then(function(r){
+    var d = r.ok ? (r.data || {}) : {};
+    var first = (d.name && d.name !== 'Клієнт') ? d.name : '';
+    var last = d.last_name || '';
+    if (first && last) {
+      state.first = first; state.last = last; state.known = true;
+      loadServices();
+    } else {
+      state.first = first; state.last = last; state.known = false;
+      renderName();
+    }
+  }).catch(function(){ renderName(); });
+}
+
+function renderName(){
+  step(1);
+  show('<h2>Як до вас звертатись?</h2>' +
+       '<p class="muted" style="margin:-6px 0 16px">Ці дані підуть у вашу картку.</p>' +
+       '<label for="nm">Імʼя</label><input id="nm" autocomplete="given-name" value="' + esc(state.first) + '">' +
+       '<label for="ln">Прізвище</label><input id="ln" autocomplete="family-name" value="' + esc(state.last) + '">' +
+       '<button class="btn" id="go">Далі</button>' +
+       '<p class="err" id="e" hidden></p>');
+  document.getElementById('go').onclick = function(){
+    var f = document.getElementById('nm').value.trim();
+    var l = document.getElementById('ln').value.trim();
+    if (f.length < 2) return err('Вкажіть, будь ласка, імʼя');
+    if (l.length < 2) return err('Вкажіть, будь ласка, прізвище');
+    state.first = f; state.last = l;
+    loadServices();
+  };
+}
+
+function hello(){
+  return '<div class="hello"><span>Вітаємо, <b>' + esc(state.first) + '</b></span>' +
+         '<button id="chg">Це не я</button></div>';
+}
+function bindHello(){
+  var b = document.getElementById('chg');
+  if (b) b.onclick = function(){ state.known = false; renderName(); };
+}
+
+/* ── 3. Послуги ────────────────────────────────────────────────────────── */
 function money(s){
   if (!s.price_from) return '';
   if (s.price_to && s.price_to !== s.price_from) return 'від ' + s.price_from + ' грн';
   return s.price_from + ' грн';
 }
 
-/* ── 1. Послуги ────────────────────────────────────────────────────────── */
 function loadServices(){
-  step(1); spin();
+  step(2);
+  if (state.services.length) return renderServices();
+  spin();
   api('/booking/services').then(function(r){
     if (!r.ok) return show('<p class="err">Не вдалося завантажити перелік послуг. Оновіть сторінку.</p>');
     state.services = r.data;
@@ -138,8 +262,8 @@ function loadServices(){
 }
 
 function renderServices(){
-  step(1);
-  var h = '<h2>Оберіть процедуру</h2>';
+  step(2);
+  var h = hello() + '<h2>Оберіть процедуру</h2>';
   state.services.forEach(function(s, i){
     var drugs = '';
     if (s.drugs && s.drugs.length > 1) {
@@ -150,11 +274,11 @@ function renderServices(){
     h += '<button class="card" data-i="' + i + '">' +
            '<div class="nm">' + esc(s.name) + '</div>' +
            '<div><span class="meta">' + esc(money(s)) + '</span>' +
-           '<span class="dur">' + s.duration_min + ' хв</span></div>' +
-           drugs +
+           '<span class="dur">' + s.duration_min + ' хв</span></div>' + drugs +
          '</button>';
   });
   show(h);
+  bindHello();
   [].forEach.call(view.querySelectorAll('.card'), function(b){
     b.onclick = function(){ pickService(state.services[+b.dataset.i]); };
   });
@@ -166,13 +290,12 @@ function pickService(s){
   else { state.specialist = s.specialists[0]; loadSlots(); }
 }
 
-/* ── 2. Спеціаліст (лише там, де є вибір) ──────────────────────────────── */
+/* ── 4. Спеціаліст (лише там, де є вибір) ──────────────────────────────── */
 var SPEC_NAME = {victoria:'Вікторія', anastasia:'Анастасія'};
 
 function renderSpecialists(){
-  step(2);
-  var h = '<button class="back" id="bk">← Процедури</button>' +
-          '<h2>Оберіть спеціаліста</h2>';
+  step(3);
+  var h = '<button class="back" id="bk">← Процедури</button><h2>Оберіть спеціаліста</h2>';
   state.service.specialists.forEach(function(sp){
     h += '<button class="card" data-sp="' + esc(sp) + '"><div class="nm">' +
          esc(SPEC_NAME[sp] || sp) + '</div></button>';
@@ -184,7 +307,7 @@ function renderSpecialists(){
   });
 }
 
-/* ── 3. Дата і час ─────────────────────────────────────────────────────── */
+/* ── 5. Дата і час ─────────────────────────────────────────────────────── */
 function isoPlus(days){
   var d = new Date(); d.setDate(d.getDate() + days);
   return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
@@ -212,8 +335,7 @@ function loadSlots(){
 
 function renderSlots(days){
   step(3);
-  var h = '<button class="back" id="bk">← Назад</button>' +
-          '<h2>' + esc(state.service.name) + '</h2>';
+  var h = '<button class="back" id="bk">← Назад</button><h2>' + esc(state.service.name) + '</h2>';
   var any = false;
   days.forEach(function(d){
     var times = (d.specialists || {})[state.specialist] || [];
@@ -234,11 +356,11 @@ function renderSlots(days){
     if (state.service.specialist_choice) renderSpecialists(); else renderServices();
   };
   [].forEach.call(view.querySelectorAll('.slot'), function(b){
-    b.onclick = function(){ state.date = b.dataset.d; state.time = b.dataset.t; renderContact(); };
+    b.onclick = function(){ state.date = b.dataset.d; state.time = b.dataset.t; renderConfirm(); };
   });
 }
 
-/* ── 4. Контакт і підтвердження ────────────────────────────────────────── */
+/* ── 6. Підтвердження ──────────────────────────────────────────────────── */
 function summary(){
   return '<div class="summary">' +
     '<div><b>' + esc(state.service.name) + '</b></div>' +
@@ -246,117 +368,56 @@ function summary(){
     '<div>' + esc(SPEC_NAME[state.specialist] || state.specialist) +
       ' · ' + state.service.duration_min + ' хв' +
       (money(state.service) ? ' · ' + esc(money(state.service)) : '') + '</div>' +
+    '<div class="muted">' + esc(state.first + ' ' + state.last) +
+      ' · ' + esc('0' + state.phone.slice(3)) + '</div>' +
     '</div>';
 }
 
-function renderContact(){
+function renderConfirm(){
   step(4);
   show('<button class="back" id="bk">← Інший час</button>' +
-       '<h2>Ваші контакти</h2>' + summary() +
-       '<label for="nm">Імʼя</label><input id="nm" autocomplete="given-name" value="' + esc(state.first) + '">' +
-       '<label for="ln">Прізвище</label><input id="ln" autocomplete="family-name" value="' + esc(state.last) + '">' +
-       '<label for="ph">Телефон</label><input id="ph" type="tel" inputmode="tel" ' +
-         'placeholder="0XX XXX XX XX" autocomplete="tel" value="' + esc(state.phone) + '">' +
-       '<button class="btn" id="go">Отримати код</button>' +
-       '<p class="err" id="e" hidden></p>');
-  document.getElementById('bk').onclick = loadSlots;
-  document.getElementById('go').onclick = sendOtp;
-}
-
-function err(msg){
-  var e = document.getElementById('e');
-  if (e) { e.textContent = msg; e.hidden = false; }
-}
-
-function normPhone(raw){
-  var d = (raw || '').replace(/\D/g, '');
-  if (d.length === 10 && d.charAt(0) === '0') return '38' + d;
-  if (d.length === 9) return '380' + d;
-  if (d.length === 12 && d.slice(0, 3) === '380') return d;
-  return null;
-}
-
-function sendOtp(){
-  var first = document.getElementById('nm').value.trim();
-  var last = document.getElementById('ln').value.trim();
-  var phone = normPhone(document.getElementById('ph').value);
-  if (first.length < 2) return err('Вкажіть, будь ласка, імʼя');
-  if (last.length < 2) return err('Вкажіть, будь ласка, прізвище');
-  if (!phone) return err('Перевірте номер телефону');
-  state.first = first; state.last = last; state.phone = phone;
-
-  var btn = document.getElementById('go');
-  btn.disabled = true; btn.textContent = 'Надсилаємо…';
-  api('/auth/send-otp', {method:'POST', body: JSON.stringify({phone: phone})})
-    .then(function(r){
-      btn.disabled = false; btn.textContent = 'Отримати код';
-      if (r.status === 429) return err('Забагато спроб. Спробуйте за годину.');
-      if (!r.ok) return err('Не вдалося надіслати код. Спробуйте пізніше.');
-      renderCode();
-    }).catch(function(){
-      btn.disabled = false; btn.textContent = 'Отримати код';
-      err('Немає звʼязку. Спробуйте ще раз.');
-    });
-}
-
-function renderCode(){
-  show('<button class="back" id="bk">← Змінити номер</button>' +
-       '<h2>Код підтвердження</h2>' + summary() +
-       '<p class="muted">Надіслали код на ' + esc(state.phone.replace(/^38/, '')) + '</p>' +
-       '<label for="cd">Код із повідомлення</label>' +
-       '<input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
+       '<h2>Перевірте запис</h2>' + summary() +
        '<button class="btn" id="go">Підтвердити запис</button>' +
        '<p class="err" id="e" hidden></p>');
-  document.getElementById('bk').onclick = renderContact;
-  document.getElementById('go').onclick = verifyAndBook;
-  document.getElementById('cd').focus();
+  document.getElementById('bk').onclick = loadSlots;
+  document.getElementById('go').onclick = submit;
 }
 
-function verifyAndBook(){
-  var code = document.getElementById('cd').value.replace(/\D/g, '');
-  if (code.length < 4) return err('Введіть код із повідомлення');
-  var btn = document.getElementById('go');
-  btn.disabled = true; btn.textContent = 'Підтверджуємо…';
-
-  api('/auth/verify', {method:'POST', body: JSON.stringify({phone: state.phone, code: code})})
-    .then(function(r){
-      if (!r.ok || !r.data.token) {
-        btn.disabled = false; btn.textContent = 'Підтвердити запис';
-        return err(r.status === 429 ? 'Забагато спроб. Спробуйте пізніше.' : 'Невірний код');
-      }
-      state.token = r.data.token;
-      return api('/booking/create', {method:'POST', body: JSON.stringify({
-        first_name: state.first, last_name: state.last,
-        service: state.service.name, specialist: state.specialist,
-        date: state.date, time: state.time, source: 'web'
-      })}).then(function(b){
-        if (b.ok) return renderDone();
-        btn.disabled = false; btn.textContent = 'Підтвердити запис';
-        var code = (b.data || {}).error;
-        if (code === 'slot_taken' || code === 'conflict') {
-          err('Цей час щойно зайняли. Оберіть інший.');
-          setTimeout(loadSlots, 1400);
-        } else {
-          err((b.data || {}).detail || 'Не вдалося створити запис. Спробуйте інший час.');
-        }
-      });
-    }).catch(function(){
-      btn.disabled = false; btn.textContent = 'Підтвердити запис';
-      err('Немає звʼязку. Спробуйте ще раз.');
-    });
+function submit(){
+  busy('go', true, 'Записуємо…');
+  api('/booking/create', {method:'POST', body: JSON.stringify({
+    first_name: state.first, last_name: state.last,
+    service: state.service.name, specialist: state.specialist,
+    date: state.date, time: state.time, source: 'web'
+  })}).then(function(b){
+    if (b.ok) return renderDone();
+    busy('go', false, 'Підтвердити запис');
+    var code = (b.data || {}).error;
+    if (code === 'slot_taken' || code === 'conflict') {
+      err('Цей час щойно зайняли. Показуємо вільні…');
+      setTimeout(loadSlots, 1400);
+    } else if (code === 'surname_required' || code === 'name_required') {
+      err('Потрібні імʼя та прізвище');
+      setTimeout(renderName, 1200);
+    } else {
+      err((b.data || {}).detail || 'Не вдалося створити запис. Спробуйте інший час.');
+    }
+  }).catch(function(){
+    busy('go', false, 'Підтвердити запис');
+    err('Немає звʼязку. Спробуйте ще раз.');
+  });
 }
 
 function renderDone(){
   step(4);
-  show('<div class="ok"><div class="tick">✓</div>' +
-       '<h2>Записано</h2>' + summary() +
+  show('<div class="ok"><div class="tick">✓</div><h2>Записано</h2>' + summary() +
        '<p class="muted">Нагадаємо напередодні. Якщо плани зміняться — ' +
        'скасувати запис можна в нашому застосунку.</p>' +
        '<a class="btn ghost" style="display:block;text-align:center;text-decoration:none;' +
        'margin-top:14px" href="/app/">Відкрити застосунок</a></div>');
 }
 
-loadServices();
+renderPhone();
 </script>
 </body>
 </html>
