@@ -181,8 +181,17 @@ def slots(bs, monkeypatch):
     stub_wl._subtract_intervals = _subtract_intervals
     monkeypatch.setitem(sys.modules, 'wlaunch_api', stub_wl)
 
-    monkeypatch.setattr(bs, 'open_frames',
-                        lambda d, s, resources=None: state['frames'].get((d, s), []))
+    state['schedule_calls'] = []
+
+    def _frames(d, s, resources=None, schedule=None):
+        return state['frames'].get((d, s), [])
+
+    def _sched(f, t, branch_id=None):
+        state['schedule_calls'].append((f, t))
+        return {'content': []}
+
+    monkeypatch.setattr(bs, 'open_frames', _frames)
+    monkeypatch.setattr(bs, 'fetch_schedule', _sched)
     monkeypatch.setattr(bs, 'fetch_busy',
                         lambda f, t, branch_id=None: state['busy'])
     monkeypatch.setattr(bs, '_local_breaks', lambda d, s, db_path=None: [])
@@ -276,6 +285,13 @@ class TestGetFreeSlots:
         far = (datetime.now() + timedelta(days=400)).strftime('%Y-%m-%d')
         days = bs.get_free_slots('Біорепарація шкіри', TOMORROW, far)
         assert len(days) <= bs.MAX_RANGE_DAYS
+
+    def test_schedule_is_fetched_once_for_the_whole_range(self, bs, slots):
+        """Розклад тягнувся окремим запитом на кожен день — місяць коштував 15 с
+        (замір: 10 днів = 4.77 с проти 0.27 с одним запитом)."""
+        bs.get_free_slots('Біорепарація шкіри', TOMORROW, NEXT_WEEK)
+        assert len(slots['schedule_calls']) == 1
+        assert slots['schedule_calls'][0] == (TOMORROW, NEXT_WEEK)
 
     def test_empty_week_is_reported_day_by_day(self, bs, slots):
         """Горизонт = наскільки лікар заповнила розклад; решта днів open=False."""

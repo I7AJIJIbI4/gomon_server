@@ -114,8 +114,39 @@ def _appt_specialists(appt, res_to_spec):
 
 # ── Робочі години ─────────────────────────────────────────────────────────────
 
-def open_frames(date_str, specialist, resources=None):
-    """Робочі інтервали дня (ON мінус OFF) або [] якщо розклад не відкрито."""
+def fetch_schedule(date_from, date_to, branch_id=None):
+    """Розклад на весь діапазон одним запитом.
+
+    `wlaunch_api._fetch_schedule_raw` тягне по одному дню, і на місяць це 30+
+    послідовних HTTP (плюс `get_branch_id` усередині кожного) — вимірювання на
+    10 днях: 4.77 с проти 0.27 с одним запитом. Ендпоінт приймає start/end, а
+    парсер фреймів і так фільтрує по даті, тож одна відповідь обслуговує всі дні.
+    """
+    import requests
+    from config import WLAUNCH_API_URL, COMPANY_ID
+    from wlaunch_api import HEADERS, get_branch_id
+
+    bid = branch_id or get_branch_id()
+    if not bid:
+        return None
+    end = (datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+    url = '{}/company/{}/branch/{}/resource/schedule'.format(WLAUNCH_API_URL, COMPANY_ID, bid)
+    try:
+        resp = requests.get(url, headers=HEADERS,
+                            params={'start': date_from, 'end': end}, timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error('WLaunch schedule range error: {}'.format(e))
+        return None
+
+
+def open_frames(date_str, specialist, resources=None, schedule=None):
+    """Робочі інтервали дня (ON мінус OFF) або [] якщо розклад не відкрито.
+
+    `schedule` — відповідь `fetch_schedule` на весь діапазон. Без неї падаємо
+    на одноденний запит (так само працює старий код).
+    """
     from wlaunch_api import (WEEKDAY_NAMES, _fetch_schedule_raw,
                              _parse_resource_frames_for_date, _subtract_intervals,
                              get_wlaunch_resources)
@@ -123,7 +154,7 @@ def open_frames(date_str, specialist, resources=None):
     rid = res.get(specialist)
     if not rid:
         return []
-    raw = _fetch_schedule_raw(date_str)
+    raw = schedule if schedule is not None else _fetch_schedule_raw(date_str)
     if not raw:
         return []
     block = next((b for b in raw.get('content', []) if b.get('resource_id') == rid), None)
@@ -210,6 +241,7 @@ def get_free_slots(service_name, date_from, date_to, specialist=None, db_path=No
     bid = get_branch_id()
     resources = get_wlaunch_resources(bid)
     busy = fetch_busy(date_from, date_to, branch_id=bid)
+    schedule = fetch_schedule(date_from, date_to, branch_id=bid)
 
     days = []
     for date_str in _dates(date_from, date_to):
@@ -217,7 +249,7 @@ def get_free_slots(service_name, date_from, date_to, specialist=None, db_path=No
             continue
         day = {'date': date_str, 'open': False, 'specialists': {}}
         for spec in allowed:
-            frames = open_frames(date_str, spec, resources=resources)
+            frames = open_frames(date_str, spec, resources=resources, schedule=schedule)
             if not frames:
                 continue
             day['open'] = True
