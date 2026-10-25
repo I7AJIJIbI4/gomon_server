@@ -35,6 +35,7 @@ CHECKS = [
 ]
 
 TIMEOUT = 15
+RETRY_DELAY = 5   # с — пауза перед повтором невдалої перевірки
 
 
 def send_tg_alert(text):
@@ -68,8 +69,8 @@ def save_state(state):
         pass
 
 
-def check_endpoint(check):
-    """Returns (ok, error_message)."""
+def _check_once(check):
+    """Одна спроба. Returns (ok, error_message)."""
     name = check['name']
     url = check['url']
     try:
@@ -92,6 +93,26 @@ def check_endpoint(check):
         return False, '{}: з\'єднання відхилено'.format(name)
     except Exception as e:
         return False, '{}: {}'.format(name, str(e)[:100])
+
+
+def check_endpoint(check):
+    """Перевірка з одним повтором.
+
+    Резолвер провайдера періодично губить DNS-запити пачками; requests віддає
+    це як ConnectionError, і одна невдала спроба піднімала алерт про «падіння»
+    сайту, який насправді працював (25.10.2026, і так само 14.06 та 19.06).
+    Повтор відсікає такі блипи — справжнє падіння переживе обидві спроби.
+    """
+    ok, err = _check_once(check)
+    if ok:
+        return True, None
+    time.sleep(RETRY_DELAY)
+    ok, err_retry = _check_once(check)
+    if ok:
+        logger.info('{}: перша спроба впала ({}), повтор успішний'.format(
+            check['name'], err))
+        return True, None
+    return False, err_retry
 
 
 def main():
