@@ -98,15 +98,21 @@ class TestDeriveSpecialists:
             {'anastasia', 'victoria'}
 
     def test_virtual_category_yields_nothing(self, wc):
-        """`_консультація` не несе спеціалістів — має бути видно як прогалину."""
-        assert wc.derive_specialists('Консультація', PRICES, P2C) == set()
+        """Віртуальна категорія спеціалістів не несе — має бути видно як прогалину."""
+        assert wc.derive_specialists('Лазерна епіляція', PRICES,
+                                     {'Лазерна епіляція': ['_епіляція']}) == set()
+
+    def test_consultation_comes_from_override(self, wc):
+        """`_консультація` порожня, тож спеціаліст заданий вручну."""
+        assert wc.derive_specialists('Консультація', PRICES, P2C) == {'victoria'}
 
     def test_unknown_service_yields_nothing(self, wc):
         assert wc.derive_specialists('Невідома послуга', PRICES, P2C) == set()
 
-    def test_override_takes_precedence(self, wc, monkeypatch):
-        monkeypatch.setitem(wc.SPECIALIST_OVERRIDE, 'Консультація', ['victoria'])
-        assert wc.derive_specialists('Консультація', PRICES, P2C) == {'victoria'}
+    def test_override_beats_the_price_list(self, wc, monkeypatch):
+        monkeypatch.setitem(wc.SPECIALIST_OVERRIDE,
+                            'Моделювання всього тіла', ['victoria'])
+        assert wc.derive_specialists('Моделювання всього тіла', PRICES, P2C) == {'victoria'}
 
 
 # ── Детектор розходжень ───────────────────────────────────────────────────────
@@ -168,6 +174,7 @@ LIVE = {
     'id-teeth':  {'name': 'Відбілювання зубів',           'duration_min': 60},
     'id-body':   {'name': 'Моделювання всього тіла',      'duration_min': 55},
     'id-consult': {'name': 'Консультація',                'duration_min': 30},
+    'id-laser':  {'name': 'Лазерна епіляція',             'duration_min': 45},
 }
 
 
@@ -236,7 +243,7 @@ class TestSyncCatalog:
 
     def test_service_without_specialist_is_flagged(self, wc, db):
         _, _, no_spec = wc.sync_catalog(db_path=db, notify=False)
-        assert no_spec == ['Консультація']
+        assert no_spec == ['Лазерна епіляція']
 
     def test_price_range_from_drugs(self, wc, db):
         wc.sync_catalog(db_path=db, notify=False)
@@ -265,7 +272,7 @@ class TestBookableMenu:
     def test_menu_excludes_services_without_specialist(self, wc, db):
         wc.sync_catalog(db_path=db, notify=False)
         names = [s['name'] for s in wc.get_bookable_services(db_path=db)]
-        assert 'Консультація' not in names, 'невідомий спеціаліст — не показуємо'
+        assert 'Лазерна епіляція' not in names, 'невідомий спеціаліст — не показуємо'
         assert 'Ботулінотерапія' in names
 
     def test_only_teeth_whitening_offers_a_choice(self, wc, db):
@@ -281,6 +288,30 @@ class TestBookableMenu:
                 assert len(s['specialists']) == 1, \
                     '{} має {} спеціалістів — клієнт не має це вирішувати'.format(
                         s['name'], len(s['specialists']))
+
+    def test_consultation_is_bookable_via_override(self, wc, db):
+        """Прайс спеціаліста не дає — беремо з SPECIALIST_OVERRIDE."""
+        wc.sync_catalog(db_path=db, notify=False)
+        menu = {s['name']: s for s in wc.get_bookable_services(db_path=db)}
+        assert 'Консультація' in menu
+        assert menu['Консультація']['specialists'] == ['victoria']
+        assert menu['Консультація']['specialist_choice'] is False
+
+    def test_hidden_service_stays_out_of_the_menu(self, wc, db, monkeypatch):
+        """Онлайн-консультацій поки не проводимо, хоча у WLaunch послуга активна."""
+        live = dict(LIVE)
+        live['id-online'] = {'name': 'Онлайн-консультація', 'duration_min': 30}
+        monkeypatch.setattr(wc, '_fetch_live', lambda: live)
+        monkeypatch.setitem(wc.SPECIALIST_OVERRIDE, 'Онлайн-консультація', ['victoria'])
+        wc.sync_catalog(db_path=db, notify=False)
+
+        names = [s['name'] for s in wc.get_bookable_services(db_path=db)]
+        assert 'Онлайн-консультація' not in names
+        # але в кеші лишається — щоб детектор бачив її зміни
+        conn = sqlite3.connect(db)
+        assert conn.execute('SELECT active FROM wl_services WHERE name=?',
+                            ('Онлайн-консультація',)).fetchone()[0] == 1
+        conn.close()
 
     def test_duration_comes_from_wlaunch_not_a_default(self, wc, db):
         wc.sync_catalog(db_path=db, notify=False)

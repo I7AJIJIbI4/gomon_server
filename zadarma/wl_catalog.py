@@ -40,7 +40,16 @@ logger = logging.getLogger('wl_catalog')
 SPECIALIST_CHOICE_ALLOWED = {'Відбілювання зубів'}
 
 #: Ручні перевизначення там, де прайс не дає відповіді.
-SPECIALIST_OVERRIDE = {}
+#: «Консультація» йде через віртуальну категорію `_консультація`, яка спеціалістів
+#: не несе, тож виводиться порожнім набором.
+SPECIALIST_OVERRIDE = {
+    'Консультація': ['victoria'],
+    'Офлайн-консультація': ['victoria'],
+}
+
+#: Активні у WLaunch, але не пропонуються клієнту для самостійного запису.
+#: Онлайн-консультацій поки не проводимо.
+HIDDEN_FROM_BOOKING = {'Онлайн-консультація'}
 
 
 def init_catalog_db(db_path=None):
@@ -270,6 +279,8 @@ def get_bookable_services(db_path=None):
         conn.close()
     out = []
     for r in rows:
+        if r['name'] in HIDDEN_FROM_BOOKING:
+            continue
         specs = r['specialists'].split(',')
         out.append({
             'wl_id': r['wl_id'], 'name': r['name'],
