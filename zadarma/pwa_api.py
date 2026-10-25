@@ -1425,8 +1425,15 @@ def get_prices():
                     # Описи процедур — для всіх (публічна інформація про послуги)
                     if row.get('desc'):
                         item['desc'] = row['desc']
-                    if row.get('duration'):
-                        item['duration'] = row['duration']
+                    # Тривалість — з каталогу WLaunch, не з прайсу: там вона
+                    # фіктивна (60 у всіх), і клієнт бачив саме цю вигадку.
+                    try:
+                        from wl_catalog import duration_for_procedure
+                        _d = duration_for_procedure(item['name'], prices=data)
+                    except Exception:
+                        _d = None
+                    if _d:
+                        item['duration'] = _d
                     if row.get('prep'):
                         item['prep'] = row['prep']
                     if row.get('aftercare'):
@@ -3724,17 +3731,20 @@ def admin_prices_get():
                 if isinstance(row, list):
                     items.append({'name': row[0] if len(row) > 0 else '', 'price': row[2] if len(row) > 2 else '', 'specialists': [], 'duration': 60})
                 elif isinstance(row, dict):
-                    raw_dur = row.get('duration') or row.get('duration_min') or 60
+                    _nm = row.get('name') or row.get('service') or ''
                     try:
-                        dur = int(raw_dur)
-                    except (TypeError, ValueError):
-                        dur = 60
-                    items.append({
-                        'name':        row.get('name') or row.get('service') or '',
+                        from wl_catalog import duration_for_procedure
+                        dur = duration_for_procedure(_nm, prices=data)
+                    except Exception:
+                        dur = None
+                    _item = {
+                        'name':        _nm,
                         'price':       row.get('price') or row.get('cost') or '',
                         'specialists': row.get('specialists', []),
-                        'duration':    dur,
-                    })
+                    }
+                    if dur:
+                        _item['duration'] = dur
+                    items.append(_item)
             if items:
                 result.append({'cat': cat_name, 'items': items})
         return jsonify(result)
@@ -3780,6 +3790,16 @@ def admin_prices_put():
             deduped.append(cat)
     data = deduped
 
+    # Тривалість у prices.json не зберігаємо — джерело правди для неї WLaunch.
+    # Редактор при цьому лишається каналом зміни: нижче diff порівнює подане
+    # значення з тим, що у WLaunch, і пушить різницю.
+    _submitted_durations = {}
+    for cat in data:
+        for item in cat.get('items', []):
+            if item.get('duration'):
+                _submitted_durations[item.get('name', '')] = item['duration']
+            item.pop('duration', None)
+
     # Load old prices + durations for diff
     old_prices, old_durations = {}, {}
     try:
@@ -3789,8 +3809,16 @@ def admin_prices_put():
             for item in cat.get('items', []):
                 nm = item.get('name', '')
                 old_prices[nm] = item.get('price', '')
-                if item.get('duration'):
-                    old_durations[nm] = int(item.get('duration') or 60)
+                # «Було» для тривалості беремо з WLaunch, а не з файлу: у файлі
+                # ми її більше не зберігаємо, інакше кожне збереження виглядало
+                # б як зміна і пушило б у WLaunch усі 56 позицій.
+                try:
+                    from wl_catalog import duration_for_procedure
+                    _od = duration_for_procedure(nm, prices=old_data)
+                except Exception:
+                    _od = None
+                if _od:
+                    old_durations[nm] = _od
     except Exception:
         pass
 
@@ -3815,8 +3843,11 @@ def admin_prices_put():
                 new_prices[name] = item.get('price', '')
                 if item.get('specialists'):
                     new_specialists[name] = item['specialists']
-                if item.get('duration'):
-                    new_durations[name] = int(item.get('duration') or 60)
+                if _submitted_durations.get(name):
+                    try:
+                        new_durations[name] = int(_submitted_durations[name])
+                    except (TypeError, ValueError):
+                        pass
         if new_prices != old_prices or new_durations != old_durations:
             threading.Thread(
                 target=_sync_prices_to_wlaunch,

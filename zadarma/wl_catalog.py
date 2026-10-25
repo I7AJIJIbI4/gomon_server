@@ -315,6 +315,66 @@ def _alert(changes, without_specialist):
         logger.error('TG alert failed: {}'.format(e))
 
 
+def all_services(db_path=None):
+    """Усі активні послуги кешу, включно з прихованими з меню."""
+    init_catalog_db(db_path)
+    conn = sqlite3.connect(db_path or DB_PATH, timeout=5)
+    conn.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in conn.execute(
+            'SELECT * FROM wl_services WHERE active=1').fetchall()]
+    finally:
+        conn.close()
+
+
+def duration_for_procedure(name, prices=None, db_path=None):
+    """Тривалість процедури у хвилинах, або None якщо невідома.
+
+    Тривалість — властивість бронюємої послуги, ніколи препарату: варіант
+    успадковує її від своєї узагальненої послуги. У прайсі це поле фіктивне
+    (60 у всіх 56 позицій), тож джерело тут одне — каталог WLaunch.
+
+    None означає «не знаємо». Підставляти 60 не можна — саме звідти й узялась
+    форма запису, що бронює 60 хвилин на 80-хвилинну процедуру.
+    """
+    if not name:
+        return None
+    services = {s['name'].lower(): s['duration_min'] for s in all_services(db_path)}
+    exact = services.get(name.lower())
+    if exact:
+        return exact
+
+    try:
+        from photo_reminder import PROCEDURE_TO_CATEGORIES
+    except Exception:
+        return None
+    if prices is None:
+        try:
+            prices = json.load(open(PRICES_PATH, encoding='utf-8'))
+        except Exception:
+            return None
+
+    # категорія прайсу, у якій лежить ця позиція
+    cat = None
+    for group in prices:
+        for item in group.get('items', []):
+            if (item.get('name') or '').lower() == name.lower():
+                cat = group.get('cat', '')
+                break
+        if cat:
+            break
+    if not cat:
+        return None
+
+    # узагальнена послуга, препарати якої беруться з цієї категорії
+    for generic, cats in PROCEDURE_TO_CATEGORIES.items():
+        if cat in cats:
+            dur = services.get(generic.lower())
+            if dur:
+                return dur
+    return None
+
+
 def get_bookable_services(db_path=None):
     """Меню запису: активні послуги з відомим спеціалістом."""
     # Міграція колонок живе в init_catalog_db, а його кличе лише sync_catalog:

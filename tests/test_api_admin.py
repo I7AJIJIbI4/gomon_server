@@ -263,3 +263,31 @@ def test_calendar_delete_existing(client, admin_token, pwa):
     row = conn.execute('SELECT status FROM manual_appointments WHERE id=?', (appt_id,)).fetchone()
     conn.close()
     assert row is None or row[0] == 'CANCELLED'
+
+
+# ── Тривалість: джерело правди — WLaunch, не прайс ────────────────────────────
+
+def test_price_save_does_not_persist_duration(client, pwa):
+    """У prices.json тривалість більше не осідає.
+
+    Інакше у файлі лишалось би друге джерело правди — те саме, через яке
+    форма запису підставляла 60 хвилин усім процедурам.
+    """
+    from conftest import _insert_session
+    token = _insert_session('380996093860')
+    payload = [{'cat': 'Тест', 'items': [
+        {'name': 'Тестова процедура', 'price': '₴ 900',
+         'specialists': ['victoria'], 'duration': 45},
+    ]}]
+    orig = open(pwa.PRICES_PATH, 'rb').read()
+    try:
+        rv = client.put('/api/admin/prices/edit', json=payload, headers=auth(token))
+        assert rv.status_code == 200
+        saved = json.load(open(pwa.PRICES_PATH, encoding='utf-8'))
+        item = saved[0]['items'][0]
+        assert item['name'] == 'Тестова процедура'
+        assert item['price'] == '₴ 900'
+        assert 'duration' not in item, 'тривалість не має зберігатись у прайсі'
+    finally:
+        with open(pwa.PRICES_PATH, 'wb') as f:
+            f.write(orig)

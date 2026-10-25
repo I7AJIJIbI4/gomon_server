@@ -84,8 +84,13 @@ def test_feed_with_posts(client, pwa):
 
 
 def test_prices_duration_non_numeric(client, pwa):
-    """duration as a string with units must not crash /api/admin/prices/edit.
-    This is a regression test for the int(duration) ValueError fixed in pwa_api.py."""
+    """Криве duration у prices.json не має ламати /api/admin/prices/edit.
+
+    Регресія на ValueError від int(duration). Підстановки 60 більше немає:
+    тривалість тепер приходить із каталогу WLaunch, а значення у файлі
+    ігнорується — саме та фікція «60 для всіх» бронювала годину на
+    80-хвилинну процедуру.
+    """
     broken_prices = [
         {'cat': 'Тест', 'items': [
             {'name': 'Тест', 'price': '500 грн', 'specialists': ['victoria'], 'duration': '60 хв'},
@@ -101,8 +106,7 @@ def test_prices_duration_non_numeric(client, pwa):
         assert rv.status_code == 200
         data = rv.get_json()
         dur = data[0]['items'][0].get('duration')
-        assert isinstance(dur, int), f"duration should be int, got {type(dur)}: {dur}"
-        assert dur == 60  # fallback default
+        assert dur is None, 'невідому послугу не вигадуємо, поле просто відсутнє'
     finally:
         with open(pwa.PRICES_PATH, 'wb') as f:
             f.write(orig)

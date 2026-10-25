@@ -295,6 +295,47 @@ class TestSyncCatalog:
         assert active == 0, 'історію не видаляємо, лише знімаємо активність'
 
 
+class TestDurationResolution:
+    """Тривалість — властивість бронюємої послуги, ніколи препарату.
+
+    У прайсі це поле фіктивне (60 у всіх 56 позицій), і саме воно підставлялось
+    у форму нового запису: Вікторія створювала 80-хвилинну WOW-чистку з
+    зарезервованою годиною, і наступний запис накладався на живу людину.
+    """
+
+    def test_exact_service_name(self, wc, db):
+        wc.sync_catalog(db_path=db, notify=False)
+        assert wc.duration_for_procedure(
+            'Моделювання всього тіла', prices=PRICES, db_path=db) == 55
+
+    def test_drug_inherits_its_generic_service(self, wc, db):
+        """«Біорепарація Rejuran HB» у WLaunch немає — бере 30 від своєї послуги."""
+        wc.sync_catalog(db_path=db, notify=False)
+        assert wc.duration_for_procedure(
+            'Біорепарація Rejuran HB', prices=PRICES, db_path=db) == 30
+
+    def test_unknown_procedure_returns_none(self, wc, db):
+        """None, а не 60: вигадана тривалість і є причиною накладань."""
+        wc.sync_catalog(db_path=db, notify=False)
+        assert wc.duration_for_procedure(
+            'Невідома процедура', prices=PRICES, db_path=db) is None
+
+    def test_empty_name_returns_none(self, wc, db):
+        assert wc.duration_for_procedure('', prices=PRICES, db_path=db) is None
+
+    def test_hidden_service_still_resolves(self, wc, db, monkeypatch):
+        """Прихована з меню послуга лишається в каталозі — тривалість у неї є."""
+        live = dict(LIVE)
+        live['id-online'] = dict(name='Онлайн-консультація', duration_min=30, **INJ)
+        monkeypatch.setattr(wc, '_fetch_live', lambda: live)
+        monkeypatch.setitem(wc.SPECIALIST_OVERRIDE, 'Онлайн-консультація', ['victoria'])
+        wc.sync_catalog(db_path=db, notify=False)
+        assert 'Онлайн-консультація' not in [
+            s['name'] for s in wc.get_bookable_services(db_path=db)]
+        assert wc.duration_for_procedure(
+            'Онлайн-консультація', prices=PRICES, db_path=db) == 30
+
+
 class TestBookableMenu:
 
     def test_menu_excludes_services_without_specialist(self, wc, db):
