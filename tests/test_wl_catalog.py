@@ -230,6 +230,29 @@ class TestSyncCatalog:
         assert len(changes) == len(LIVE)
         assert alerts == []
 
+    def test_alert_goes_to_the_admin_not_the_studio_account(self, wc, db, monkeypatch):
+        """Детектор без доставки не має сенсу.
+
+        Раніше алерт шукав tg_id за телефоном студії `380733103110`, а той
+        резолвиться в акаунт DrGomonCosmetology — туди ніхто не дивиться як у
+        пошту для інцидентів, і 30 рядків про переїзд тек просто зникли.
+        """
+        sent = []
+        stub = type(sys)('notifier')
+        stub.alert_admin = lambda text: sent.append(text) or True
+        stub._send_tg = lambda *a, **kw: pytest.fail(
+            'алерт має йти через alert_admin, а не напряму в _send_tg')
+        monkeypatch.setitem(sys.modules, 'notifier', stub)
+
+        wc.sync_catalog(db_path=db, notify=False)
+        renamed = dict(LIVE)
+        renamed['id-botox'] = dict(name='Ботулінотерапія (Xeomin)', duration_min=30, **INJ)
+        monkeypatch.setattr(wc, '_fetch_live', lambda: renamed)
+        wc.sync_catalog(db_path=db, notify=True)
+
+        assert len(sent) == 1
+        assert 'перейменовано' in sent[0]
+
     def test_later_change_does_alert(self, wc, db, monkeypatch):
         wc.sync_catalog(db_path=db, notify=False)
         alerts = []

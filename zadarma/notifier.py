@@ -298,6 +298,21 @@ def _send_sms(phone, text):
         logger.error('sms error for {}: {}'.format(phone, e))
         return False
 
+def alert_admin(text):
+    """Службовий алерт адміну (не клієнту).
+
+    Саме ADMIN_USER_ID, а не пошук tg_id за телефоном студії: `380733103110`
+    резолвиться в акаунт DrGomonCosmetology, який ніхто не читає як пошту для
+    інцидентів. health_check.py шле туди ж.
+    """
+    try:
+        from config import ADMIN_USER_ID
+        return _send_tg(ADMIN_USER_ID, text)
+    except Exception as e:
+        logger.error('alert_admin failed: {}'.format(e))
+        return False
+
+
 # ─── Центральний диспетчер ───────────────────────────────────────────────────
 
 def notify_client(phone, tg_text, sms_text=None,

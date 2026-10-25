@@ -161,10 +161,9 @@ def _rollback_wlaunch(wl_id, why):
         return
     logger.error('WLaunch rollback FAILED for {}: {}'.format(wl_id, err))
     try:
-        from notifier import _send_tg, _get_tg_id
-        _send_tg(_get_tg_id('380733103110'),
-                 'WLaunch orphan: не вдалось відкотити {} ({}). Потрібне ручне прибирання.'
-                 .format(wl_id, why))
+        from notifier import alert_admin
+        alert_admin('WLaunch orphan: не вдалось відкотити {} ({}). '
+                    'Потрібне ручне прибирання.'.format(wl_id, why))
     except Exception:
         pass
 

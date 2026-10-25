@@ -309,8 +309,8 @@ def _alert(changes, without_specialist):
         lines += ['', 'Без відомого спеціаліста (не потраплять у меню запису):']
         lines += ['- ' + n for n in without_specialist]
     try:
-        from notifier import _send_tg, _get_tg_id
-        _send_tg(_get_tg_id('380733103110'), '\n'.join(lines))
+        from notifier import alert_admin
+        alert_admin('\n'.join(lines))
     except Exception as e:
         logger.error('TG alert failed: {}'.format(e))
 
