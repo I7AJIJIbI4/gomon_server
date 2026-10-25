@@ -297,8 +297,10 @@ class TestCreateRouteInvariants:
 
         cancelled = []
         second = _payload(date='2099-04-04', time='13:30', duration=60)
+        # відкат робить ядро, тож підміняємо канонічну функцію, не аліас у pwa_api
+        import booking as _booking
         with patch.dict(sys.modules), \
-             patch.object(_pwa, '_cancel_wlaunch_appt',
+             patch.object(_booking, 'cancel_wlaunch_appt',
                           lambda wl_id, **kw: cancelled.append(wl_id) or (True, None)):
             sys.modules['wlaunch_api'].create_wlaunch_appointment = \
                 lambda *a, **kw: ('wl-orphan', None)

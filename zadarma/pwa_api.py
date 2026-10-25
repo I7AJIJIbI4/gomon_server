@@ -1365,6 +1365,7 @@ def booking_create():
             specialist=(d.get('specialist') or '').strip() or None,
             source=(d.get('source') or 'web').strip()[:16],
             notes=(d.get('notes') or '').strip()[:300],
+            db_path=DB_PATH,
         )
         return jsonify(dict(res, ok=True))
     except BookingError as e:
@@ -3312,88 +3313,36 @@ def admin_cal_create():
     if end_min > 21 * 60:
         return jsonify({'error': 'too_late', 'detail': 'Запис не може закінчуватись пізніше 21:00'}), 400
 
-    # 1. Спробувати створити в WLaunch. Якщо WLaunch відмовив через конфлікт
-    #    розкладу (validation) — повертаємо помилку. Якщо WLaunch недоступний
-    #    (мережа, серверна помилка) — створюємо локально як fallback.
-    wl_id = None
-    wl_warning = None
+    # Інваріанти (WLaunch-first, дзеркало, відкат) — у booking.place_appointment.
+    # Тут лишається тільки адмінська політика: він записує будь-кого, задає
+    # тривалість вручну і може вписати процедуру, якої немає в меню запису.
+    from booking import place_appointment, BookingError
     try:
-        from wlaunch_api import create_wlaunch_appointment
-        wl_id, wl_err = create_wlaunch_appointment(
-            client_phone, client_name, procedure_name,
-            specialist, date, appt_time, duration
-        )
-        if wl_err:
-            wl_lower = wl_err.lower()
-            if 'unavailable' in wl_lower:
-                return jsonify({'error': 'wlaunch_rejected',
-                    'detail': 'Спеціаліст недоступний у WLaunch у цей час. Перевірте розклад або оберіть інший час.'}), 409
-            if wl_err.startswith('http_422'):
-                return jsonify({'error': 'wlaunch_rejected',
-                    'detail': 'WLaunch відхилив запис. Перевірте дані.'}), 409
-            # Any other WLaunch error — block creation
-            logger.error('WLaunch error: {}'.format(wl_err))
+        placed = place_appointment(
+            client_phone, client_name, procedure_name, specialist, date, appt_time,
+            duration, notes=notes, source='admin_app',
+            created_by=request.admin_phone, db_path=DB_PATH)
+    except BookingError as e:
+        if e.code == 'conflict':
+            return jsonify({'error': 'conflict'}), 409
+        if e.code == 'db_error':
+            return jsonify({'error': 'db_error'}), 500
+        if e.code == 'wlaunch_unavailable':
             return jsonify({'error': 'wlaunch_rejected',
-                'detail': 'WLaunch помилка: {}. Спробуйте пізніше.'.format(wl_err)}), 409
-    except Exception as _e:
-        logger.error('WLaunch create exception: {}'.format(_e))
-        return jsonify({'error': 'wlaunch_rejected',
-            'detail': 'WLaunch недоступний. Спробуйте пізніше.'}), 503
+                            'detail': 'WLaunch недоступний. Спробуйте пізніше.'}), 503
+        raw = (e.detail or '').lower()
+        if 'unavailable' in raw:
+            detail = ('Спеціаліст недоступний у WLaunch у цей час. '
+                      'Перевірте розклад або оберіть інший час.')
+        elif raw.startswith('http_422'):
+            detail = 'WLaunch відхилив запис. Перевірте дані.'
+        else:
+            detail = 'WLaunch помилка: {}. Спробуйте пізніше.'.format(e.detail)
+        return jsonify({'error': 'wlaunch_rejected', 'detail': detail}), 409
 
-    # 2. WLaunch OK — створюємо локальний запис
-    conn = sqlite3.connect(DB_PATH, timeout=5)
-    conn.execute('BEGIN IMMEDIATE')
-    new_start = _time_to_min(appt_time)
-    new_end   = new_start + duration
-    if _check_overlap(conn, specialist, date, new_start, new_end):
-        conn.rollback()
-        conn.close()
-        # Rollback WLaunch if overlap detected locally
-        if wl_id:
-            try:
-                _cancel_wlaunch_appt(wl_id)
-                logger.warning('WLaunch rollback (local overlap): {}'.format(wl_id))
-            except Exception as _re:
-                logger.error('WLaunch rollback failed: {}'.format(_re))
-                try:
-                    from notifier import _send_tg, _get_tg_id
-                    _send_tg(_get_tg_id('380733103110'), 'WLaunch orphan: rollback failed for wl_id={}. Manual cleanup needed.'.format(wl_id))
-                except Exception:
-                    pass
-        return jsonify({'error': 'conflict'}), 409
-
-    wl_notes = 'wl:{}'.format(wl_id) if wl_id else ''
-    full_notes = (notes + ' ' + wl_notes).strip() if notes else wl_notes
-
-    try:
-        c = conn.cursor()
-        c.execute(
-            '''INSERT INTO manual_appointments
-               (client_phone, client_name, procedure_name, specialist, date, time, duration, notes, wlaunch_id, created_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?)''',
-            (client_phone, client_name, procedure_name, specialist, date, appt_time, duration, full_notes, wl_id, request.admin_phone)
-        )
-        new_id = c.lastrowid
-        conn.commit()
-        _audit_appointment(wl_id or new_id, client_phone, client_name, procedure_name, specialist, date, appt_time, 'CONFIRMED', None, 'created', 'admin_app')
-    except Exception as _db_err:
-        conn.rollback()
-        conn.close()
-        # Rollback WLaunch if local DB failed
-        if wl_id:
-            try:
-                _cancel_wlaunch_appt(wl_id)
-                logger.warning('WLaunch rollback (DB error): {}'.format(wl_id))
-            except Exception as _re:
-                logger.error('WLaunch rollback failed: {}'.format(_re))
-                try:
-                    from notifier import _send_tg, _get_tg_id
-                    _send_tg(_get_tg_id('380733103110'), 'WLaunch orphan: rollback failed for wl_id={}. Manual cleanup needed.'.format(wl_id))
-                except Exception:
-                    pass
-        logger.error('Local DB insert failed: {}'.format(_db_err))
-        return jsonify({'error': 'db_error'}), 500
-    conn.close()
+    new_id = placed['local_id']
+    wl_id = placed['wlaunch_id']
+    wl_warning = None
 
     # DISABLED: appt_confirm (поки не потрібно, WLaunch сам шле)
     # if client_phone:

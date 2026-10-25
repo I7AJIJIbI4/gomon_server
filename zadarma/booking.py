@@ -37,10 +37,11 @@ _TIME_RE = re.compile(r'^\d{2}:\d{2}$')
 class BookingError(Exception):
     """Відмова, яку клієнт може зрозуміти й виправити."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, detail=None):
         super(BookingError, self).__init__(message)
         self.code = code
         self.message = message
+        self.detail = detail      # сира відповідь WLaunch, для адмінських повідомлень
 
 
 # ── Канонічні примітиви (pwa_api імпортує саме їх) ────────────────────────────
@@ -208,6 +209,77 @@ def _verify_slot(service, specialist, date, time_str, db_path=None):
                            'Цей час щойно зайняли. Оберіть інший')
 
 
+def place_appointment(phone, client_name, procedure_name, specialist, date,
+                      time_str, duration, notes='', source='web',
+                      created_by=None, db_path=None):
+    """Інваріанти запису, спільні для всіх каналів. Політики тут немає.
+
+    Спершу WLaunch, потім локальне дзеркало. Локальна помилка після успішного
+    WLaunch відкочує WLaunch — інакше лишиться запис, якого ніхто не чекає.
+
+    Викликачі самі вирішують, що можна: клієнтові послугу й тривалість диктує
+    каталог, адміну — ні, він записує будь-кого і будь-коли.
+    """
+    from wlaunch_api import create_wlaunch_appointment
+    try:
+        wl_id, wl_err = create_wlaunch_appointment(
+            phone, client_name, procedure_name, specialist, date, time_str, duration)
+    except Exception as e:
+        logger.error('WLaunch create exception: {}'.format(e))
+        raise BookingError('wlaunch_unavailable',
+                           'Сервіс запису тимчасово недоступний. Спробуйте пізніше',
+                           detail=str(e)[:200])
+    if wl_err or not wl_id:
+        logger.error('WLaunch create refused: {}'.format(wl_err))
+        raise BookingError('wlaunch_rejected',
+                           'Не вдалося підтвердити час. Оберіть інший',
+                           detail=wl_err)
+
+    start = time_to_min(time_str)
+    # Маркер wl: у нотатках — запасний шлях для місць, які шукають WLaunch ID там
+    wl_note = 'wl:{}'.format(wl_id)
+    full_notes = ((notes or '').strip() + ' ' + wl_note).strip()
+
+    conn = sqlite3.connect(db_path or DB_PATH, timeout=5)
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        if check_overlap(conn, specialist, date, start, start + duration):
+            conn.rollback()
+            _rollback_wlaunch(wl_id, 'local overlap')
+            raise BookingError('conflict', 'Цей час щойно зайняли. Оберіть інший')
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO manual_appointments'
+            ' (client_phone, client_name, procedure_name, specialist, date, time,'
+            '  duration, notes, wlaunch_id, created_by)'
+            ' VALUES (?,?,?,?,?,?,?,?,?,?)',
+            (phone, client_name, procedure_name, specialist, date, time_str,
+             duration, full_notes, wl_id, created_by or source))
+        local_id = cur.lastrowid
+        conn.commit()
+    except BookingError:
+        raise
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _rollback_wlaunch(wl_id, 'db error')
+        logger.error('local mirror failed: {}'.format(e))
+        raise BookingError('db_error', 'Не вдалося зберегти запис. Спробуйте пізніше')
+    finally:
+        conn.close()
+
+    audit_appointment(wl_id, phone, client_name, procedure_name, specialist,
+                      date, time_str, 'CONFIRMED', None, 'created', source,
+                      db_path=db_path)
+    logger.info('appointment placed: {} {} {} {} {} (wl={})'.format(
+        source, phone, procedure_name, date, time_str, wl_id))
+    return {'wlaunch_id': wl_id, 'local_id': local_id, 'service': procedure_name,
+            'specialist': specialist, 'date': date, 'time': time_str,
+            'duration_min': duration}
+
+
 def create_booking(phone, client_name, service_name, date, time_str,
                    specialist=None, source='web', notes='', db_path=None):
     """Створити запис клієнта. WLaunch-first, з відкотом.
@@ -239,56 +311,11 @@ def create_booking(phone, client_name, service_name, date, time_str,
 
     _verify_slot(service, specialist, date, time_str, db_path=db_path)
 
-    from wlaunch_api import create_wlaunch_appointment
     try:
-        wl_id, wl_err = create_wlaunch_appointment(
-            phone, client_name, service['name'], specialist, date, time_str, duration)
-    except Exception as e:
-        logger.error('WLaunch create exception: {}'.format(e))
-        raise BookingError('wlaunch_unavailable',
-                           'Сервіс запису тимчасово недоступний. Спробуйте пізніше')
-    if wl_err or not wl_id:
-        logger.error('WLaunch create refused: {}'.format(wl_err))
-        raise BookingError('wlaunch_rejected',
-                           'Не вдалося підтвердити час. Оберіть інший')
-
-    start = time_to_min(time_str)
-    conn = sqlite3.connect(db_path or DB_PATH, timeout=5)
-    try:
-        conn.execute('BEGIN IMMEDIATE')
-        if check_overlap(conn, specialist, date, start, start + duration):
-            conn.rollback()
-            _rollback_wlaunch(wl_id, 'local overlap')
+        return place_appointment(
+            phone, client_name, service['name'], specialist, date, time_str,
+            duration, notes=notes, source='booking:' + source, db_path=db_path)
+    except BookingError as e:
+        if e.code == 'conflict':
             raise BookingError('slot_taken', 'Цей час щойно зайняли. Оберіть інший')
-        cur = conn.cursor()
-        cur.execute(
-            'INSERT INTO manual_appointments'
-            ' (client_phone, client_name, procedure_name, specialist, date, time,'
-            '  duration, notes, wlaunch_id, created_by)'
-            ' VALUES (?,?,?,?,?,?,?,?,?,?)',
-            (phone, client_name, service['name'], specialist, date, time_str,
-             duration, (notes or '').strip(), wl_id, 'booking:' + source))
-        local_id = cur.lastrowid
-        conn.commit()
-    except BookingError:
         raise
-    except Exception as e:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        _rollback_wlaunch(wl_id, 'db error')
-        logger.error('local mirror failed: {}'.format(e))
-        raise BookingError('db_error', 'Не вдалося зберегти запис. Спробуйте пізніше')
-    finally:
-        conn.close()
-
-    audit_appointment(wl_id, phone, client_name, service['name'], specialist,
-                      date, time_str, 'CONFIRMED', None, 'created',
-                      'booking:' + source, db_path=db_path)
-    logger.info('booking created: {} {} {} {} {} (wl={})'.format(
-        source, phone, service['name'], date, time_str, wl_id))
-
-    return {'wlaunch_id': wl_id, 'local_id': local_id, 'service': service['name'],
-            'specialist': specialist, 'date': date, 'time': time_str,
-            'duration_min': duration}
