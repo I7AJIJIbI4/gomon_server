@@ -293,9 +293,13 @@ def create_booking(phone, client_name, service_name, date, time_str,
     phone = normalize_phone(phone or '')
     if not phone:
         raise BookingError('phone_required', 'Потрібен номер телефону')
-    client_name = (client_name or '').strip()
+    client_name = ' '.join((client_name or '').split())
     if not client_name:
-        raise BookingError('name_required', "Потрібно вказати ім'я")
+        raise BookingError('name_required', "Потрібно вказати ім'я та прізвище")
+    if len(client_name.split()) < 2:
+        # create_wlaunch_appointment ділить рядок на first/last, і без прізвища
+        # у картці WLaunch лишилось би порожнє поле
+        raise BookingError('surname_required', 'Вкажіть імʼя та прізвище')
     if not _DATE_RE.match(date or ''):
         raise BookingError('invalid_date', 'Невірна дата')
     if not _TIME_RE.match(time_str or ''):

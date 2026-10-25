@@ -1358,7 +1358,9 @@ def booking_create():
     try:
         res = create_booking(
             phone=request.user_phone,
-            client_name=(d.get('name') or '').strip(),
+            client_name=' '.join(((d.get('first_name') or '') + ' ' +
+                                  (d.get('last_name') or '')).split())
+                        or (d.get('name') or '').strip(),
             service_name=(d.get('service') or '').strip(),
             date=(d.get('date') or '').strip(),
             time_str=(d.get('time') or '').strip(),

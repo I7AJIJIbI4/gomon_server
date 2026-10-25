@@ -171,6 +171,13 @@ class TestHappyPath:
         assert env['wl_calls'][0]['duration'] == 30
         assert _rows(env['db'])[0]['duration'] == 30
 
+    def test_surname_reaches_wlaunch(self, bk, env):
+        """create_wlaunch_appointment ділить рядок на first/last — без прізвища
+        картка клієнта у WLaunch лишилась би з порожнім полем."""
+        _book(bk, env, client_name='  Олена   Сулім ')
+        assert env['wl_calls'][0]['name'] == 'Олена Сулім'
+        assert _rows(env['db'])[0]['client_name'] == 'Олена Сулім'
+
     def test_phone_is_normalised(self, bk, env):
         _book(bk, env, phone='+38 (099) 123-45-67')
         assert _rows(env['db'])[0]['client_phone'] == '380991234567'
@@ -220,6 +227,7 @@ class TestValidation:
     @pytest.mark.parametrize('field,value,code', [
         ('phone', '', 'phone_required'),
         ('client_name', '   ', 'name_required'),
+        ('client_name', 'Олена', 'surname_required'),
         ('date', '26.10.2026', 'invalid_date'),
         ('time_str', '10-00', 'invalid_time'),
         ('date', YESTERDAY, 'past_date'),
