@@ -51,6 +51,7 @@
 | `zadarma/appt_reminder.py` | Cron-скрипт: `--reminder` (10:00/18:00), `--feedback` (20:00), `--specialist` (20:00, активно) |
 | `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
 | `zadarma/ig_health.py` | Cron: перевіряє IG-токен через graph.instagram.com, TG-алерт за 7 днів до кінця і при протуханні. `--dry-run` не пише прапорці і не шле TG |
+| `zadarma/wl_catalog.py` | **Кеш каталогу послуг WLaunch** + детектор розходжень. `--sync` / `--dry-run` / `--show`. Основа меню онлайн-запису |
 | `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
 ### Systemd Services
@@ -136,6 +137,22 @@ wfp_transaction_id TEXT
 ```sql
 id INTEGER PRIMARY KEY, phone TEXT, amount REAL, reason TEXT, created_by TEXT, created_at TEXT
 ```
+
+### Таблиця `wl_services` (кеш каталогу WLaunch)
+```sql
+wl_id TEXT PK, name TEXT, duration_min INT, specialists TEXT,
+classify TEXT, price_from INT, price_to INT, active INT,
+first_seen TEXT, synced_at TEXT
+```
+- Меню онлайн-запису = активні послуги філії WLaunch, **не** позиції прайсу. Клієнт
+  записується на узагальнену послугу, препарат лікар проставляє після процедури в TG
+- `specialists` — кома-розділений список, виводиться з `prices.json` (WLaunch не зберігає
+  правил «хто кому дозволений», `company_service_resource_restrictions` порожній у всіх)
+- Вибір спеціаліста клієнтом дозволений лише для `SPECIALIST_CHOICE_ALLOWED`
+  (наразі «Відбілювання зубів»); решта предефайнені
+- `duration_min` — з WLaunch, від 15 до 80 хв. **НЕ підставляти 60 за замовчуванням**
+- Послуга без відомого спеціаліста в меню не показується і потрапляє в TG-алерт
+- Зникла послуга не видаляється, лише `active=0`
 
 ### Таблиця `cashback`
 ```sql
