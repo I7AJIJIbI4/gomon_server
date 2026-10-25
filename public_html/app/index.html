@@ -6459,7 +6459,7 @@ async function bkLoadSlots() {
   _bkView('<div class="bk-spin">Шукаємо вільний час…</div>', BK.service.name, 2);
   var q = '?service=' + encodeURIComponent(BK.service.name) +
           '&specialist=' + encodeURIComponent(BK.specialist) +
-          '&from=' + _bkIso(0) + '&to=' + _bkIso(30);
+          '&from=' + _bkIso(0) + '&to=' + _bkIso(14);   // горизонт запису — два тижні
   var days = await api('/booking/slots' + q);
   if (!days || days.error || !days.length) {
     return _bkView('<p class="bk-err">Не вдалося завантажити розклад. Спробуйте пізніше.</p>',

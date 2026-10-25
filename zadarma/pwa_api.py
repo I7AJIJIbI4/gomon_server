@@ -1344,7 +1344,8 @@ def booking_slots_route():
     if not service or not _d.match(date_from) or not _d.match(date_to):
         return jsonify({'error': 'invalid_params'}), 400
     try:
-        from booking_slots import get_free_slots
+        from booking_slots import get_free_slots, clamp_range
+        date_from, date_to = clamp_range(date_from, date_to)
         return jsonify(get_free_slots(service, date_from, date_to, specialist=specialist))
     except ValueError as e:
         return jsonify({'error': 'invalid_params', 'detail': str(e)}), 400
@@ -3565,12 +3566,22 @@ def admin_cal_delete(appt_id):
         if m:
             wl_id = m.group(1)
     if wl_id:
-        try:
-            _cancel_wlaunch_appt(wl_id)
+        # Перевіряємо відповідь, а не лише відсутність винятку: функція не
+        # кидає, вона повертає (ok, err). Без цієї перевірки запис лишався б
+        # CONFIRMED у WLaunch, клієнту й далі йшло б нагадування, і в логах
+        # не було б сліду.
+        ok, err = _cancel_wlaunch_appt(wl_id)
+        if ok:
             logger.info('WLaunch cancel on delete: {}'.format(wl_id))
-        except Exception as _wle:
-            logger.error('WLaunch cancel failed on delete: {}'.format(_wle))
-            wl_warning = 'WLaunch cancel failed: {}'.format(_wle)
+        else:
+            logger.error('WLaunch cancel FAILED on delete {}: {}'.format(wl_id, err))
+            wl_warning = 'WLaunch cancel failed: {}'.format(err)
+            try:
+                from notifier import alert_admin
+                alert_admin('Скасування не дійшло у WLaunch: запис {} лишився '
+                            'активним там. Потрібне ручне скасування.'.format(wl_id))
+            except Exception:
+                pass
 
     conn.execute("UPDATE manual_appointments SET status='CANCELLED' WHERE id=?", (appt_id,))
     conn.commit()

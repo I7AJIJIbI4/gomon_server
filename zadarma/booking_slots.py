@@ -32,17 +32,45 @@ SLOT_STEP_MIN = 15
 #: клієнт фізично не встигне, та й лікар не побачить.
 MIN_LEAD_MIN = 60
 
-#: Скільки днів максимум віддаємо за один запит.
-MAX_RANGE_DAYS = 60
+#: Горизонт запису: на скільки днів уперед від СЬОГОДНІ клієнт може записатись.
+#: Не довжина діапазону, а тверда межа — інакше запит з далеким `from` обійшов би її.
+BOOKING_HORIZON_DAYS = 14
+
+#: Сумісність: та сама межа як обмеження довжини одного запиту.
+MAX_RANGE_DAYS = BOOKING_HORIZON_DAYS + 1
 
 _CANCELLED = {'CANCELLED', 'NO_SHOW', 'DELETED'}
+
+
+def clamp_range(date_from, date_to):
+    """Діапазон у межах горизонту запису. Кидає ValueError на безглуздий.
+
+    Межа рахується від СЬОГОДНІ, а не від початку діапазону: інакше запит
+    з `from` у майбутньому відкрив би запис за горизонт.
+
+    Обрізати треба ДО звернення у WLaunch, а не на виводі: інакше запит на
+    десять років тягне звідти десятирічний розклад і тисячі записів, скільки б
+    днів ми потім не віддали.
+    """
+    from tz_utils import kyiv_now
+    try:
+        start = datetime.strptime(date_from, '%Y-%m-%d').date()
+        end = datetime.strptime(date_to, '%Y-%m-%d').date()
+    except Exception:
+        raise ValueError('невірна дата')
+    if end < start:
+        raise ValueError('кінець діапазону раніший за початок')
+    horizon = kyiv_now().date() + timedelta(days=BOOKING_HORIZON_DAYS)
+    if end > horizon:
+        end = horizon
+    if end < start:
+        raise ValueError('діапазон повністю за горизонтом запису')
+    return start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
 
 
 def _dates(date_from, date_to):
     d = datetime.strptime(date_from, '%Y-%m-%d').date()
     end = datetime.strptime(date_to, '%Y-%m-%d').date()
-    if (end - d).days >= MAX_RANGE_DAYS:
-        end = d + timedelta(days=MAX_RANGE_DAYS - 1)
     while d <= end:
         yield d.strftime('%Y-%m-%d')
         d += timedelta(days=1)
@@ -96,20 +124,52 @@ def fetch_busy(date_from, date_to, branch_id=None):
 
 
 def _appt_specialists(appt, res_to_spec):
-    """Хто зайнятий цим записом. Запис без ресурсу блокує всіх — інакше
-    ми б запропонували слот, який WLaunch усе одно відхилить."""
-    found = set()
+    """Хто з НАШИХ лікарів зайнятий цим записом.
+
+    Три випадки, і їх треба розрізняти:
+      - ресурс наш -> зайнятий саме він;
+      - ресурсу немає взагалі -> блокуємо обох: WLaunch такий слот усе одно
+        відхилить, краще не пропонувати;
+      - ресурс є, але не наш (новий працівник, кабінет, апарат) -> не блокує
+        нікого. Інакше поява третього ресурсу у WLaunch тихо прибрала б слоти
+        в обох лікарів, і виглядало б це як «у Вікторії раптом немає часу».
+    """
+    found, any_resource = set(), False
     for srs in (appt.get('service_resource_settings') or []):
         for rid in (srs.get('resources') or []):
             if isinstance(rid, dict):
                 rid = rid.get('id')
+            if rid:
+                any_resource = True
             if rid in res_to_spec:
                 found.add(res_to_spec[rid])
     for r in (appt.get('resources') or []):
         rid = r.get('id') if isinstance(r, dict) else r
+        if rid:
+            any_resource = True
         if rid in res_to_spec:
             found.add(res_to_spec[rid])
-    return found or set(res_to_spec.values())
+    if found:
+        return found
+    if any_resource:
+        _unknown_resource_seen(appt)
+        return set()
+    return set(res_to_spec.values())
+
+
+_UNKNOWN_SEEN = set()
+
+
+def _unknown_resource_seen(appt):
+    """Про новий ресурс у WLaunch треба дізнатись, а не лише не впасти."""
+    key = str(appt.get('id') or '')[:12]
+    if key in _UNKNOWN_SEEN:
+        return
+    _UNKNOWN_SEEN.add(key)
+    if len(_UNKNOWN_SEEN) > 500:
+        _UNKNOWN_SEEN.clear()
+    logger.warning('WLaunch: запис %s на незнайомому ресурсі — слоти наших '
+                   'лікарів він не займає', key)
 
 
 # ── Робочі години ─────────────────────────────────────────────────────────────
@@ -237,6 +297,8 @@ def get_free_slots(service_name, date_from, date_to, specialist=None, db_path=No
     now = kyiv_now()
     today = now.strftime('%Y-%m-%d')
     earliest_today = now.hour * 60 + now.minute + MIN_LEAD_MIN
+
+    date_from, date_to = clamp_range(date_from, date_to)
 
     bid = get_branch_id()
     resources = get_wlaunch_resources(bid)

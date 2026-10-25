@@ -362,7 +362,7 @@ function loadSlots(){
   step(3); spin('Шукаємо вільний час…');
   var q = '?service=' + encodeURIComponent(state.service.name) +
           '&specialist=' + encodeURIComponent(state.specialist) +
-          '&from=' + isoPlus(0) + '&to=' + isoPlus(30);
+          '&from=' + isoPlus(0) + '&to=' + isoPlus(14);   // горизонт запису — два тижні
   api('/booking/slots' + q).then(function(r){
     if (!r.ok) return show('<p class="err">Не вдалося завантажити розклад. Спробуйте пізніше.</p>');
     renderSlots(r.data);

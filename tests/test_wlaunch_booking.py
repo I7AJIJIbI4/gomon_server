@@ -406,3 +406,40 @@ class TestNewClientCanStartBooking:
                            ('380631112244',)).fetchone()
         conn.close()
         assert row and row[0], 'код має бути згенерований'
+
+
+class TestAdminDeleteChecksWlaunch:
+    """Скасування, яке не дійшло у WLaunch, не має виглядати як успіх.
+
+    Функція не кидає виняток — вона повертає (ok, err). Старий код ловив
+    виняток, якого не буває, і завжди логував успіх: запис лишався CONFIRMED
+    у WLaunch, клієнту йшло нагадування про скасований візит, сліду не було.
+    """
+
+    def _make(self, client, admin_token, date, wl_id):
+        with patch.dict(sys.modules):
+            sys.modules['wlaunch_api'].create_wlaunch_appointment = \
+                lambda *a, **kw: (wl_id, None)
+            rv = client.post('/api/admin/calendar/appointments',
+                             json=_payload(date=date, time='09:00'),
+                             headers=auth(admin_token))
+        assert rv.status_code == 200
+        return rv.get_json()['id']
+
+    def test_failed_cancel_is_surfaced(self, client, admin_token):
+        appt_id = self._make(client, admin_token, '2099-06-01', 'wl-del-fail')
+        with patch.object(_pwa, '_cancel_wlaunch_appt',
+                          lambda wl_id, **kw: (False, 'http_500')):
+            rv = client.delete('/api/admin/calendar/appointments/{}'.format(appt_id),
+                               headers=auth(admin_token))
+        assert rv.status_code == 200
+        assert 'warning' in rv.get_json(), 'провал скасування має бути видно у відповіді'
+
+    def test_successful_cancel_has_no_warning(self, client, admin_token):
+        appt_id = self._make(client, admin_token, '2099-06-02', 'wl-del-ok')
+        with patch.object(_pwa, '_cancel_wlaunch_appt',
+                          lambda wl_id, **kw: (True, None)):
+            rv = client.delete('/api/admin/calendar/appointments/{}'.format(appt_id),
+                               headers=auth(admin_token))
+        assert rv.status_code == 200
+        assert 'warning' not in rv.get_json()

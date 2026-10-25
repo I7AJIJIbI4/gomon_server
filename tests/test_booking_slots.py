@@ -298,3 +298,77 @@ class TestGetFreeSlots:
         days = bs.get_free_slots('Біорепарація шкіри', TOMORROW, NEXT_WEEK)
         assert len(days) == 8
         assert all(d['open'] is False for d in days)
+
+
+# ── Межі діапазону і чужі ресурси ─────────────────────────────────────────────
+
+class TestClampRange:
+    """Обрізати треба ДО звернення у WLaunch, інакше запит на 10 років тягне
+    звідти десятирічний розклад, скільки б днів ми потім не віддали."""
+
+    def test_horizon_is_two_weeks_from_today(self, bs):
+        today = datetime.now().date()
+        f, t = bs.clamp_range(today.strftime('%Y-%m-%d'),
+                              (today + timedelta(days=400)).strftime('%Y-%m-%d'))
+        assert t == (today + timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
+
+    def test_horizon_counts_from_today_not_from_range_start(self, bs):
+        """Інакше запит із `from` у майбутньому відкрив би запис за горизонт."""
+        today = datetime.now().date()
+        far = (today + timedelta(days=10)).strftime('%Y-%m-%d')
+        _, t = bs.clamp_range(far, (today + timedelta(days=90)).strftime('%Y-%m-%d'))
+        assert t == (today + timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
+
+    def test_range_entirely_beyond_the_horizon_is_refused(self, bs):
+        today = datetime.now().date()
+        with pytest.raises(ValueError, match='горизонт'):
+            bs.clamp_range((today + timedelta(days=60)).strftime('%Y-%m-%d'),
+                           (today + timedelta(days=70)).strftime('%Y-%m-%d'))
+
+    def test_short_range_is_left_alone(self, bs):
+        today = datetime.now().date()
+        f = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+        t = (today + timedelta(days=3)).strftime('%Y-%m-%d')
+        assert bs.clamp_range(f, t) == (f, t)
+
+    def test_reversed_range_is_refused(self, bs):
+        """Було 500 від WLaunch замість зрозумілої відмови."""
+        with pytest.raises(ValueError, match='раніший'):
+            bs.clamp_range('2026-10-28', '2026-10-26')
+
+    def test_garbage_is_refused(self, bs):
+        with pytest.raises(ValueError):
+            bs.clamp_range('28.10.2026', '2026-10-30')
+
+    def test_wlaunch_never_sees_the_raw_range(self, bs, slots):
+        far = (datetime.now() + timedelta(days=4000)).strftime('%Y-%m-%d')
+        bs.get_free_slots('Біорепарація шкіри', TOMORROW, far)
+        _, asked_to = slots['schedule_calls'][0]
+        horizon = (datetime.now().date() +
+                   timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
+        assert asked_to == horizon
+
+
+class TestUnknownResource:
+    """Третій ресурс у WLaunch (новий працівник, кабінет, апарат) не має тихо
+    прибирати слоти в обох наших лікарів."""
+
+    def test_our_resource_blocks_only_itself(self, bs):
+        appt = {'service_resource_settings': [{'resources': ['res-v']}]}
+        assert bs._appt_specialists(appt, {'res-v': 'victoria',
+                                           'res-a': 'anastasia'}) == {'victoria'}
+
+    def test_no_resource_at_all_blocks_everyone(self, bs):
+        """WLaunch такий слот усе одно відхилить — краще не пропонувати."""
+        assert bs._appt_specialists({}, {'res-v': 'victoria', 'res-a': 'anastasia'}) == \
+            {'victoria', 'anastasia'}
+
+    def test_foreign_resource_blocks_nobody(self, bs):
+        appt = {'service_resource_settings': [{'resources': ['res-newcomer']}]}
+        assert bs._appt_specialists(appt, {'res-v': 'victoria',
+                                           'res-a': 'anastasia'}) == set()
+
+    def test_mixed_resources_block_only_ours(self, bs):
+        appt = {'service_resource_settings': [{'resources': ['res-newcomer', 'res-a']}]}
+        assert bs._appt_specialists(appt, {'res-v': 'victoria',
+                                           'res-a': 'anastasia'}) == {'anastasia'}
