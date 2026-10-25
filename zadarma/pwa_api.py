@@ -547,8 +547,11 @@ def send_otp():
     otp_conn.commit()
     otp_conn.close()
 
-    # Не клієнт → гостьовий режим (без OTP)
-    if not get_client(phone) and phone not in ADMIN_ROLES:
+    # Не клієнт → гостьовий режим (без OTP).
+    # Виняток — онлайн-запис: там телефон мусить бути підтверджений, інакше
+    # новий клієнт упирається в екран коду, якого йому ніхто не надсилав.
+    _purpose = (data.get('purpose') or '').strip()
+    if not get_client(phone) and phone not in ADMIN_ROLES and _purpose != 'booking':
         save_lead(phone, '', 'app_guest')
         logger.info(f"Guest mode (not a client): {phone}")
         return jsonify({'ok': True, 'guest': True})

@@ -317,6 +317,9 @@ def _alert(changes, without_specialist):
 
 def get_bookable_services(db_path=None):
     """Меню запису: активні послуги з відомим спеціалістом."""
+    # Міграція колонок живе в init_catalog_db, а його кличе лише sync_catalog:
+    # між деплоєм і найближчим синком меню інакше падало б у 500.
+    init_catalog_db(db_path)
     conn = sqlite3.connect(db_path or DB_PATH, timeout=5)
     conn.row_factory = sqlite3.Row
     try:

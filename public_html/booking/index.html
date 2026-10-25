@@ -161,7 +161,8 @@ function sendOtp(){
   if (!phone) return err('Перевірте номер телефону');
   state.phone = phone;
   busy('go', true, 'Надсилаємо…');
-  api('/auth/send-otp', {method:'POST', body: JSON.stringify({phone: phone})})
+  api('/auth/send-otp', {method:'POST',
+                         body: JSON.stringify({phone: phone, purpose: 'booking'})})
     .then(function(r){
       busy('go', false, 'Отримати код');
       if (r.status === 429) return err('Забагато спроб. Спробуйте за годину.');

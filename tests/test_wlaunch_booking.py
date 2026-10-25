@@ -378,3 +378,31 @@ class TestBookingEndpoints:
     def test_slots_requires_a_service(self, client):
         rv = client.get('/api/booking/slots?from=2099-05-05')
         assert rv.status_code == 400
+
+
+class TestNewClientCanStartBooking:
+    """Телефон, якого немає в clients, мусить отримати код.
+
+    Інакше новий клієнт — той, заради кого сторінка й робилась — упирається
+    в екран «введіть код», якого йому ніхто не надсилав: send-otp віддає
+    {'ok': True, 'guest': True} без коду, сторінка бачить лише ok і йде далі.
+    """
+
+    def test_unknown_phone_in_guest_mode_gets_no_code(self, client):
+        """Базова поведінка для чату лишається — гостю код не потрібен."""
+        rv = client.post('/api/auth/send-otp', json={'phone': '0631112233'})
+        assert rv.status_code == 200
+        assert rv.get_json().get('guest') is True
+
+    def test_booking_purpose_forces_a_real_code(self, client):
+        rv = client.post('/api/auth/send-otp',
+                         json={'phone': '0631112244', 'purpose': 'booking'})
+        assert rv.status_code == 200
+        data = rv.get_json()
+        assert not data.get('guest'), 'для запису гостьовий режим недопустимий'
+
+        conn = sqlite3.connect(_pwa.OTP_DB)
+        row = conn.execute('SELECT code FROM otp_codes WHERE phone=?',
+                           ('380631112244',)).fetchone()
+        conn.close()
+        assert row and row[0], 'код має бути згенерований'
