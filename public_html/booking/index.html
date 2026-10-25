@@ -45,6 +45,19 @@ h2{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 14px}
 .card .dur{color:var(--text3);font-size:13px;margin-left:8px}
 .card .drugs{color:var(--text3);font-size:12.5px;margin-top:7px;line-height:1.45}
 
+/* теки процедур */
+.cat{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.cat>button{width:100%;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;background:var(--surface);border:0;padding:15px 16px;color:inherit;
+  font:inherit;font-size:16px;cursor:pointer;text-align:left}
+.cat>button:hover{background:var(--surface2)}
+.cat .cnt{color:var(--text3);font-size:13px;margin-left:auto;margin-right:4px}
+.cat .arw{color:var(--gold);font-size:12px;transition:transform .2s;flex:none}
+.cat.open .arw{transform:rotate(90deg)}
+.cat .inner{display:none;padding:10px 10px 2px;background:var(--bg2)}
+.cat.open .inner{display:block}
+.cat .card{background:var(--bg);margin-bottom:8px}
+
 .day{margin-bottom:18px}
 .day h3{font-size:14px;font-weight:400;color:var(--text2);margin:0 0 8px;text-transform:capitalize}
 .slots{display:flex;flex-wrap:wrap;gap:7px}
@@ -252,23 +265,57 @@ function loadServices(){
   });
 }
 
-function renderServices(){
-  step(2);
-  var h = hello() + '<h2>Оберіть процедуру</h2>';
-  state.services.forEach(function(s, i){
-    var drugs = '';
-    if (s.drugs && s.drugs.length > 1) {
-      drugs = '<div class="drugs">' + s.drugs.map(function(d){
-        return esc(d.name) + ' — ' + d.price + ' грн';
-      }).join(' · ') + '</div>';
-    }
-    h += '<button class="card" data-i="' + i + '">' +
+function serviceCard(s, i){
+  var drugs = '';
+  if (s.drugs && s.drugs.length > 1) {
+    drugs = '<div class="drugs">' + s.drugs.map(function(d){
+      return esc(d.name) + ' — ' + d.price + ' грн';
+    }).join(' · ') + '</div>';
+  }
+  return '<button class="card" data-i="' + i + '">' +
            '<div class="nm">' + esc(s.name) + '</div>' +
            '<div><span class="meta">' + esc(money(s)) + '</span>' +
            '<span class="dur">' + s.duration_min + ' хв</span></div>' + drugs +
          '</button>';
+}
+
+function renderServices(){
+  step(2);
+  // Порядок тек — той, у якому їх віддав сервер (ordinal з WLaunch)
+  var order = [], byCat = {};
+  state.services.forEach(function(s, i){
+    var c = s.category || '';
+    if (!(c in byCat)) { byCat[c] = []; order.push(c); }
+    byCat[c].push(i);
+  });
+
+  var h = hello() + '<h2>Оберіть процедуру</h2>';
+  order.forEach(function(cat){
+    var idx = byCat[cat];
+    if (!cat) {                          // послуги з кореня — без теки
+      h += idx.map(function(i){ return serviceCard(state.services[i], i); }).join('');
+      return;
+    }
+    h += '<div class="cat" data-cat="' + esc(cat) + '">' +
+           '<button type="button"><span>' + esc(cat) + '</span>' +
+           '<span class="cnt">' + idx.length + '</span>' +
+           '<span class="arw">&#9654;</span></button>' +
+           '<div class="inner">' +
+             idx.map(function(i){ return serviceCard(state.services[i], i); }).join('') +
+           '</div></div>';
   });
   show(h);
+
+  [].forEach.call(view.querySelectorAll('.cat>button'), function(b){
+    b.onclick = function(){
+      var box = b.parentNode, wasOpen = box.classList.contains('open');
+      [].forEach.call(view.querySelectorAll('.cat'), function(c){ c.classList.remove('open'); });
+      if (!wasOpen) {                    // відкрита завжди одна — список лишається коротким
+        box.classList.add('open');
+        box.scrollIntoView({block:'nearest', behavior:'smooth'});
+      }
+    };
+  });
   [].forEach.call(view.querySelectorAll('.card'), function(b){
     b.onclick = function(){ pickService(state.services[+b.dataset.i]); };
   });

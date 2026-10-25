@@ -168,13 +168,18 @@ class TestDiffCatalog:
 
 # ── Запис у кеш ───────────────────────────────────────────────────────────────
 
+INJ = {'category': "Ін'єкційна косметологія", 'category_ord': 1}
+BODY = {'category': 'Догляд за тілом', 'category_ord': 3}
+TEETH = {'category': 'Відбілювання зубів', 'category_ord': 2}
+ROOT = {'category': '', 'category_ord': 999}
+
 LIVE = {
-    'id-botox':  {'name': 'Ботулінотерапія',             'duration_min': 30},
-    'id-biorep': {'name': 'Біорепарація шкіри',           'duration_min': 30},
-    'id-teeth':  {'name': 'Відбілювання зубів',           'duration_min': 60},
-    'id-body':   {'name': 'Моделювання всього тіла',      'duration_min': 55},
-    'id-consult': {'name': 'Консультація',                'duration_min': 30},
-    'id-laser':  {'name': 'Лазерна епіляція',             'duration_min': 45},
+    'id-botox':  dict(name='Ботулінотерапія',        duration_min=30, **INJ),
+    'id-biorep': dict(name='Біорепарація шкіри',      duration_min=30, **INJ),
+    'id-teeth':  dict(name='Відбілювання зубів',      duration_min=60, **TEETH),
+    'id-body':   dict(name='Моделювання всього тіла', duration_min=55, **BODY),
+    'id-consult': dict(name='Консультація',           duration_min=30, **ROOT),
+    'id-laser':  dict(name='Лазерна епіляція',        duration_min=45, **ROOT),
 }
 
 
@@ -322,6 +327,47 @@ class TestBookableMenu:
         assert conn.execute('SELECT active FROM wl_services WHERE name=?',
                             ('Онлайн-консультація',)).fetchone()[0] == 1
         conn.close()
+
+    def test_menu_carries_the_wlaunch_folder(self, wc, db):
+        """Меню групується тими ж теками, що бачить лікар у WLaunch."""
+        wc.sync_catalog(db_path=db, notify=False)
+        cats = {s['name']: s['category'] for s in wc.get_bookable_services(db_path=db)}
+        assert cats['Ботулінотерапія'] == "Ін'єкційна косметологія"
+        assert cats['Моделювання всього тіла'] == 'Догляд за тілом'
+        assert cats['Консультація'] == '', 'послуга з кореня лишається без теки'
+
+    def test_menu_is_ordered_by_folder(self, wc, db):
+        """Порядок тек — той самий, що у WLaunch (ordinal), не алфавітний."""
+        wc.sync_catalog(db_path=db, notify=False)
+        cats = [s['category'] for s in wc.get_bookable_services(db_path=db)]
+        seen = [c for i, c in enumerate(cats) if i == 0 or cats[i - 1] != c]
+        assert seen == ["Ін'єкційна косметологія", 'Відбілювання зубів',
+                        'Догляд за тілом', '']
+
+    def test_moving_a_service_between_folders_is_detected(self, wc, db, monkeypatch):
+        wc.sync_catalog(db_path=db, notify=False)
+        moved = dict(LIVE)
+        moved['id-body'] = dict(name='Моделювання всього тіла', duration_min=55, **INJ)
+        monkeypatch.setattr(wc, '_fetch_live', lambda: moved)
+        changes, _, _ = wc.sync_catalog(db_path=db, notify=False)
+        assert any('переїхала' in c for c in changes)
+
+    def test_column_is_added_to_an_existing_table(self, wc, tmp_path):
+        """Таблиця зʼявилась до тек — CREATE TABLE IF NOT EXISTS їх не доллє."""
+        path = str(tmp_path / 'old.db')
+        conn = sqlite3.connect(path)
+        conn.execute('CREATE TABLE wl_services (wl_id TEXT PRIMARY KEY, name TEXT,'
+                     " duration_min INTEGER, specialists TEXT, classify TEXT,"
+                     ' price_from INTEGER, price_to INTEGER, active INTEGER,'
+                     ' first_seen TEXT, synced_at TEXT)')
+        conn.commit(); conn.close()
+
+        wc.init_catalog_db(path)
+
+        conn = sqlite3.connect(path)
+        cols = {r[1] for r in conn.execute('PRAGMA table_info(wl_services)')}
+        conn.close()
+        assert 'category' in cols and 'category_ord' in cols
 
     def test_duration_comes_from_wlaunch_not_a_default(self, wc, db):
         wc.sync_catalog(db_path=db, notify=False)

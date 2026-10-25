@@ -62,6 +62,8 @@ def init_catalog_db(db_path=None):
                 name         TEXT NOT NULL,
                 duration_min INTEGER NOT NULL,
                 specialists  TEXT NOT NULL DEFAULT '',
+                category     TEXT NOT NULL DEFAULT '',
+                category_ord INTEGER NOT NULL DEFAULT 999,
                 classify     TEXT,
                 price_from   INTEGER,
                 price_to     INTEGER,
@@ -70,6 +72,13 @@ def init_catalog_db(db_path=None):
                 synced_at    TEXT NOT NULL DEFAULT (datetime('now'))
             )
         ''')
+        # Таблиця могла зʼявитись до того, як додали теки: CREATE TABLE IF NOT
+        # EXISTS нові колонки не доливає, тож доливаємо вручну.
+        have = {r[1] for r in conn.execute('PRAGMA table_info(wl_services)')}
+        for col, decl in (('category', "TEXT NOT NULL DEFAULT ''"),
+                          ('category_ord', 'INTEGER NOT NULL DEFAULT 999')):
+            if col not in have:
+                conn.execute('ALTER TABLE wl_services ADD COLUMN {} {}'.format(col, decl))
         conn.commit()
     finally:
         conn.close()
@@ -145,25 +154,55 @@ def _price_range(service_name, classify, prices):
 # ── Синхронізація ─────────────────────────────────────────────────────────────
 
 def _fetch_live():
-    """Активні послуги філії з WLaunch -> {wl_id: {...}}."""
-    from wlaunch_api import get_branch_id, get_wlaunch_services
+    """Активні послуги філії з WLaunch -> {wl_id: {...}}.
+
+    Тягнемо сирий каталог, а не `get_wlaunch_services`, бо та функція відкидає
+    теки (`type: GROUP`), а нам потрібна саме приналежність послуги до теки —
+    меню запису групується так само, як бачить лікар у WLaunch.
+    """
+    import requests
+    from config import WLAUNCH_API_URL, COMPANY_ID
+    from wlaunch_api import HEADERS, get_branch_id
+
     bid = get_branch_id()
     if not bid:
         raise RuntimeError('WLaunch: не вдалося визначити філію')
+
+    url = '{}/company/{}/branch/{}/service'.format(WLAUNCH_API_URL, COMPANY_ID, bid)
+    rows, page = [], 0
+    while page < 50:
+        resp = requests.get(url, headers=HEADERS,
+                            params={'page': page, 'size': 100}, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        rows.extend(data.get('content', []))
+        page += 1
+        if page >= data.get('page', {}).get('total_pages', 1):
+            break
+
+    groups = {s['id']: s for s in rows if s.get('type') == 'GROUP'}
     out = {}
-    for data in get_wlaunch_services(bid).values():
-        out[data['id']] = {'name': data['name'],
-                           'duration_min': int(data.get('duration') or 60)}
+    for s in rows:
+        if not s.get('active') or s.get('type') == 'GROUP':
+            continue
+        g = groups.get(s.get('parent_id'))
+        out[s['id']] = {
+            'name': s.get('name') or '',
+            'duration_min': int((s.get('duration') or 3600) // 60),
+            'category': (g or {}).get('name') or '',
+            'category_ord': int((g or {}).get('ordinal') or 0) if g else 999,
+        }
     return out
 
 
 def _load_cached(conn):
     try:
         rows = conn.execute(
-            'SELECT wl_id, name, duration_min, active FROM wl_services').fetchall()
+            'SELECT wl_id, name, duration_min, active, category FROM wl_services').fetchall()
     except sqlite3.OperationalError:
         return {}                     # таблиці ще немає — перший прогін
-    return {r[0]: {'name': r[1], 'duration_min': r[2], 'active': r[3]} for r in rows}
+    return {r[0]: {'name': r[1], 'duration_min': r[2], 'active': r[3],
+                   'category': r[4]} for r in rows}
 
 
 def diff_catalog(cached, live):
@@ -182,6 +221,10 @@ def diff_catalog(cached, live):
         if old['duration_min'] != new['duration_min']:
             changes.append('тривалість «{}»: {} -> {} хв'.format(
                 new['name'], old['duration_min'], new['duration_min']))
+        if old.get('category', '') != new.get('category', ''):
+            changes.append('«{}» переїхала: «{}» -> «{}»'.format(
+                new['name'], old.get('category') or 'без теки',
+                new.get('category') or 'без теки'))
     for wl_id, old in sorted(cached.items(), key=lambda kv: kv[1]['name']):
         if old.get('active') and wl_id not in live:
             changes.append('зникла або вимкнена: «{}»'.format(old['name']))
@@ -223,6 +266,8 @@ def sync_catalog(dry_run=False, db_path=None, notify=True):
                 'wl_id': wl_id, 'name': name, 'duration_min': item['duration_min'],
                 'specialists': ','.join(specs), 'classify': classify,
                 'price_from': p_from, 'price_to': p_to,
+                'category': item.get('category', ''),
+                'category_ord': item.get('category_ord', 999),
             })
 
         if not dry_run:
@@ -231,15 +276,17 @@ def sync_catalog(dry_run=False, db_path=None, notify=True):
                 conn.execute(
                     "INSERT INTO wl_services"
                     " (wl_id, name, duration_min, specialists, classify, price_from, price_to,"
-                    "  active, synced_at)"
-                    " VALUES (?,?,?,?,?,?,?,1,datetime('now'))"
+                    "  category, category_ord, active, synced_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,1,datetime('now'))"
                     " ON CONFLICT(wl_id) DO UPDATE SET"
                     "  name=excluded.name, duration_min=excluded.duration_min,"
                     "  specialists=excluded.specialists, classify=excluded.classify,"
                     "  price_from=excluded.price_from, price_to=excluded.price_to,"
+                    "  category=excluded.category, category_ord=excluded.category_ord,"
                     "  active=1, synced_at=excluded.synced_at",
                     (s['wl_id'], s['name'], s['duration_min'], s['specialists'],
-                     s['classify'], s['price_from'], s['price_to']))
+                     s['classify'], s['price_from'], s['price_to'],
+                     s['category'], s['category_ord']))
             if live_ids:
                 conn.execute(
                     'UPDATE wl_services SET active=0 WHERE wl_id NOT IN ({})'.format(
@@ -275,7 +322,7 @@ def get_bookable_services(db_path=None):
     try:
         rows = conn.execute(
             "SELECT * FROM wl_services WHERE active=1 AND specialists != ''"
-            ' ORDER BY name').fetchall()
+            ' ORDER BY category_ord, category, name').fetchall()
     finally:
         conn.close()
     out = []
@@ -289,6 +336,7 @@ def get_bookable_services(db_path=None):
             'specialist_choice': r['name'] in SPECIALIST_CHOICE_ALLOWED and len(specs) > 1,
             'classify': r['classify'],
             'price_from': r['price_from'], 'price_to': r['price_to'],
+            'category': r['category'] or '',
         })
     return out
 

@@ -1223,6 +1223,16 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
 .bk-card .meta{color:var(--gold);font-size:14px}
 .bk-card .dur{color:var(--text3);font-size:13px;margin-left:8px}
 .bk-card .drugs{color:var(--text3);font-size:12.5px;margin-top:7px;line-height:1.45}
+.bk-cat{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.bk-cat>button{width:100%;display:flex;align-items:center;gap:10px;background:var(--surface);
+  border:0;padding:15px 16px;color:inherit;font:inherit;font-size:16px;cursor:pointer;
+  text-align:left}
+.bk-cat .cnt{color:var(--text3);font-size:13px;margin-left:auto}
+.bk-cat .arw{color:var(--gold);font-size:12px;transition:transform .2s;flex:none}
+.bk-cat.open .arw{transform:rotate(90deg)}
+.bk-cat .inner{display:none;padding:10px 10px 2px;background:var(--bg2)}
+.bk-cat.open .inner{display:block}
+.bk-cat .bk-card{background:var(--bg);margin-bottom:8px}
 .bk-day{margin-bottom:18px}
 .bk-day h4{font-size:14px;font-weight:400;color:var(--text2);margin:0 0 8px}
 .bk-slots{display:flex;flex-wrap:wrap;gap:7px}
@@ -6372,22 +6382,56 @@ async function openBooking() {
   bkRenderServices();
 }
 
-function bkRenderServices() {
-  var h = '';
-  BK.services.forEach(function(s, i) {
-    var drugs = '';
-    if (s.drugs && s.drugs.length > 1) {
-      drugs = '<div class="drugs">' + s.drugs.map(function(d) {
-        return _esc(d.name) + ' — ' + d.price + ' грн';
-      }).join(' · ') + '</div>';
-    }
-    h += '<button class="bk-card" data-i="' + i + '">' +
+function _bkCard(s, i) {
+  var drugs = '';
+  if (s.drugs && s.drugs.length > 1) {
+    drugs = '<div class="drugs">' + s.drugs.map(function(d) {
+      return _esc(d.name) + ' — ' + d.price + ' грн';
+    }).join(' · ') + '</div>';
+  }
+  return '<button class="bk-card" data-i="' + i + '">' +
            '<div class="nm">' + _esc(s.name) + '</div>' +
            '<div><span class="meta">' + _esc(_bkMoney(s)) + '</span>' +
            '<span class="dur">' + s.duration_min + ' хв</span></div>' + drugs +
          '</button>';
+}
+
+function bkRenderServices() {
+  // Порядок тек — той, у якому їх віддав сервер (ordinal з WLaunch)
+  var order = [], byCat = {};
+  BK.services.forEach(function(s, i) {
+    var c = s.category || '';
+    if (!(c in byCat)) { byCat[c] = []; order.push(c); }
+    byCat[c].push(i);
   });
+
+  var h = '';
+  order.forEach(function(cat) {
+    var idx = byCat[cat];
+    if (!cat) {                         // послуги з кореня — без теки
+      h += idx.map(function(i) { return _bkCard(BK.services[i], i); }).join('');
+      return;
+    }
+    h += '<div class="bk-cat"><button type="button"><span>' + _esc(cat) + '</span>' +
+           '<span class="cnt">' + idx.length + '</span>' +
+           '<span class="arw">&#9654;</span></button><div class="inner">' +
+           idx.map(function(i) { return _bkCard(BK.services[i], i); }).join('') +
+         '</div></div>';
+  });
+
   _bkView(h, 'Оберіть процедуру', 1);
+  document.querySelectorAll('#bk-view .bk-cat>button').forEach(function(b) {
+    b.onclick = function() {
+      var box = b.parentNode, wasOpen = box.classList.contains('open');
+      document.querySelectorAll('#bk-view .bk-cat').forEach(function(c) {
+        c.classList.remove('open');
+      });
+      if (!wasOpen) {                   // відкрита завжди одна
+        box.classList.add('open');
+        box.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+      }
+    };
+  });
   document.querySelectorAll('#bk-view .bk-card').forEach(function(b) {
     b.onclick = function() {
       var s = BK.services[+b.dataset.i];

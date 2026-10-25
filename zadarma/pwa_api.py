@@ -1314,6 +1314,7 @@ def booking_services():
                 pass
             out.append({
                 'name': s['name'],
+                'category': s.get('category') or '',
                 'duration_min': s['duration_min'],
                 'price_from': s['price_from'],
                 'price_to': s['price_to'],
