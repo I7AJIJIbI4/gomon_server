@@ -297,6 +297,16 @@ class TestBookableMenu:
         assert menu['Консультація']['specialists'] == ['victoria']
         assert menu['Консультація']['specialist_choice'] is False
 
+    def test_only_one_consultation_in_the_menu(self, wc, db, monkeypatch):
+        """«Офлайн-консультація» дублює «Консультацію» — показуємо одну."""
+        live = dict(LIVE)
+        live['id-offline'] = {'name': 'Офлайн-консультація', 'duration_min': 30}
+        monkeypatch.setattr(wc, '_fetch_live', lambda: live)
+        wc.sync_catalog(db_path=db, notify=False)
+        names = [s['name'] for s in wc.get_bookable_services(db_path=db)]
+        assert names.count('Консультація') == 1
+        assert 'Офлайн-консультація' not in names
+
     def test_hidden_service_stays_out_of_the_menu(self, wc, db, monkeypatch):
         """Онлайн-консультацій поки не проводимо, хоча у WLaunch послуга активна."""
         live = dict(LIVE)
