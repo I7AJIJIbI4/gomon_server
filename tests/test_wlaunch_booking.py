@@ -443,3 +443,134 @@ class TestAdminDeleteChecksWlaunch:
                                headers=auth(admin_token))
         assert rv.status_code == 200
         assert 'warning' not in rv.get_json()
+
+
+# ── 5. Редагування: WLaunch першим ────────────────────────────────────────────
+
+class TestUpdateIsWlaunchFirst:
+    """Редагування писало локально першим, а WLaunch оновлювало у
+    fire-and-forget треді — без повтору, без перевірки і без спеціаліста.
+    При збої треда локально стояв один час, у календарі лікаря інший.
+    """
+
+    def _make(self, client, admin_token, date, wl_id, time='09:00'):
+        with patch.dict(sys.modules):
+            sys.modules['wlaunch_api'].create_wlaunch_appointment = \
+                lambda *a, **kw: (wl_id, None)
+            rv = client.post('/api/admin/calendar/appointments',
+                             json=_payload(date=date, time=time),
+                             headers=auth(admin_token))
+        assert rv.status_code == 200, rv.get_data(as_text=True)
+        return rv.get_json()['id']
+
+    def _row(self, appt_id):
+        conn = sqlite3.connect(_pwa.DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            return dict(conn.execute(
+                'SELECT * FROM manual_appointments WHERE id=?', (appt_id,)).fetchone())
+        finally:
+            conn.close()
+
+    def test_specialist_change_reaches_wlaunch(self, client, admin_token):
+        """Головний баг: тіло запиту до WLaunch не містило спеціаліста взагалі."""
+        appt_id = self._make(client, admin_token, '2099-07-01', 'wl-upd-spec')
+        seen = {}
+
+        def _upd(wl_id, phone, proc, spec, date, time_str, dur):
+            seen.update(wl_id=wl_id, specialist=spec, date=date, time=time_str)
+            return True, None
+
+        import booking as _booking
+        with patch.dict(sys.modules), patch.object(_booking, 'cancel_wlaunch_appt',
+                                                   lambda *a, **kw: (True, None)):
+            sys.modules['wlaunch_api'].update_wlaunch_appointment = _upd
+            rv = client.put('/api/admin/calendar/appointments/{}'.format(appt_id),
+                            json={'specialist': 'anastasia'}, headers=auth(admin_token))
+        assert rv.status_code == 200
+        assert seen.get('specialist') == 'anastasia'
+        assert self._row(appt_id)['specialist'] == 'anastasia'
+
+    def test_wlaunch_refusal_leaves_local_untouched(self, client, admin_token):
+        appt_id = self._make(client, admin_token, '2099-07-02', 'wl-upd-refuse')
+        before = self._row(appt_id)
+
+        with patch.dict(sys.modules):
+            sys.modules['wlaunch_api'].update_wlaunch_appointment = \
+                lambda *a, **kw: (False, 'http_422: busy')
+            rv = client.put('/api/admin/calendar/appointments/{}'.format(appt_id),
+                            json={'time': '16:00'}, headers=auth(admin_token))
+        assert rv.status_code == 409
+        assert self._row(appt_id)['time'] == before['time'], \
+            'локальний запис не має змінюватись, якщо WLaunch відмовив'
+
+    def test_local_failure_reverts_wlaunch(self, client, admin_token):
+        """Дзеркало відкату зі створення: WLaunch не лишається попереду бази."""
+        appt_id = self._make(client, admin_token, '2099-07-03', 'wl-upd-revert')
+        pushed = []
+
+        def _upd(wl_id, phone, proc, spec, date, time_str, dur):
+            pushed.append((date, time_str))
+            return True, None
+
+        import booking as _booking
+        with patch.dict(sys.modules), \
+             patch.object(_pwa.sqlite3, 'connect', _boom_on_update(appt_id)):
+            sys.modules['wlaunch_api'].update_wlaunch_appointment = _upd
+            rv = client.put('/api/admin/calendar/appointments/{}'.format(appt_id),
+                            json={'time': '17:00'}, headers=auth(admin_token))
+        assert rv.status_code == 500
+        assert len(pushed) == 2, 'має бути зміна і повернення попереднього часу'
+        assert pushed[1][1] == '09:00', 'у WLaunch має повернутись старий час'
+
+    def test_cancel_goes_through_cancel_not_update(self, client, admin_token):
+        """update_wlaunch_appointment статусу не передає — скасування інший шлях."""
+        appt_id = self._make(client, admin_token, '2099-07-04', 'wl-upd-cancel')
+        cancelled, updated = [], []
+        import booking as _booking
+        with patch.dict(sys.modules), \
+             patch.object(_booking, 'cancel_wlaunch_appt',
+                          lambda wl_id, **kw: cancelled.append(wl_id) or (True, None)):
+            sys.modules['wlaunch_api'].update_wlaunch_appointment = \
+                lambda *a, **kw: updated.append(1) or (True, None)
+            rv = client.put('/api/admin/calendar/appointments/{}'.format(appt_id),
+                            json={'status': 'CANCELLED'}, headers=auth(admin_token))
+        assert rv.status_code == 200
+        assert cancelled == ['wl-upd-cancel']
+        assert updated == [], 'скасування не має йти через update'
+
+    def test_note_only_change_does_not_touch_wlaunch(self, client, admin_token):
+        appt_id = self._make(client, admin_token, '2099-07-05', 'wl-upd-note')
+        called = []
+        with patch.dict(sys.modules):
+            sys.modules['wlaunch_api'].update_wlaunch_appointment = \
+                lambda *a, **kw: called.append(1) or (True, None)
+            rv = client.put('/api/admin/calendar/appointments/{}'.format(appt_id),
+                            json={'notes': 'подзвонити зранку'}, headers=auth(admin_token))
+        assert rv.status_code == 200
+        assert called == [], 'нотатка WLaunch не стосується'
+
+
+def _boom_on_update(appt_id):
+    """sqlite3.connect, чий UPDATE manual_appointments падає — решта працює."""
+    real = sqlite3.connect
+
+    class _Conn:
+        def __init__(self, inner):
+            object.__setattr__(self, '_i', inner)
+
+        def execute(self, sql, *a, **kw):
+            if sql.lstrip().upper().startswith('UPDATE MANUAL_APPOINTMENTS'):
+                raise sqlite3.OperationalError('disk I/O error')
+            return self._i.execute(sql, *a, **kw)
+
+        def __getattr__(self, n):
+            return getattr(self._i, n)
+
+        def __setattr__(self, n, v):
+            # row_factory має осісти на справжньому зʼєднанні, не на обгортці
+            setattr(self._i, n, v)
+
+    def _connect(path, *a, **kw):
+        return _Conn(real(path, *a, **kw))
+    return _connect

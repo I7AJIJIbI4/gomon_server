@@ -168,6 +168,64 @@ def _rollback_wlaunch(wl_id, why):
         pass
 
 
+def push_appointment_update(wl_id, phone, client_name, procedure_name,
+                            specialist, date, time_str, duration, status=None):
+    """Відправити зміну запису у WLaunch. Кидає BookingError при відмові.
+
+    Це друга половина того самого інваріанта, що й у `place_appointment`:
+    WLaunch веде розклад лікаря, тож зміна, якої там немає, не сталась.
+    Раніше редагування писало локально першим, а WLaunch оновлювало у
+    fire-and-forget треді без повтору й без перевірки — і при збої локально
+    стояв один час, а в календарі лікаря інший.
+
+    Скасування йде окремим шляхом: `update_wlaunch_appointment` статусу не
+    передає, його вміє лише cancel.
+    """
+    if (status or '').upper() == 'CANCELLED':
+        ok, err = cancel_wlaunch_appt(wl_id)
+        if not ok:
+            raise BookingError('wlaunch_rejected',
+                               'Не вдалося скасувати запис у WLaunch', detail=err)
+        return
+
+    from wlaunch_api import update_wlaunch_appointment
+    try:
+        ok, err = update_wlaunch_appointment(
+            wl_id, phone, procedure_name, specialist, date, time_str, duration)
+    except Exception as e:
+        logger.error('WLaunch update exception for {}: {}'.format(wl_id, e))
+        raise BookingError('wlaunch_unavailable',
+                           'WLaunch недоступний. Спробуйте пізніше',
+                           detail=str(e)[:200])
+    if not ok:
+        logger.error('WLaunch update refused for {}: {}'.format(wl_id, err))
+        raise BookingError('wlaunch_rejected',
+                           'WLaunch відхилив зміну', detail=err)
+
+
+def revert_appointment_update(wl_id, before):
+    """Повернути у WLaunch попередній стан після локального збою.
+
+    Дзеркало падіння `_rollback_wlaunch`: без цього запис у WLaunch лишався б
+    у новому часі, якого в нашій базі немає.
+    """
+    try:
+        push_appointment_update(
+            wl_id, before.get('phone'), before.get('client_name'),
+            before.get('procedure_name'), before.get('specialist'),
+            before.get('date'), before.get('time'), before.get('duration'))
+        logger.warning('WLaunch update reverted: {}'.format(wl_id))
+        return
+    except Exception as e:
+        logger.error('WLaunch revert FAILED for {}: {}'.format(wl_id, e))
+    try:
+        from notifier import alert_admin
+        alert_admin('WLaunch розійшовся з базою: запис {} лишився у новому часі, '
+                    'а локально — у старому. Потрібна ручна звірка.'.format(wl_id))
+    except Exception:
+        pass
+
+
 # ── Ядро ──────────────────────────────────────────────────────────────────────
 
 def resolve_service(service_name, db_path=None):

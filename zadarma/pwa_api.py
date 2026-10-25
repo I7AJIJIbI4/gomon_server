@@ -3411,76 +3411,95 @@ def admin_cal_update(appt_id):
         conn.close()
         return jsonify({'ok': True})
 
-    # Atomic overlap check + update
-    conn.execute('BEGIN IMMEDIATE')
+    # Ефективні значення після зміни — потрібні і для WLaunch, і для перевірки
+    eff = {
+        'phone':          d.get('client_phone', row['client_phone']),
+        'client_name':    d.get('client_name', row['client_name']),
+        'procedure_name': d.get('procedure_name', row['procedure_name']),
+        'specialist':     d.get('specialist', row['specialist']),
+        'date':           d.get('date', row['date']),
+        'time':           d.get('time', row['time']),
+        'duration':       int(d.get('duration', row['duration'] or 60) or 60),
+        'status':         d.get('status', row['status']),
+    }
+    before = {k: row[k] for k in ('client_phone', 'client_name', 'procedure_name',
+                                  'specialist', 'date', 'time', 'duration')}
+    before = {'phone': before['client_phone'], 'client_name': before['client_name'],
+              'procedure_name': before['procedure_name'],
+              'specialist': before['specialist'], 'date': before['date'],
+              'time': before['time'], 'duration': before['duration'] or 60}
 
-    # Overlap check only when time/date/specialist/duration is being changed
-    time_related = {'specialist', 'date', 'time', 'duration'}
-    if time_related.intersection(set(d.keys())):
-        eff_specialist = d.get('specialist', row['specialist'])
-        eff_date       = d.get('date',       row['date'])
-        eff_time       = d.get('time',       row['time'])
-        eff_duration   = int(d.get('duration', row['duration'] or 60) or 60)
-        new_start = _time_to_min(eff_time)
-        new_end   = new_start + eff_duration
-        # Extract WLaunch ID to exclude its copy from overlap check
-        wl_id_to_exclude = row['wlaunch_id'] or None
-        if not wl_id_to_exclude:
-            notes = row['notes'] or ''
-            m = re.search(r'wl:([a-f0-9-]+)', notes, re.IGNORECASE)
-            if m:
-                wl_id_to_exclude = m.group(1)
-        if _check_overlap(conn, eff_specialist, eff_date, new_start, new_end, exclude_id=appt_id, exclude_wl_id=wl_id_to_exclude):
-            conn.rollback()
-            conn.close()
-            return jsonify({'error': 'conflict'}), 409
-
-    params.append(appt_id)
-    conn.execute('UPDATE manual_appointments SET {} WHERE id=?'.format(', '.join(updates)), params)
-    conn.commit()
-    conn.close()
-
-    # Sync changes to WLaunch if appointment has wlaunch_id
     wl_id = row['wlaunch_id']
     if not wl_id:
         m = re.search(r'wl:([a-f0-9-]+)', row['notes'] or '', re.IGNORECASE)
         if m:
             wl_id = m.group(1)
-    if wl_id and any(k in d for k in ('date', 'time', 'duration', 'specialist', 'status')):
+
+    time_related = {'specialist', 'date', 'time', 'duration'}
+    touches_time = bool(time_related.intersection(set(d.keys())))
+    touches_wl = bool(wl_id) and (touches_time or 'status' in d or
+                                  'procedure_name' in d)
+
+    # Попередня перевірка накладань — до звернення у WLaunch, щоб не ганяти
+    # мережу через конфлікт, який видно локально.
+    if touches_time:
+        new_start = _time_to_min(eff['time'])
+        new_end = new_start + eff['duration']
+        if _check_overlap(conn, eff['specialist'], eff['date'], new_start, new_end,
+                          exclude_id=appt_id, exclude_wl_id=wl_id):
+            conn.close()
+            return jsonify({'error': 'conflict'}), 409
+    conn.close()
+
+    # WLaunch першим: розклад лікаря ведеться там, і зміна, якої там немає,
+    # не сталась. Раніше це був fire-and-forget тред, який до того ж не
+    # передавав спеціаліста взагалі.
+    from booking import (push_appointment_update, revert_appointment_update,
+                         BookingError)
+    if touches_wl:
         try:
-            import threading
-            def _sync_wl_update():
-                try:
-                    from wlaunch_api import get_branch_id, get_wlaunch_resources, HEADERS as WL_HEADERS
-                    from config import WLAUNCH_API_URL, COMPANY_ID
-                    from tz_utils import kyiv_offset
-                    bid = get_branch_id()
-                    if not bid:
-                        return
-                    eff_date = d.get('date', row['date'])
-                    eff_time = d.get('time', row['time']) or '09:00'
-                    eff_duration = int(d.get('duration', row['duration'] or 60) or 60)
-                    # Convert Kyiv → UTC
-                    kyiv_dt = datetime.strptime('{} {}'.format(eff_date, eff_time), '%Y-%m-%d %H:%M')
-                    utc_dt = kyiv_dt - timedelta(hours=kyiv_offset(kyiv_dt))
-                    wl_body = {
-                        'appointment': {
-                            'id': wl_id,
-                            'start_time': utc_dt.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                            'duration': eff_duration * 60,
-                        }
-                    }
-                    if 'status' in d and d['status'] == 'CANCELLED':
-                        wl_body['appointment']['status'] = 'CANCELLED'
-                    h = dict(WL_HEADERS, **{'Content-Type': 'application/json'})
-                    url = '{}/company/{}/branch/{}/appointment/{}'.format(WLAUNCH_API_URL, COMPANY_ID, bid, wl_id)
-                    resp = _req.post(url, headers=h, json=wl_body, timeout=10)
-                    logger.info('WLaunch update {}: {} {}'.format(wl_id, resp.status_code, resp.text[:100]))
-                except Exception as e:
-                    logger.error('WLaunch update error for {}: {}'.format(wl_id, e))
-            threading.Thread(target=_sync_wl_update, daemon=True).start()
+            push_appointment_update(
+                wl_id, eff['phone'], eff['client_name'], eff['procedure_name'],
+                eff['specialist'], eff['date'], eff['time'], eff['duration'],
+                status=eff['status'] if d.get('status') else None)
+        except BookingError as e:
+            status_code = 503 if e.code == 'wlaunch_unavailable' else 409
+            return jsonify({'error': e.code, 'detail': e.detail or e.message}), status_code
+
+    # Локальне дзеркало
+    conn = sqlite3.connect(DB_PATH, timeout=5)
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        if touches_time:
+            new_start = _time_to_min(eff['time'])
+            if _check_overlap(conn, eff['specialist'], eff['date'], new_start,
+                              new_start + eff['duration'],
+                              exclude_id=appt_id, exclude_wl_id=wl_id):
+                conn.rollback()
+                conn.close()
+                if touches_wl:
+                    revert_appointment_update(wl_id, before)
+                return jsonify({'error': 'conflict'}), 409
+        params.append(appt_id)
+        conn.execute('UPDATE manual_appointments SET {} WHERE id=?'.format(
+            ', '.join(updates)), params)
+        conn.commit()
+    except Exception as _db_err:
+        try:
+            conn.rollback()
         except Exception:
             pass
+        conn.close()
+        if touches_wl:
+            revert_appointment_update(wl_id, before)
+        logger.error('local update failed for {}: {}'.format(appt_id, _db_err))
+        return jsonify({'error': 'db_error'}), 500
+    conn.close()
+
+    _audit_appointment(wl_id or appt_id, eff['phone'], eff['client_name'],
+                       eff['procedure_name'], eff['specialist'], eff['date'],
+                       eff['time'], eff['status'], row['status'], 'updated',
+                       'admin_app')
 
     return jsonify({'ok': True})
 
