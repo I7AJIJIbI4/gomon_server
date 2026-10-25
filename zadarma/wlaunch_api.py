@@ -58,7 +58,41 @@ HEADERS = {
 }
 
 
+_LOOKUP_CACHE = {}
+LOOKUP_CACHE_TTL = 3600   # с — філія і склад спеціалістів змінюються раз на місяці
+
+
+def _cached_lookup(key, producer, ttl=None):
+    """TTL-кеш для довідників, які смикають на кожен запит.
+
+    Порожню відповідь не кешуємо: `get_branch_id` і `get_wlaunch_resources`
+    віддають None/{} і на мережевій помилці теж, а запамʼятати збій на годину
+    означає покласти запис на годину.
+    """
+    import time as _t
+    now = _t.time()
+    hit = _LOOKUP_CACHE.get(key)
+    if hit and now - hit[0] < (ttl or LOOKUP_CACHE_TTL):
+        return hit[1]
+    value = producer()
+    if value:
+        _LOOKUP_CACHE[key] = (now, value)
+    return value
+
+
 def get_branch_id():
+    """ID першої активної філії (кешований)."""
+    return _cached_lookup('branch', _get_branch_id_uncached)
+
+
+def get_wlaunch_resources(branch_id=None):
+    """Спеціалісти філії: {назва: resource_id} (кешовано)."""
+    return _cached_lookup(
+        'resources:{}'.format(branch_id or ''),
+        lambda: _get_wlaunch_resources_uncached(branch_id))
+
+
+def _get_branch_id_uncached():
     """Отримує ID першої активної філії"""
     try:
         url = "{}/company/{}/branch/".format(WLAUNCH_API_URL, COMPANY_ID)
@@ -350,7 +384,7 @@ def create_wlaunch_client(phone, first_name, last_name=""):
     return None
 
 
-def get_wlaunch_resources(branch_id=None):
+def _get_wlaunch_resources_uncached(branch_id=None):
     """Fetch WLaunch resources (specialists) for the branch. Returns {specialist_name: resource_id}."""
     if not branch_id:
         branch_id = get_branch_id()
