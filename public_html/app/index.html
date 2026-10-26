@@ -1500,7 +1500,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
       <div class="news-scroll" id="home-news"></div>
       <p class="section-label">Швидкий доступ</p>
       <div class="quick-grid">
-        <div class="quick-tile" onclick="openBooking()">
+        <div class="quick-tile" id="tile-booking" onclick="openBooking()">
           <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/><path d="M11 13v4M9 15h4" stroke-linecap="round"/></svg>
           <p>Записатись</p>
         </div>
@@ -1574,7 +1574,7 @@ body.offline .instagram-wrap{min-height:180px;border:1px solid var(--border);bor
     <div class="screen-scroll">
       <div id="appts-list"></div>
     </div>
-    <button class="bk-fab" onclick="openBooking()" aria-label="Записатись">+</button>
+    <button class="bk-fab" id="fab-booking" onclick="openBooking()" aria-label="Записатись">+</button>
     <nav>
       <button class="nav-btn" onclick="go('home')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--text2)" stroke-width="1.2"><path d="M3 10L11 3l8 7v9a1 1 0 01-1 1H14v-5H8v5H4a1 1 0 01-1-1V10Z"/></svg><span class="nav-label">Головна</span></button>
       <button class="nav-btn active" onclick="go('appointments')"><svg class="nav-icon" viewBox="0 0 22 22" fill="none" stroke="var(--gold)" stroke-width="1.2"><rect x="3" y="4" width="16" height="15" rx="3"/><path d="M7 2v4M15 2v4M3 10h16"/></svg><span class="nav-label" style="color:var(--gold)">Записи</span></button>
@@ -6331,6 +6331,19 @@ var _currentScreen = 'home';
    Той самий серверний шлях, що й на /booking, але без OTP: у додатку клієнт
    уже авторизований, тож телефон береться з сесії, імʼя — з його картки.    */
 
+// Самостійний запис клієнтом вимкнений до завершення перевірки.
+// Щоб повернути — true. Екран, логіка і API лишаються на місці,
+// ховаються лише дві точки входу: плитка на головній і «+» у записах.
+var BOOKING_ENABLED = false;
+
+function _bkApplyVisibility() {
+  ['tile-booking', 'fab-booking'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = BOOKING_ENABLED ? '' : 'none';
+  });
+}
+document.addEventListener('DOMContentLoaded', _bkApplyVisibility);
+
 var BK = {services:[], service:null, specialist:null, date:null, time:null};
 var BK_SPEC = {victoria:'Вікторія', anastasia:'Анастасія'};
 var BK_WD = ['неділя','понеділок','вівторок','середа','четвер','пʼятниця','субота'];
@@ -6369,6 +6382,7 @@ function _bkMoney(s) {
 }
 
 async function openBooking() {
+  if (!BOOKING_ENABLED) return;   // вхід прихований, але функція могла лишитись у обробнику
   go('booking');
   BK.service = null; BK.specialist = null; BK.date = null; BK.time = null;
   if (BK.services.length) return bkRenderServices();
