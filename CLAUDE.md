@@ -1046,7 +1046,7 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 - Flask CORS — додано `drgomon.beauty`
 
 **DevOps:**
-- `check_flask.sh` — */2 cron + auto HUP reload при зміні `pwa_api.py`
+- `check_flask.sh` — */2 cron + auto HUP reload при зміні `pwa_api.py`. **Більше не в crontab** (перевірено 28.10.2026, файл лежить у `zadarma/`): після `git pull` зі зміною Python-коду API сам не перезавантажиться, потрібен `systemctl restart gomon-api`
 - Secrets centralized — всі токени в config.py / config.php
 
 ### Google Drive — фото до/після

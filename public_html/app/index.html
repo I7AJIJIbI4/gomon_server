@@ -478,10 +478,14 @@ nav{
 .price-search:focus{border-color:var(--border-gold)}
 .price-search::placeholder{color:var(--text3)}
 .search-icon{position:absolute;right:34px;top:50%;transform:translateY(-50%);opacity:.35}
-.price-group-label{
-  font-family:var(--serif);font-size:22px;color:var(--text);
-  padding:28px 20px 2px;
-}
+/* Групи прайсу на акордеоні онлайн-запису (.bk-cat). Стилі .bk-cat нижче у
+   файлі, тож тут подвійний клас — інакше їхній padding .inner перебиває */
+.bk-cat.price-acc{margin:0 16px 10px}
+.bk-cat.price-acc:first-child{margin-top:16px}
+.bk-cat.price-acc .inner{padding:0 0 6px}
+.bk-cat.price-acc .price-cat-label{padding:16px 16px 6px}
+.bk-cat.price-acc .price-item{padding:11px 16px}
+.bk-cat.price-acc .adm-proc-cat{padding:0 8px 12px}
 .price-cat-label{
   font-size:14px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;
   padding:18px 20px 8px;font-family:var(--sans);
@@ -761,7 +765,6 @@ nav{
 #adm-add-client-modal{position:fixed;inset:0;z-index:10200;background:var(--overlay);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
 #adm-add-client-modal.show{display:flex}
 /* Procedures screen */
-.adm-proc-group-hdr{padding:28px 20px 4px;font-size:12px;color:var(--gold);letter-spacing:1px;text-transform:uppercase}
 .adm-proc-cat{padding:0 20px 12px}
 .adm-proc-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px;border-bottom:1px solid var(--border);margin-bottom:2px}
 .adm-proc-cat-name{font-family:var(--serif);font-size:18px;color:var(--gold-pale)}
@@ -4671,9 +4674,12 @@ function renderProcedures(canEdit) {
   let html = '';
   _priceGroups(_procData).forEach(g => {
   // Група 0 — категорії, яких немає серед карток сайту: їх не бачать ні на сайті, ні клієнти в додатку
-  html += `<div class="adm-proc-group-hdr">${_esc(g.name || 'Інше · не показується на сайті і клієнтам')}</div>`;
+  const outer = html;
+  html = '';
+  let count = 0;
   g.idxs.forEach(ci => {
     const cat = _procData[ci];
+    count += (cat.items || []).length;
     html += `<div class="adm-proc-cat">
       <div class="adm-proc-cat-hdr">
         <span class="adm-proc-cat-name">${cat.cat||'Без категорії'}</span>
@@ -4710,6 +4716,8 @@ function renderProcedures(canEdit) {
     });
     html += '</div>';
   });
+  html = outer + _priceAcc({id: g.id, name: g.name || 'Інше · не показується на сайті і клієнтам'},
+                           html, count, String(g.id) === _procOpen, 'proc');
   });
   if (canEdit) html += `<div style="padding:8px 20px 80px"><button class="adm-proc-add-cat-btn" onclick="addProcCat()">+ Додати категорію</button></div>`;
   c.innerHTML = html;
@@ -4730,6 +4738,7 @@ function deleteProcItem(ci, ii) {
 }
 function addProcCat() {
   _procData.push({cat:'Нова категорія',items:[]});
+  _procOpen = '0';   // нова категорія без групи — розкриваємо «Інше», де вона з'явилась
   renderProcedures(true);
 }
 async function saveProcedures() {
@@ -6226,6 +6235,26 @@ function _priceGroups(list) {
   return groups.sort((a, b) => (a.id || 99) - (b.id || 99));
 }
 
+// Групи прайсу згортаються, як теки в онлайн-записі: відкрита завжди одна.
+// Яку відкрито, пам'ятаємо, бо обидва списки перемальовуються (пошук, редагування).
+let _priceOpen = null, _procOpen = null;
+function _priceAcc(g, body, count, open, which) {
+  return `<div class="bk-cat price-acc${open ? ' open' : ''}" data-g="${g.id}">` +
+    `<button type="button" onclick="_priceAccToggle(this,'${which}')"><span>${_esc(g.name)}</span>` +
+    `<span class="cnt">${count}</span><span class="arw">&#9654;</span></button>` +
+    `<div class="inner">${body}</div></div>`;
+}
+function _priceAccToggle(btn, which) {
+  const box = btn.parentNode, wasOpen = box.classList.contains('open');
+  box.parentNode.querySelectorAll(':scope > .price-acc').forEach(c => c.classList.remove('open'));
+  if (which === 'proc') _procOpen = wasOpen ? null : box.dataset.g;
+  else _priceOpen = wasOpen ? null : box.dataset.g;
+  if (!wasOpen) {
+    box.classList.add('open');
+    box.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  }
+}
+
 function renderPrice(filter = '') {
   const el = document.getElementById('price-list');
   const q  = filter.toLowerCase();
@@ -6237,7 +6266,7 @@ function renderPrice(filter = '') {
 
   let html = '';
   _priceGroups(prices).forEach(g => {
-  let groupShown = false;
+  let body = '', count = 0;
   g.idxs.forEach(catIdx => {
     const cat = prices[catIdx];
     // Підтримуємо обидва формати: {cat, items} і {category/name, services/items}
@@ -6248,8 +6277,8 @@ function renderPrice(filter = '') {
       ? (catMatch ? catItems : catItems.filter(i => (i.name || i.service || i.title || '').toLowerCase().includes(q)))
       : catItems;
     if (!filtered.length) return;
-    if (g.name && !groupShown) { html += `<p class="price-group-label">${_esc(g.name)}</p>`; groupShown = true; }
-    html += `<p class="price-cat-label">${_esc(catName)}</p>`;
+    count += filtered.length;
+    body += `<p class="price-cat-label">${_esc(catName)}</p>`;
     filtered.forEach(i => {
       const name  = i.name  || i.service || '';
       const price = i.price || i.cost    || '';
@@ -6258,12 +6287,16 @@ function renderPrice(filter = '') {
       const nameHtml = hasDetail
         ? '<span class="proc-link" onclick="event.stopPropagation();openProcModal(' + catIdx + ',' + origIdx + ')">' + _esc(name) + '</span>'
         : _esc(name);
-      html += `<div class="price-item">
+      body += `<div class="price-item">
         <span class="price-name">${nameHtml}</span>
         <span class="price-val">${_esc(price)}</span>
       </div>`;
     });
   });
+  if (!body) return;
+  // Без group (кеш до групування) — плоский список, як раніше.
+  // Під час пошуку теки зі збігами розкриті, інакше результатів не видно.
+  html += g.name ? _priceAcc(g, body, count, q || String(g.id) === _priceOpen, 'price') : body;
   });
 
   if (!html) {
