@@ -378,23 +378,33 @@ Cron (09:00 і 21:00)
 
 ## Cron (crontab -l)
 
-Всі часи в crontab — **UTC** (сервер у `Etc/UTC`, рядка `TZ=` в crontab немає — Ubuntu cron його ігнорує). Kyiv = UTC+3 влітку. Нижче наведено UTC-час.
+Всі часи в crontab — **UTC** (сервер у `Etc/UTC`). Ubuntu cron не підтримує ні `TZ=`, ні `CRON_TZ=`, тож київський час зашитий у години. Скрипти самі рахують час через `kyiv_now()` і переходу не помічають, а от вікна запуску — помічають.
+
+**Двічі на рік треба зсувати всі джоби з фіксованою годиною:** в останню неділю жовтня +1 год UTC (Kyiv = UTC+2), в останню неділю березня −1 год UTC (Kyiv = UTC+3). Інтервальні (`*/5`, щогодинний sync, `anthropic_health`) не чіпати. Перед заміною — бекап у `/opt/gomon/backups/crontab/`. Зимовий crontab стоїть з 28.10.2026, наступний перехід 28.03.2027.
+
+Київський час джоб (UTC-години = мінус 2 взимку, мінус 3 влітку):
 
 ```
-TZ=Europe/Kyiv
+APP=/opt/gomon/app/zadarma        # змінні — ВИЩЕ всіх джоб, інакше cron їх ігнорує
+PATH=/opt/gomon/venv/bin:...
 VENV=/opt/gomon/venv/bin/python
-APP=/opt/gomon/app/zadarma
 
-0 * * * *       cd $APP && $VENV sync_appointments.py          # Sync WLaunch
-0 9,21 * * *    cd $APP && bash sync_with_notification.sh       # Sync clients + TG звіт
-0 9-21 * * *    cd $APP && $VENV sms_reminder.py                # Повторні процедури (TG→SMS)
-*/15 8-22 * * * cd $APP && $VENV push_reminder.py               # Push нагадування
-0 20 * * *      cd $APP && $VENV appt_reminder.py --specialist --tomorrow  # Брифінг спеціалістам
-30 21 * * *     cd $APP && $VENV photo_reminder.py --create     # Drive папки + TG
-0 11 * * *      cd $APP && $VENV photo_reminder.py --check      # Перевірка фото
-0 7,19 * * *    cd $APP && $VENV photo_cache.py                 # Кеш фото
-0 7 * * *       cd $APP && $VENV ig_health.py                # Термін IG-токена → TG-алерт (10:00 Kyiv)
-0 3 * * *       SQLite backup → /opt/gomon/backups/ (14 днів)
+щогодини        sync_appointments.py                      # Sync WLaunch
+09:05, 21:05    sync_with_notification.sh                 # Sync clients + TG звіт
+09:00–21:00     sms_reminder.py (щогодини)                # Повторні процедури (TG→SMS)
+22:10           sms_reminder.py --daily-summary
+08:00–22:45     push_reminder.py (кожні 15 хв)            # Push нагадування
+09:00–23:45     appt_reminder.py --feedback (кожні 15 хв) # Post-visit
+10:10, 18:10    appt_reminder.py --reminder
+21:05           appt_reminder.py --specialist --tomorrow  # Брифінг спеціалістам
+21:00           photo_reminder.py --create                # Drive папки + TG
+11:00           photo_reminder.py --check                 # Перевірка фото
+09:00–21:45     photo_reminder.py --cashback-notify (кожні 15 хв)
+07:00, 19:00    photo_cache.py, wl_catalog.py --sync
+08:00           sync_reviews.py
+10:00           ig_health.py                              # Термін IG-токена → TG-алерт
+03:00           SQLite backup → /opt/gomon/backups/ (14 днів)
+04:00–04:10     очищення сесій/OTP, manual → DONE, audit_log > 60 днів
 ```
 
 **НЕ В CRON** (обслуговується WLaunch): нагадування за 24 год, відгук після процедури.

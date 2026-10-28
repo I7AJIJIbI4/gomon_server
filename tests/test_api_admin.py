@@ -265,6 +265,53 @@ def test_calendar_delete_existing(client, admin_token, pwa):
     assert row is None or row[0] == 'CANCELLED'
 
 
+def _insert_wl_appt(pwa, wl_id):
+    conn = sqlite3.connect(pwa.DB_PATH)
+    cur = conn.execute(
+        "INSERT INTO manual_appointments (client_phone, client_name, procedure_name, specialist,"
+        " date, time, wlaunch_id) VALUES (?,?,?,?,?,?,?)",
+        ('380671234567', 'Test', 'Тест-процедура', 'victoria', '2026-12-16', '15:00', wl_id))
+    appt_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return appt_id
+
+
+def test_calendar_delete_cancels_in_wlaunch(client, admin_token, pwa):
+    """Видалення скасовує запис у WLaunch, і без збою попередження немає."""
+    appt_id = _insert_wl_appt(pwa, 'wl-del-ok')
+    with patch.object(pwa, '_cancel_wlaunch_appt', return_value=(True, None)) as cancel, \
+         patch.object(sys.modules['notifier'], 'alert_admin', create=True) as alert:
+        rv = client.delete(f'/api/admin/calendar/appointments/{appt_id}',
+                           headers=auth(admin_token))
+    assert rv.status_code == 200
+    assert 'warning' not in rv.get_json()
+    cancel.assert_called_once_with('wl-del-ok')
+    alert.assert_not_called()
+
+
+def test_calendar_delete_reports_wlaunch_cancel_failure(client, admin_token, pwa):
+    """cancel_wlaunch_appt не кидає, а повертає (False, err).
+
+    Раніше цю відповідь ніхто не читав: запис лишався CONFIRMED у WLaunch,
+    клієнту йшло нагадування, а в логах не було сліду.
+    """
+    appt_id = _insert_wl_appt(pwa, 'wl-del-fail')
+    with patch.object(pwa, '_cancel_wlaunch_appt', return_value=(False, '503 down')), \
+         patch.object(sys.modules['notifier'], 'alert_admin', create=True) as alert:
+        rv = client.delete(f'/api/admin/calendar/appointments/{appt_id}',
+                           headers=auth(admin_token))
+    assert rv.status_code == 200
+    assert '503 down' in rv.get_json().get('warning', '')
+    alert.assert_called_once()
+    assert 'wl-del-fail' in alert.call_args[0][0]
+
+    conn = sqlite3.connect(pwa.DB_PATH)
+    row = conn.execute('SELECT status FROM manual_appointments WHERE id=?', (appt_id,)).fetchone()
+    conn.close()
+    assert row[0] == 'CANCELLED'
+
+
 # ── Тривалість: джерело правди — WLaunch, не прайс ────────────────────────────
 
 def test_price_save_does_not_persist_duration(client, pwa):
