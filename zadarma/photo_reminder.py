@@ -546,28 +546,23 @@ def check_pending_cashback_reminders():
     current_time = now.strftime('%H:%M')
 
     conn = sqlite3.connect(DB_PATH, timeout=5)
-    # Send when: confirmed AND current time >= visit time AND (confirmed before visit time today OR confirmed yesterday+)
-    # Simply: confirmed AND now >= appt_time AND confirmed_at < today's appt_time (or confirmed yesterday)
     rows = conn.execute(
         "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist, cashback_confirmed_at "
         "FROM photo_tasks "
-        "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL "
-        "AND (appt_time IS NULL OR appt_time <= ?)",
-        (current_time,)).fetchall()
+        "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL").fetchall()
     conn.close()
-    # Filter: only send if confirmed at least 1 hour before current time (give doctor time, avoid instant send)
+    # Слати не раніше наступного дня після підтвердження, у годину візиту клієнта.
+    # Так обіцяє лікарю бот («клієнт отримає повідомлення наступного дня»), а
+    # раніше тут чекали лише годину: 28.10.2026 лікар підтвердила 13 візитів о
+    # 20:05, і о 21:15 клієнтам пішли SMS. Година візиту без часу — 10:00; пізня
+    # (після 21:00) прибивається до 21:00, бо останній запуск крону о 21:45.
     filtered = []
     for r in rows:
         confirmed_at = r[9] or ''
-        if not confirmed_at:
+        if not confirmed_at or confirmed_at[:10] >= today:
             continue
-        # Confirmed more than 1 hour ago → send
-        from datetime import datetime as _dt
-        try:
-            conf_dt = _dt.strptime(confirmed_at, '%Y-%m-%d %H:%M:%S')
-            if (now - conf_dt).total_seconds() >= 3600:
-                filtered.append(r)
-        except Exception:
+        send_from = min(max(r[7] or '10:00', '09:00'), '21:00')
+        if current_time >= send_from:
             filtered.append(r)
     rows = filtered
 

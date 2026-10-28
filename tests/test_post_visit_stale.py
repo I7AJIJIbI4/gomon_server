@@ -222,8 +222,8 @@ class TestCashbackBacklogFlush:
 
     @staticmethod
     def _seed(db, rows):
-        """rows: (phone, name, proc, days_ago, price)"""
-        confirmed = (kyiv_now() - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+        """rows: (phone, name, proc, days_ago, price). Підтверджено вчора — вже час слати."""
+        confirmed = (kyiv_now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
         conn = sqlite3.connect(db)
         for phone, name, proc, days, price in rows:
             conn.execute(
@@ -288,3 +288,79 @@ class TestCashbackBacklogFlush:
         assert cb[0][1] == pytest.approx(150.0)      # 3% з 5000
         assert notif._sent == {'sms': [], 'tg': [], 'push': []}
         assert _log_rows(db) == []
+
+    # ── Коли слати: наступного дня в годину візиту ────────────────────────────
+    #
+    # 28.10.2026 о 20:05 лікар підтвердила препарати по 13 візитах, бот відповів
+    # «клієнт отримає повідомлення наступного дня» — а о 21:15 того ж вечора
+    # клієнтам пішли SMS: код чекав лише годину після підтвердження.
+
+    @staticmethod
+    def _at(monkeypatch, day, hhmm):
+        """Підмінити «зараз» для check_pending_cashback_reminders."""
+        h, m = map(int, hhmm.split(':'))
+        fake = datetime.combine(day, datetime.min.time()).replace(hour=h, minute=m)
+        monkeypatch.setattr(sys.modules['tz_utils'], 'kyiv_now', lambda: fake)
+
+    @staticmethod
+    def _seed_one(db, appt_date, appt_time, confirmed_at):
+        conn = sqlite3.connect(db)
+        conn.execute(
+            'INSERT INTO photo_tasks (client_phone, client_name, procedure_name,'
+            " specialist, appt_date, appt_time, cashback_status, cashback_drug,"
+            ' cashback_price, cashback_confirmed_at)'
+            " VALUES ('380631234519','Світлана','Ботулінотерапія','victoria',?,?,"
+            "'confirmed','Ботулінотерапія 1 зона (Neuronox)',2200,?)",
+            (appt_date, appt_time, confirmed_at))
+        conn.commit()
+        conn.close()
+
+    def test_evening_confirmation_waits_for_next_day(self, flush, notif, monkeypatch):
+        """Підтверджено о 20:05 — о 21:15 того ж дня клієнту нічого не йде."""
+        today = kyiv_now().date()
+        self._seed_one(notif._db_file, today.isoformat(), '13:00',
+                       '{} 20:05:30'.format(today.isoformat()))
+        self._at(monkeypatch, today, '21:15')
+        flush.check_pending_cashback_reminders()
+
+        assert notif._sent == {'sms': [], 'tg': [], 'push': []}
+        assert self._tasks(notif._db_file)[0][2] == 'confirmed'   # не закрито, чекає
+
+    def test_next_day_sends_at_the_visit_hour(self, flush, notif, monkeypatch):
+        today = kyiv_now().date()
+        yesterday = today - timedelta(days=1)
+        self._seed_one(notif._db_file, yesterday.isoformat(), '13:00',
+                       '{} 20:05:30'.format(yesterday.isoformat()))
+
+        self._at(monkeypatch, today, '12:45')
+        flush.check_pending_cashback_reminders()
+        assert notif._sent['sms'] == []
+
+        self._at(monkeypatch, today, '13:00')
+        flush.check_pending_cashback_reminders()
+        assert [to for to, _ in notif._sent['sms']] == ['380631234519']
+
+    def test_unknown_visit_hour_sends_at_ten(self, flush, notif, monkeypatch):
+        today = kyiv_now().date()
+        yesterday = today - timedelta(days=1)
+        self._seed_one(notif._db_file, yesterday.isoformat(), None,
+                       '{} 20:05:30'.format(yesterday.isoformat()))
+
+        self._at(monkeypatch, today, '09:30')
+        flush.check_pending_cashback_reminders()
+        assert notif._sent['sms'] == []
+
+        self._at(monkeypatch, today, '10:00')
+        flush.check_pending_cashback_reminders()
+        assert len(notif._sent['sms']) == 1
+
+    def test_late_visit_still_sends_within_working_hours(self, flush, notif, monkeypatch):
+        """Візит о 21:30 не має застрягнути: крон останній раз ходить о 21:45."""
+        today = kyiv_now().date()
+        yesterday = today - timedelta(days=1)
+        self._seed_one(notif._db_file, yesterday.isoformat(), '21:30',
+                       '{} 21:50:00'.format(yesterday.isoformat()))
+
+        self._at(monkeypatch, today, '21:00')
+        flush.check_pending_cashback_reminders()
+        assert len(notif._sent['sms']) == 1
