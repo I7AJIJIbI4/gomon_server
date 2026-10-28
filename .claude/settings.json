@@ -5,6 +5,8 @@
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git pull --ff-only')",
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git pull --ff-only && git rev-parse --short HEAD')",
       "Bash(ssh root@45.94.157.127 'systemctl restart gomon-api && sleep 3 && systemctl is-active gomon-api')",
+      "Bash(git push origin main)",
+      "Bash(git push -q origin main)",
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git rev-parse --short HEAD')",
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git status --porcelain')"
     ]
