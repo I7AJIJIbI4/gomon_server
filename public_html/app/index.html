@@ -774,6 +774,9 @@ nav{
 .adm-proc-item-main{display:flex;align-items:center;gap:6px}
 .adm-proc-name-inp{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:17px;color:var(--text);font-family:var(--sans);outline:none;min-width:0}
 .adm-proc-price-inp{width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:17px;color:var(--gold);font-family:var(--sans);outline:none;text-align:right}
+.adm-proc-price-box{position:relative;flex:none;display:block}
+.adm-proc-price-box>span{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--gold);opacity:.6;font-size:15px;pointer-events:none}
+.adm-proc-price-box>.adm-proc-price-inp{padding-left:24px}
 .adm-proc-dur-inp{width:62px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 6px;font-size:15px;color:var(--text2);font-family:var(--sans);outline:none;text-align:right}
 .adm-proc-dur-ro{font-size:14px;color:var(--text3);margin-left:6px;flex-shrink:0}
 .adm-proc-name-ro{font-size:17px;color:var(--text);flex:1}
@@ -4668,6 +4671,21 @@ async function loadProcedures() {
     renderProcedures(canEdit);
   } catch(e) { if (c) c.innerHTML = '<p style="padding:20px;color:var(--text3)">Помилка завантаження</p>'; }
 }
+// Ціна у prices.json — текст для людей і AI: «₴ 1200», «безкоштовно», «від 7000 грн».
+// Редактор показує стандартні як число і записує назад у тому ж форматі,
+// тож сайт, AI, кешбек і синк у WLaunch бачать той самий рядок, що й раніше.
+function _priceToNum(p) {
+  p = String(p == null ? '' : p).trim();
+  if (p === '') return '';
+  if (p.toLowerCase() === 'безкоштовно') return '0';
+  const m = p.match(/^₴\s*(\d+)$/);
+  return m ? m[1] : null;   // null — нестандартна ціна, редагується як текст
+}
+function _numToPrice(v) {
+  v = String(v).replace(/\D/g, '');
+  if (v === '') return '';
+  return +v === 0 ? 'безкоштовно' : '₴ ' + (+v);
+}
 function renderProcedures(canEdit) {
   const c = document.getElementById('adm-proc-container');
   if (!c || !_procData || !_procData.length) { if(c) c.innerHTML='<p style="padding:20px;color:var(--text3)">Немає процедур</p>'; return; }
@@ -4694,7 +4712,9 @@ function renderProcedures(canEdit) {
         html += `<div class="adm-proc-item">
           <div class="adm-proc-item-main">
             <input class="adm-proc-name-inp" value="${(item.name||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].name=this.value" placeholder="Назва"/>
-            <input class="adm-proc-price-inp" value="${(item.price||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].price=this.value" placeholder="Ціна"/>
+            ${_priceToNum(item.price) === null
+              ? `<input class="adm-proc-price-inp" value="${(item.price||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].price=this.value" placeholder="Ціна"/>`
+              : `<label class="adm-proc-price-box"><span>₴</span><input class="adm-proc-price-inp" inputmode="numeric" pattern="[0-9]*" value="${_priceToNum(item.price)}" oninput="this.value=this.value.replace(/\\D/g,'');_procData[${ci}].items[${ii}].price=_numToPrice(this.value)" placeholder="0" title="0 — безкоштовно"/></label>`}
             <input class="adm-proc-dur-inp" type="number" min="15" max="480" step="15" value="${dur}" oninput="_procData[${ci}].items[${ii}].duration=parseInt(this.value,10)||60" title="Тривалість, хв" placeholder="хв"/>
             <button class="adm-proc-del" onclick="deleteProcItem(${ci},${ii})">✕</button>
           </div>
