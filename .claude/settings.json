@@ -3,6 +3,7 @@
   "permissions": {
     "allow": [
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git pull --ff-only')",
+      "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git pull --ff-only && git rev-parse --short HEAD')",
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git rev-parse --short HEAD')",
       "Bash(ssh root@45.94.157.127 'cd /opt/gomon/app && git status --porcelain')"
     ]
