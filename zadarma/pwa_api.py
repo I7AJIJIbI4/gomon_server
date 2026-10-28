@@ -1385,6 +1385,29 @@ def booking_create():
         return jsonify({'error': 'server_error'}), 500
 
 
+# Групи прайсу = картки послуг на сайті. Ключові слова — дзеркало $catMap у
+# public_html/sitepro/modal_prices.php, тест стежить, щоб вони не розійшлись.
+# Порядок перевірки важливий: «Пілінги-біоревіталізанти» мають потрапити в
+# пілінги (3), а не в ін'єкційну (2). Категорія без збігу (консультації,
+# корекції) на сайті не показується — так само й клієнту в додатку.
+PRICE_GROUPS = [
+    (1, 'Апаратна косметологія', ['wow', 'киснев', 'дермапен', 'скрабінг', 'гідропілінг']),
+    (3, 'Доглядові процедури та пілінги', ['доглядові', 'пілінг', 'карбокси', 'prx', 'kemikum', 'spa']),
+    (2, "Ін'єкційна косметологія", ['ботулін', "ін'єкційна", 'контурна', 'біоревіталізація', 'мезотер', 'ферментотер', 'біорепар']),
+    (5, 'Апаратна корекція фігури', ['drumroll', 'пресотер', 'лімфодренаж']),
+    (6, 'Косметичне відбілювання зубів', ['відбілюв', 'зуб', 'magic smile']),
+]
+
+
+def price_group(cat_name):
+    """(id, назва) картки сайту для категорії прайсу або None."""
+    low = (cat_name or '').lower()
+    for gid, gname, keywords in PRICE_GROUPS:
+        if any(kw in low for kw in keywords):
+            return gid, gname
+    return None
+
+
 @app.route('/api/prices', methods=['GET'])
 def get_prices():
     """Повертає prices.json напряму з диску (оновлюється з сайтом)"""
@@ -1439,8 +1462,10 @@ def get_prices():
                     if row.get('aftercare'):
                         item['aftercare'] = row['aftercare']
                     items.append(item)
-            if items:
-                result.append({'cat': cat_name, 'items': items})
+            group = price_group(cat_name)
+            if items and group:
+                result.append({'cat': cat_name, 'items': items,
+                               'group_id': group[0], 'group': group[1]})
         return jsonify(result)
     except FileNotFoundError:
         return jsonify({'error': 'prices_not_found'}), 404
@@ -3765,7 +3790,10 @@ def admin_prices_get():
                         _item['duration'] = dur
                     items.append(_item)
             if items:
-                result.append({'cat': cat_name, 'items': items})
+                group = price_group(cat_name)
+                result.append({'cat': cat_name, 'items': items,
+                               'group_id': group[0] if group else None,
+                               'group': group[1] if group else None})
         return jsonify(result)
     except FileNotFoundError:
         return jsonify([])
@@ -3786,6 +3814,9 @@ def admin_prices_put():
     for cat in data:
         if not isinstance(cat, dict) or 'cat' not in cat or 'items' not in cat:
             return jsonify({'error': 'invalid_format'}), 400
+        # Група виводиться з назви категорії, у файлі їй не місце
+        cat.pop('group', None)
+        cat.pop('group_id', None)
 
     # Dedupe: merge categories with the same name (preserve order of first occurrence).
     # Items inside a merged category are deduped by name as well (first wins).

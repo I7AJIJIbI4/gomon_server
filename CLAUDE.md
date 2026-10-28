@@ -248,7 +248,7 @@ _redeemCashback(phone, amount)    // списання кешбеку
 | `/api/me/appointments` | GET | Записи клієнта: WLaunch (services_json) + manual_appointments, фільтрує CANCELLED |
 | `/api/me/appointments/cancel` | POST | Скасовує запис у WLaunch + оновлює БД |
 | `/api/chat/cancel-appointment` | POST | AI-скасування: `{phone, date?}` → cancel nearest/specific → WLaunch + notifier |
-| `/api/prices` | GET | Прайс у форматі `[{cat, items:[{name,price}]}]` |
+| `/api/prices` | GET | Прайс у форматі `[{cat, group_id, group, items:[{name,price}]}]`. `group` — картка послуг сайту (`price_group()`, дзеркало `$catMap` у `modal_prices.php`); категорії без картки (консультації, корекції) не віддаються. Адмінський `GET /api/admin/prices/edit` віддає їх з `group: null` |
 | `/api/feed` | GET | Пости з Telegram (feed.db) |
 | `/api/health` | GET | Стан БД, кількість клієнтів |
 

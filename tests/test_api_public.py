@@ -92,7 +92,7 @@ def test_prices_duration_non_numeric(client, pwa):
     80-хвилинну процедуру.
     """
     broken_prices = [
-        {'cat': 'Тест', 'items': [
+        {'cat': 'WOW-чистка (тест)', 'items': [
             {'name': 'Тест', 'price': '500 грн', 'specialists': ['victoria'], 'duration': '60 хв'},
         ]}
     ]

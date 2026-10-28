@@ -478,6 +478,10 @@ nav{
 .price-search:focus{border-color:var(--border-gold)}
 .price-search::placeholder{color:var(--text3)}
 .search-icon{position:absolute;right:34px;top:50%;transform:translateY(-50%);opacity:.35}
+.price-group-label{
+  font-family:var(--serif);font-size:22px;color:var(--text);
+  padding:28px 20px 2px;
+}
 .price-cat-label{
   font-size:14px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;
   padding:18px 20px 8px;font-family:var(--sans);
@@ -757,6 +761,7 @@ nav{
 #adm-add-client-modal{position:fixed;inset:0;z-index:10200;background:var(--overlay);display:none;align-items:flex-end;justify-content:center;padding:0 0 var(--safe-bottom)}
 #adm-add-client-modal.show{display:flex}
 /* Procedures screen */
+.adm-proc-group-hdr{padding:28px 20px 4px;font-size:12px;color:var(--gold);letter-spacing:1px;text-transform:uppercase}
 .adm-proc-cat{padding:0 20px 12px}
 .adm-proc-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px;border-bottom:1px solid var(--border);margin-bottom:2px}
 .adm-proc-cat-name{font-family:var(--serif);font-size:18px;color:var(--gold-pale)}
@@ -4664,7 +4669,11 @@ function renderProcedures(canEdit) {
   const c = document.getElementById('adm-proc-container');
   if (!c || !_procData || !_procData.length) { if(c) c.innerHTML='<p style="padding:20px;color:var(--text3)">Немає процедур</p>'; return; }
   let html = '';
-  _procData.forEach((cat,ci) => {
+  _priceGroups(_procData).forEach(g => {
+  // Група 0 — категорії, яких немає серед карток сайту: їх не бачать ні на сайті, ні клієнти в додатку
+  html += `<div class="adm-proc-group-hdr">${_esc(g.name || 'Інше · не показується на сайті і клієнтам')}</div>`;
+  g.idxs.forEach(ci => {
+    const cat = _procData[ci];
     html += `<div class="adm-proc-cat">
       <div class="adm-proc-cat-hdr">
         <span class="adm-proc-cat-name">${cat.cat||'Без категорії'}</span>
@@ -4700,6 +4709,7 @@ function renderProcedures(canEdit) {
       }
     });
     html += '</div>';
+  });
   });
   if (canEdit) html += `<div style="padding:8px 20px 80px"><button class="adm-proc-add-cat-btn" onclick="addProcCat()">+ Додати категорію</button></div>`;
   c.innerHTML = html;
@@ -6203,6 +6213,19 @@ function closeProcModal() {
   document.getElementById('proc-modal').classList.remove('show');
 }
 
+// Категорії прайсу, згруповані як картки послуг на сайті (group/group_id
+// приходять з API). Повертає індекси у вихідному масиві: на них тримаються
+// модалка процедури і редагування в адмінці. Без group_id — група 0, в кінці.
+function _priceGroups(list) {
+  const groups = [], byId = {};
+  list.forEach((cat, i) => {
+    const id = cat.group_id || 0;
+    if (!byId[id]) { byId[id] = {id, name: cat.group || '', idxs: []}; groups.push(byId[id]); }
+    byId[id].idxs.push(i);
+  });
+  return groups.sort((a, b) => (a.id || 99) - (b.id || 99));
+}
+
 function renderPrice(filter = '') {
   const el = document.getElementById('price-list');
   const q  = filter.toLowerCase();
@@ -6213,7 +6236,10 @@ function renderPrice(filter = '') {
   }
 
   let html = '';
-  prices.forEach((cat, catIdx) => {
+  _priceGroups(prices).forEach(g => {
+  let groupShown = false;
+  g.idxs.forEach(catIdx => {
+    const cat = prices[catIdx];
     // Підтримуємо обидва формати: {cat, items} і {category/name, services/items}
     const catName  = cat.cat || cat.category || cat.name || '';
     const catItems = cat.items || cat.services || [];
@@ -6222,6 +6248,7 @@ function renderPrice(filter = '') {
       ? (catMatch ? catItems : catItems.filter(i => (i.name || i.service || i.title || '').toLowerCase().includes(q)))
       : catItems;
     if (!filtered.length) return;
+    if (g.name && !groupShown) { html += `<p class="price-group-label">${_esc(g.name)}</p>`; groupShown = true; }
     html += `<p class="price-cat-label">${_esc(catName)}</p>`;
     filtered.forEach(i => {
       const name  = i.name  || i.service || '';
@@ -6236,6 +6263,7 @@ function renderPrice(filter = '') {
         <span class="price-val">${_esc(price)}</span>
       </div>`;
     });
+  });
   });
 
   if (!html) {

@@ -78,7 +78,7 @@ def test_prices_edit_get_full_admin(client, admin_token):
     assert rv.status_code == 200
     data = rv.get_json()
     assert isinstance(data, list)
-    assert data[0]['cat'] == 'Тест'
+    assert data[0]['cat'] == 'WOW-чистка (тест)'
 
 
 def test_prices_edit_get_forbidden_for_specialist(client, specialist_token):
@@ -115,7 +115,7 @@ def test_prices_edit_put_updates_file(client, admin_token, pwa):
 
     # Restore original test prices
     orig = [
-        {'cat': 'Тест', 'items': [
+        {'cat': 'WOW-чистка (тест)', 'items': [
             {'name': 'Тест-процедура', 'price': '500 грн', 'specialists': ['victoria'], 'duration': 60},
             {'name': 'Дует-процедура', 'price': '1000 грн', 'specialists': ['victoria', 'anastasia'], 'duration': 90},
         ]}
@@ -322,7 +322,7 @@ def test_price_save_does_not_persist_duration(client, pwa):
     """
     from conftest import _insert_session
     token = _insert_session('380996093860')
-    payload = [{'cat': 'Тест', 'items': [
+    payload = [{'cat': 'WOW-чистка (тест)', 'items': [
         {'name': 'Тестова процедура', 'price': '₴ 900',
          'specialists': ['victoria'], 'duration': 45},
     ]}]

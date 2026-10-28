@@ -281,7 +281,7 @@ logging.getLogger('pwa_api').handlers = []
 
 # Write minimal prices.json
 _prices = [
-    {'cat': 'Тест', 'items': [
+    {'cat': 'WOW-чистка (тест)', 'items': [
         {'name': 'Тест-процедура', 'price': '500 грн', 'specialists': ['victoria'], 'duration': 60},
         {'name': 'Дует-процедура', 'price': '1000 грн', 'specialists': ['victoria', 'anastasia'], 'duration': 90},
     ]}
