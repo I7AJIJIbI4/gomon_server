@@ -11,7 +11,7 @@
 **CRM:** WLaunch (api.wlaunch.net/v1), Company ID у config.py
 **SSL:** certbot auto-renew, HSTS enabled
 **Security:** UFW (22, 80, 443), fail2ban, SSH key-only
-**Backups:** daily SQLite 03:00 → `/opt/gomon/backups/` (14 day retention)
+**Backups:** daily SQLite 02:50 Kyiv → `/opt/gomon/backups/` (14 day retention)
 
 ---
 
@@ -379,17 +379,18 @@ Cron (09:00 і 21:00)
 
 ## Cron (crontab -l)
 
-Всі часи в crontab — **UTC** (сервер у `Etc/UTC`). Ubuntu cron не підтримує ні `TZ=`, ні `CRON_TZ=`, тож київський час зашитий у години. Скрипти самі рахують час через `kyiv_now()` і переходу не помічають, а от вікна запуску — помічають.
-
-**Двічі на рік треба зсувати всі джоби з фіксованою годиною:** в останню неділю жовтня +1 год UTC (Kyiv = UTC+2), в останню неділю березня −1 год UTC (Kyiv = UTC+3). Інтервальні (`*/5`, щогодинний sync, `anthropic_health`) не чіпати. Перед заміною — бекап у `/opt/gomon/backups/crontab/`. Зимовий crontab стоїть з 28.10.2026, наступний перехід 28.03.2027.
-
-Київський час джоб (UTC-години = мінус 2 взимку, мінус 3 влітку):
-
+**Джерело правди — `deploy/crontab` у git.** Руками на сервері не правити. Деплой (з бекапом):
+```bash
+ssh root@45.94.157.127 'cd /opt/gomon/app && crontab -l > /opt/gomon/backups/crontab/crontab_$(date +%Y%m%d_%H%M).txt && crontab deploy/crontab'
+ssh root@45.94.157.127 'cd /opt/gomon/app && crontab -l | diff - deploy/crontab && echo in-sync'
 ```
-APP=/opt/gomon/app/zadarma        # змінні — ВИЩЕ всіх джоб, інакше cron їх ігнорує
-PATH=/opt/gomon/venv/bin:...
-VENV=/opt/gomon/venv/bin/python
 
+Сервер і cron — у UTC, а Ubuntu cron не вміє ні `TZ=`, ні `CRON_TZ=`. **Переводити години двічі на рік більше не треба** (з 04.11.2026): кожна джоба з фіксованою годиною стоїть на обох можливих UTC-годинах (літній і зимовій), а перед командою `zadarma/kyiv_gate.py` пропускає лише запуск у потрібний київський час (`09:05`, `07:00,19:00`, вікно `08:00-22:59`; exit 0 — запускати, 1 — пропустити). Інтервальні джоби (`*/5`, щогодинний sync, `anthropic_health`) без гейта.
+
+`tests/test_crontab.py` імітує крон хвилина за хвилиною на зимову, літню, обидві доби переходу й Новий рік і перевіряє, що кожна джоба спрацьовує рівно в обіцяний київський час; а також що змінні стоять вище джоб і жодна фіксована година не лишилась без гейта. Нова джоба = рядок у `deploy/crontab` з обома UTC-годинами + гейт, тест сам скаже, якщо щось не так.
+
+Київський час джоб:
+```
 щогодини        sync_appointments.py                      # Sync WLaunch
 09:05, 21:05    sync_with_notification.sh                 # Sync clients + TG звіт
 09:00–21:00     sms_reminder.py (щогодини)                # Повторні процедури (TG→SMS)
@@ -404,7 +405,7 @@ VENV=/opt/gomon/venv/bin/python
 07:00, 19:00    photo_cache.py, wl_catalog.py --sync
 08:00           sync_reviews.py
 10:00           ig_health.py                              # Термін IG-токена → TG-алерт
-03:00           SQLite backup → /opt/gomon/backups/ (14 днів)
+02:50           SQLite backup → /opt/gomon/backups/ (14 днів); не 03:00 — ця година зникає/двоїться в ночі переходу
 04:00–04:10     очищення сесій/OTP, manual → DONE, audit_log > 60 днів
 ```
 
