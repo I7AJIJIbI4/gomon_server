@@ -279,20 +279,88 @@ def test_check_ai_should_reply_rate_limited(frozen_kyiv):
     assert reason == 'rate_limited'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-баг, чекає рішення власника: created_at у UTC, а ліміт рахує «сьогодні» '
-    'за київською датою. З 00:00 до 02:00 (влітку 03:00) Києва щойно надіслані '
-    'відповіді не рахуються — денний ліміт обнуляється. Коли виправлять, тест '
-    'почервоніє як XPASS — тоді зняти xfail.'))
+def _night_setup(conv, n=10, client_tg=None):
+    """Північ минула: 00:30 Києва, а UTC ще вчорашній вечір.
+
+    Беремо минулу добу, щоб усі рядки були в минулому відносно справжнього
+    SQLite now (з ним порівнює cooldown): 00:30 Києва D+1 = 22:30 UTC D (влітку 21:30).
+    Повертає київський час, на який треба заморозити годинник.
+    """
+    from datetime import datetime, timedelta
+    import tz_utils
+    c = _conn()
+    d = c.execute("SELECT date('now','-1 day')").fetchone()[0]
+    c.close()
+    kyiv = datetime.strptime(d, '%Y-%m-%d') + timedelta(days=1, minutes=30)
+    utc = next(kyiv - timedelta(hours=o) for o in (3, 2)
+               if tz_utils.kyiv_offset(kyiv - timedelta(hours=o)) == o)
+    ts = (utc - timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S')     # 00:25 Києва
+    c = _conn()
+    for i in range(n):
+        c.execute(
+            "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,1,?)",
+            (conv, 'ai_bot', 'Reply {}'.format(i), ts)
+        )
+    c.commit()
+    c.close()
+    return kyiv, utc
+
+
 def test_rate_limit_counts_replies_right_after_kyiv_midnight(frozen_kyiv):
-    """00:30 Києва = 22:30 UTC попереднього дня: 10 відповідей 5 хв тому мають рахуватись."""
-    from datetime import timedelta
+    """10 відповідей о 00:25 Києва — ліміт діє і о 00:30.
+
+    created_at у UTC, а «сьогодні» рахувалось за київською датою: з 00:00 до 02:00
+    (влітку 03:00) лічильник був 0 і ліміту вночі не було (виправлено 04.11.2026).
+    """
     cid = 80006
     conv = 'tg_{}'.format(cid)
-    day = _seed_ai_replies(conv)
-    frozen_kyiv((day + timedelta(days=1)).replace(hour=0, minute=30))
+    kyiv, _ = _night_setup(conv)
+    frozen_kyiv(kyiv)
     should, reason = _tgbiz._check_ai_should_reply(conv, cid)
-    assert reason == 'rate_limited'
+    assert (should, reason) == (False, 'rate_limited')
+
+
+def test_replies_before_kyiv_midnight_do_not_count_today(frozen_kyiv):
+    """Відповіді з учорашнього вечора (за Києвом) у сьогоднішній ліміт не входять."""
+    from datetime import timedelta
+    cid = 80007
+    conv = 'tg_{}'.format(cid)
+    kyiv, _ = _night_setup(conv)
+    frozen_kyiv(kyiv + timedelta(days=1))          # наступна київська доба
+    should, reason = _tgbiz._check_ai_should_reply(conv, cid)
+    assert (should, reason) == (True, 'ok')
+
+
+def test_deposit_paid_after_kyiv_midnight_lifts_the_limit(frozen_kyiv):
+    """Депозит о 00:20 Києва — сьогоднішній, хоча в UTC це ще вчора.
+
+    Доба D+1 за Києвом позавчорашня, щоб усе було в минулому для SQLite now:
+    депозит о 00:20 Києва (22:20 UTC D), 10 відповідей о 09:00, перевірка о 10:00.
+    Раніше депозит шукали як date(created_at) = київська дата — і не знаходили.
+    """
+    from datetime import datetime, timedelta
+    import tz_utils
+    cid = 80008
+    conv = 'tg_{}'.format(cid)
+    c = _conn()
+    d = c.execute("SELECT date('now','-2 days')").fetchone()[0]
+    day = datetime.strptime(d, '%Y-%m-%d') + timedelta(days=1)          # київська доба D+1
+
+    def utc(kyiv):
+        return next(kyiv - timedelta(hours=o) for o in (3, 2)
+                    if tz_utils.kyiv_offset(kyiv - timedelta(hours=o)) == o).strftime('%Y-%m-%d %H:%M:%S')
+    for i in range(10):
+        c.execute(
+            "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,1,?)",
+            (conv, 'ai_bot', 'Reply {}'.format(i), utc(day.replace(hour=9))))
+    c.execute("INSERT OR REPLACE INTO users (telegram_id, phone) VALUES (?, ?)", (cid, '380507770808'))
+    c.execute("INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status, created_at)"
+              " VALUES ('380507770808', 5, 220, 'night-dep', 'Approved', ?)", (utc(day.replace(minute=20)),))
+    c.commit()
+    c.close()
+    frozen_kyiv(day.replace(hour=10))
+    should, reason = _tgbiz._check_ai_should_reply(conv, cid)
+    assert (should, reason) == (True, 'ok')
 
 
 def test_check_ai_should_reply_admin_active():

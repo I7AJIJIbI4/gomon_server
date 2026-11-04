@@ -422,13 +422,15 @@ def _check_ai_should_reply(conv_id, chat_id):
                 # Real admin message, not auto-greeting
                 return False, 'admin_active'
 
-        # Rate limit: count AI replies today (Kyiv time, not UTC)
-        from tz_utils import kyiv_now as _kyiv_now_rl
-        kyiv_today = _kyiv_now_rl().strftime('%Y-%m-%d')
+        # Rate limit: count AI replies since Kyiv midnight. created_at is UTC, so compare
+        # with Kyiv midnight converted to UTC — comparing with the Kyiv date string made
+        # the count 0 from 00:00 to 02:00 (03:00 in summer) Kyiv, i.e. no limit at night.
+        from tz_utils import kyiv_day_start_utc
+        day_start = kyiv_day_start_utc()
         count_row = conn.execute(
             "SELECT COUNT(*) FROM messages WHERE conversation_id=? AND is_from_admin=1 "
-            "AND sender_id='ai_bot' AND created_at > ?",
-            (conv_id, kyiv_today)).fetchone()
+            "AND sender_id='ai_bot' AND created_at >= ?",
+            (conv_id, day_start)).fetchone()
         if count_row and count_row[0] >= AI_RATE_LIMIT:
             # Deposit rate limit bypass
             client_phone_dep = None
@@ -444,8 +446,8 @@ def _check_ai_should_reply(conv_id, chat_id):
             if client_phone_dep:
                 try:
                     dep_row = conn.execute(
-                        "SELECT 1 FROM deposits WHERE phone=? AND status='Approved' AND date(created_at)=? LIMIT 1",
-                        (client_phone_dep, kyiv_today)).fetchone()
+                        "SELECT 1 FROM deposits WHERE phone=? AND status='Approved' AND created_at >= ? LIMIT 1",
+                        (client_phone_dep, day_start)).fetchone()
                     has_deposit = bool(dep_row)
                 except Exception:
                     pass

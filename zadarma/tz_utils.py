@@ -32,3 +32,18 @@ def utc_to_kyiv(utc_dt):
 def kyiv_now():
     """Current time in Kyiv timezone."""
     return utc_to_kyiv(datetime.utcnow())
+
+
+def kyiv_day_start_utc(kyiv_dt=None):
+    """Київська північ поточної (або заданої) доби — як UTC-рядок 'YYYY-MM-DD HH:MM:SS'.
+
+    Для порівняння з created_at, які SQLite пише в UTC (datetime('now'),
+    CURRENT_TIMESTAMP). Порівнювати їх із київською датою 'YYYY-MM-DD' не можна:
+    з 00:00 до 02:00 (влітку до 03:00) Києва UTC ще вчора, і «сьогодні» нічого немає.
+    """
+    k = (kyiv_dt or kyiv_now()).replace(hour=0, minute=0, second=0, microsecond=0)
+    for off in (3, 2):
+        utc = k - timedelta(hours=off)
+        if kyiv_offset(utc) == off:
+            return utc.strftime('%Y-%m-%d %H:%M:%S')
+    return (k - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
