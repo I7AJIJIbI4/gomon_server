@@ -13,6 +13,7 @@ import logging.handlers
 import os
 import sys
 import re
+import math
 import requests as _req
 from functools import wraps
 from datetime import datetime, timedelta
@@ -268,6 +269,10 @@ def init_messages_db():
         admin_phone     TEXT,
         is_read         INTEGER DEFAULT 0
     )''')
+    # avatar_url з'явилась пізніше, і в проді її додали вручну ALTER-ом. ig_message_webhook
+    # пише в неї, тож без цього на свіжій базі кожне вхідне з Instagram падало б з 500.
+    if 'avatar_url' not in [r[1] for r in conn.execute('PRAGMA table_info(messages)')]:
+        conn.execute('ALTER TABLE messages ADD COLUMN avatar_url TEXT DEFAULT NULL')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at DESC)')
     # Partial index for unread messages
@@ -764,12 +769,19 @@ def ig_message_webhook():
                         _ph_row = conn.execute("SELECT phone FROM clients WHERE phone LIKE ?", ('%' + _ph_short[-9:],)).fetchone()
                         _full_phone = _ph_row[0] if _ph_row else _ph_short
                         from tz_utils import kyiv_now as _kn_cb
-                        _year = str(_kn_cb().year)
-                        _appt_date = '{}-{}-{}'.format(_year, _dt_short[:2], _dt_short[2:4])
+                        # У тегу лише ММДД. Візит завжди в минулому, тож дата «пізніше сьогодні»
+                        # означає минулий рік: 28.12, підтверджене 02.01, — це грудень, не наступний.
+                        _today = _kn_cb().strftime('%Y-%m-%d')
+                        _appt_date = '{}-{}-{}'.format(_today[:4], _dt_short[:2], _dt_short[2:4])
+                        if _appt_date > _today:
+                            _appt_date = '{}-{}-{}'.format(int(_today[:4]) - 1, _dt_short[:2], _dt_short[2:4])
                         # Find drug name by price match
                         _drug_name = ''
                         try:
-                            _cb_proc = _cb_msg[0].split('(')[-1].split(')')[0] if '(' in _cb_msg[0] else ''
+                            # Процедура — у дужках ПЕРШОГО рядка: «💰 Кешбек: Ім'я (Процедура)». Останні дужки
+                            # повідомлення — це «(наприклад: 3500)» з підказки, і раніше бралися саме вони.
+                            _first_line = _cb_msg[0].split('\n', 1)[0]
+                            _cb_proc = _first_line.rsplit('(', 1)[-1].split(')')[0] if '(' in _first_line else ''
                             from photo_reminder import _get_drugs_for_procedure
                             _drugs = _get_drugs_for_procedure(_cb_proc)
                             for _dr in _drugs:
@@ -5543,7 +5555,13 @@ def admin_deposit_deduct():
     except (ValueError, TypeError):
         return jsonify({'error': 'invalid_amount'}), 400
     reason = d.get('reason', '')
-    if not phone or amount <= 0:
+    # Тип списання всюди визначається за reason LIKE 'cashback%' (баланс, рівень у
+    # loyalty, повідомлення). Причина від адміна «cashback за…» списала б кешбек
+    # замість депозиту — тому такий початок отримує префікс.
+    if (reason or '').lower().startswith('cashback'):
+        reason = 'депозит: ' + reason
+    # math.isfinite: float('inf') проходив amount<=0 і робив депозит нескінченним, NaN давав 500
+    if not phone or not math.isfinite(amount) or amount <= 0:
         return jsonify({'error': 'invalid'}), 400
     # Atomic balance check + deduction (TOCTOU prevention)
     conn = sqlite3.connect(DB_PATH, timeout=5)
@@ -5575,7 +5593,8 @@ def admin_deposit_add_cash():
         amount = float(d.get('amount', 0))
     except (ValueError, TypeError):
         return jsonify({'error': 'invalid_amount'}), 400
-    if not phone or amount <= 0:
+    # math.isfinite: float('inf') проходив amount<=0 і робив депозит нескінченним, NaN давав 500
+    if not phone or not math.isfinite(amount) or amount <= 0:
         return jsonify({'error': 'invalid'}), 400
     # Insert as Approved deposit with 'cash' marker
     import secrets
@@ -5607,7 +5626,8 @@ def admin_cashback_redeem():
         amount = float(d.get('amount', 0))
     except (ValueError, TypeError):
         return jsonify({'error': 'invalid_amount'}), 400
-    if not phone or amount <= 0:
+    # math.isfinite: float('inf') проходив amount<=0 і робив депозит нескінченним, NaN давав 500
+    if not phone or not math.isfinite(amount) or amount <= 0:
         return jsonify({'error': 'invalid'}), 400
     # Atomic balance check + redeem (TOCTOU prevention)
     conn = sqlite3.connect(DB_PATH, timeout=5)

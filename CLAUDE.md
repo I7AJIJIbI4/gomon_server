@@ -134,8 +134,10 @@ order_id TEXT UNIQUE, status TEXT, wfp_transaction_status TEXT, created_at TEXT
 
 ### Таблиця `deposit_deductions`
 ```sql
-id INTEGER PRIMARY KEY, phone TEXT, amount REAL, reason TEXT, created_by TEXT, created_at TEXT
+id INTEGER PRIMARY KEY, phone TEXT NOT NULL, amount REAL NOT NULL, reason TEXT, deducted_by TEXT, created_at TEXT
 ```
+- Списання кешбеку і списання з депозиту лежать в одній таблиці й розрізняються **лише за `reason LIKE 'cashback%'`** (без урахування регістру) — так рахують баланс `pwa_api`, рівень `loyalty.py`, `notifier`, `appt_reminder`, `bot.py`. Списання кешбеку пише `reason='cashback_redeem'`; `/api/admin/deposit/deduct` додає префікс «депозит: » до причини, що починається на «cashback», щоб оплата з депозиту не списала кешбек
+- Суми в грошових маршрутах перевіряються на `math.isfinite`: `'inf'` проходив `amount <= 0` і робив депозит нескінченним
 
 ### Таблиця `wl_services` (кеш каталогу WLaunch)
 ```sql

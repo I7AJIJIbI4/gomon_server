@@ -30,23 +30,9 @@ def _sid():
     return '17841{:010d}'.format(next(_seq))
 
 
-@pytest.fixture(autouse=True)
-def _prod_messages_schema(pwa):
-    """messages.avatar_url є в проді (додано вручну ALTER-ом), але init_messages_db
-    його не створює — див. test_fresh_database_has_avatar_url. Тут дзеркалимо прод."""
-    conn = sqlite3.connect(pwa.DB_PATH)
-    cols = [r[1] for r in conn.execute('PRAGMA table_info(messages)')]
-    if 'avatar_url' not in cols:
-        conn.execute('ALTER TABLE messages ADD COLUMN avatar_url TEXT DEFAULT NULL')
-        conn.commit()
-    conn.close()
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-ризик, чекає рішення власника: init_messages_db не створює messages.avatar_url, '
-    'а ig_message_webhook пише в неї. У проді колонку додали вручну; на свіжій базі '
-    '(відновлення, новий сервер) кожне вхідне з Instagram падатиме з 500.'))
 def test_fresh_database_has_avatar_url(pwa, tmp_path, monkeypatch):
+    """У проді колонку додали вручну ALTER-ом, init її не створював — на свіжій базі
+    кожне вхідне з Instagram падало б з 500 (виправлено 04.11.2026)."""
     monkeypatch.setattr(pwa, 'DB_PATH', str(tmp_path / 'fresh.db'))
     pwa.init_messages_db()
     conn = sqlite3.connect(pwa.DB_PATH)
@@ -224,12 +210,9 @@ def test_doctor_price_reply_confirms_the_cashback(client, pwa, cashback_ig, froz
     assert '+105 грн' in cashback_ig[0][1]      # 3% з 3500
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-баг, чекає рішення власника: процедуру беруть з ОСТАННІХ дужок повідомлення, '
-    'а справжнє повідомлення з препаратами закінчується на «(наприклад: 3500)». '
-    'У результаті drug_specific = «наприклад: 3500». У проді ще не спрацьовувало '
-    '(0 IG-підтверджень станом на 04.11.2026) — лікар підтверджує через TG-бот.'))
 def test_real_drug_prompt_text_still_resolves_the_drug(client, pwa, cashback_ig, frozen_kyiv):
+    """Справжня підказка закінчується на «(наприклад: 3500)» — процедуру беремо з першого
+    рядка, не з останніх дужок (виправлено 04.11.2026)."""
     frozen_kyiv('2026-11-04 12:00')
     doctor, phone = _sid(), '380507770002'
     _photo_task(pwa, phone, '2026-11-03')
@@ -242,11 +225,8 @@ def test_real_drug_prompt_text_still_resolves_the_drug(client, pwa, cashback_ig,
         [('Біорепарація Rejuran S',)]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-баг, чекає рішення власника: рік візиту береться з поточної дати. Візит 28.12, '
-    'підтверджений 02.01, отримує дату наступного року — photo_tasks не знаходиться, '
-    'кешбек «зависає».'))
 def test_price_reply_across_new_year_keeps_the_visit_year(client, pwa, cashback_ig, frozen_kyiv):
+    """Візит 28.12, підтверджений 02.01, — грудень минулого року (виправлено 04.11.2026)."""
     frozen_kyiv('2027-01-02 12:00')
     doctor, phone = _sid(), '380507770003'
     _photo_task(pwa, phone, '2026-12-28')

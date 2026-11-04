@@ -188,16 +188,18 @@ def test_add_cash_is_all_or_nothing(client, admin_token, pwa, monkeypatch):
     assert _balance(client, admin_token, phone) == (500, 0), 'повтор вніс рівно один раз'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-баг, чекає рішення власника: amount="inf" проходить перевірку amount<=0 '
-    'і записується в deposits — депозит клієнта стає нескінченним. NaN дає 500 '
-    'через NOT NULL. Потрібна перевірка math.isfinite і верхня межа суми.'))
-def test_add_cash_rejects_infinite_amount(client, admin_token, pwa):
+@pytest.mark.parametrize('route', ROUTES)
+@pytest.mark.parametrize('amount', ['inf', '-inf', 'nan', 'Infinity'])
+def test_non_finite_amount_moves_nothing(client, admin_token, pwa, route, amount):
+    """float('inf') проходив amount<=0: add-cash робив депозит нескінченним, а NaN
+    давав 500 на NOT NULL (виправлено 04.11.2026)."""
     phone = _phone()
-    rv = client.post('/api/admin/deposit/add-cash', json={'phone': phone, 'amount': 'inf'},
-                     headers=auth(admin_token))
+    _deposit(pwa, phone, 1000)
+    _cashback(pwa, phone, 600)
+    rv = client.post(route, json={'phone': phone, 'amount': amount}, headers=auth(admin_token))
     assert rv.status_code == 400
-    assert _q(pwa, 'SELECT 1 FROM deposits WHERE phone=?', (phone,)) == []
+    assert _deductions(pwa, phone) == []
+    assert _balance(client, admin_token, phone) == (1000, 600)
 
 
 # ── Оплата з депозиту ─────────────────────────────────────────────────────────
@@ -248,19 +250,19 @@ def test_deposit_is_spent_down_to_zero_and_no_further(client, admin_token, pwa):
     assert _balance(client, admin_token, phone) == (0, 0)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-баг, чекає рішення власника: списання з депозиту з причиною, що '
-    'починається на «cashback», рахується як списання кешбеку (класифікація за '
-    'LIKE \'cashback%\'), тож депозит не зменшується, а кешбек зменшується.'))
-def test_deduct_reason_text_cannot_redirect_to_cashback(client, admin_token, pwa):
+@pytest.mark.parametrize('reason', ['cashback за минулий візит', 'Cashback', 'CASHBACK_REDEEM'])
+def test_deduct_reason_text_cannot_redirect_to_cashback(client, admin_token, pwa, reason):
+    """Тип списання визначається за reason LIKE 'cashback%' (без урахування регістру);
+    оплата з депозиту з такою причиною списувала кешбек (виправлено 04.11.2026)."""
     phone = _phone()
     _deposit(pwa, phone, 1000)
     _cashback(pwa, phone, 600)
     rv = client.post('/api/admin/deposit/deduct',
-                     json={'phone': phone, 'amount': 300, 'reason': 'cashback за минулий візит'},
+                     json={'phone': phone, 'amount': 300, 'reason': reason},
                      headers=auth(admin_token))
     assert rv.status_code == 200
     assert _balance(client, admin_token, phone) == (700, 600)
+    assert _deductions(pwa, phone)[0][1] == 'депозит: ' + reason, 'текст адміна збережено'
 
 
 # ── Кешбек ────────────────────────────────────────────────────────────────────
