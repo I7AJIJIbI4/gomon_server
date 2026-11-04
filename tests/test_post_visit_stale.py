@@ -346,3 +346,20 @@ class TestCashbackBacklogFlush:
         self._at(monkeypatch, today, '21:00')
         flush.check_pending_cashback_reminders()
         assert len(notif._sent['sms']) == 1
+
+    def test_dry_run_sends_nothing_and_writes_nothing(self, flush, notif):
+        """--dry-run: показати, що пішло б, — без нарахування, без відправки, без запису."""
+        db = notif._db_file
+        self._seed(db, [('380936487807', 'App', 'Ботулінотерапія', 1, 5000),
+                        ('380507653106', 'Олена', 'Карбокситерапія', 1, 2500)])
+        flush.check_pending_cashback_reminders(dry_run=True)
+
+        assert notif._sent == {'sms': [], 'tg': [], 'push': []}
+        assert [r[2] for r in self._tasks(db)] == ['confirmed', 'confirmed']
+        conn = sqlite3.connect(db)
+        assert conn.execute('SELECT COUNT(*) FROM cashback').fetchone()[0] == 0
+        conn.close()
+        assert _log_rows(db) == []
+
+        flush.check_pending_cashback_reminders()             # справжній прогін після перевірки
+        assert len(notif._sent['sms']) >= 1

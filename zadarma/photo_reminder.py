@@ -536,10 +536,13 @@ def check_pending_photos():
         len(rows), updated, sum(len(v) for v in by_spec.values())))
 
 
-def check_pending_cashback_reminders():
+def check_pending_cashback_reminders(dry_run=False):
     """Send post_visit (cashback + review) for confirmed drug-selection cashback.
     Sends next day after doctor confirmed, at the client's original visit time.
-    Uses same notifier.send_post_visit as fixed-price procedures."""
+    Uses same notifier.send_post_visit as fixed-price procedures.
+
+    dry_run: лише показати, кому що пішло б, — нічого не нараховувати, не писати
+    в базу і не слати. Саме цей шлях 17.10.2026 розіслав 125 повідомлень."""
     from tz_utils import kyiv_now
     now = kyiv_now()
     today = now.strftime('%Y-%m-%d')
@@ -567,6 +570,13 @@ def check_pending_cashback_reminders():
     rows = filtered
 
     if not rows:
+        return
+
+    if dry_run:
+        for r in rows:
+            logger.info('[dry-run] would accrue cashback + send post_visit: {} {} {} ₴{} (visit {} {})'.format(
+                r[1], r[2] or '', r[4] or r[3], r[5], r[6], r[7] or ''))
+        logger.info('[dry-run] {} cashback notification(s) due, nothing sent'.format(len(rows)))
         return
 
     for r in rows:
@@ -651,6 +661,7 @@ if __name__ == '__main__':
     parser.add_argument('--check-pending', action='store_true', help='Re-remind about missing photos (2-7 days old)')
     parser.add_argument('--cashback-notify', action='store_true', help='Notify clients about confirmed cashback')
     parser.add_argument('--date', type=str, help='Override date (YYYY-MM-DD)')
+    parser.add_argument('--dry-run', action='store_true', help='--cashback-notify: show what would be sent, write and send nothing')
     args = parser.parse_args()
 
     target_date = args.date or None
@@ -662,6 +673,6 @@ if __name__ == '__main__':
     elif args.check_pending:
         check_pending_photos()
     elif args.cashback_notify:
-        check_pending_cashback_reminders()
+        check_pending_cashback_reminders(dry_run=args.dry_run)
     else:
         print('Usage: --create | --check | --check-pending | --cashback-notify')

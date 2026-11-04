@@ -32,6 +32,11 @@ def send_sms(to, message):
         logger.error('❌ SMS: невалідний номер: {} -> {}'.format(to, sms_phone))
         return False
 
+    # Запобіжник масових розсилок: діє лише в cron (GOMON_SEND_CAP), OTP з API не чіпає
+    import send_guard
+    if not send_guard.allow('sms', sms_phone):
+        return False
+
     try:
         if SMS_FLY_VIBER_SENDER:
             # Viber першим, SMS як fallback

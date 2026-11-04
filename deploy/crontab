@@ -1,7 +1,10 @@
 APP=/opt/gomon/app/zadarma
 PATH=/opt/gomon/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 VENV=/opt/gomon/venv/bin/python
+GOMON_SEND_CAP=30
 # ↑ Змінні — ВИЩЕ всіх джоб: Vixie cron ігнорує змінні після них (6-денний збій, червень 2026).
+# GOMON_SEND_CAP — запобіжник масових розсилок (zadarma/send_guard.py): понад 30 повідомлень
+# клієнтам за один запуск скрипта — пауза всіх cron-розсилок і TG адміну. Звичайний пік — до 10.
 #
 # Джерело правди — цей файл у git (deploy/crontab). Деплой:
 #   ssh root@45.94.157.127 'cd /opt/gomon/app && crontab -l > /opt/gomon/backups/crontab/crontab_$(date +%Y%m%d_%H%M).txt && crontab deploy/crontab'

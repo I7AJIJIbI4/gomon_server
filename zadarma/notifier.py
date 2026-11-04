@@ -238,7 +238,13 @@ def _send_tg(tg_id, text, parse_mode=None):
     Повертає True при успіху, False при будь-якій помилці (в т.ч. 403 заблоковано).
     """
     try:
-        from config import TELEGRAM_TOKEN
+        from config import TELEGRAM_TOKEN, ADMIN_USER_IDS
+        # Службові повідомлення адмінам не обмежуємо — інакше пауза розсилок
+        # заглушила б і тривоги про неї.
+        if tg_id not in ADMIN_USER_IDS and str(tg_id) not in [str(a) for a in ADMIN_USER_IDS]:
+            import send_guard
+            if not send_guard.allow('tg', tg_id):
+                return False
         payload = {'chat_id': tg_id, 'text': text}
         if parse_mode:
             payload['parse_mode'] = parse_mode
@@ -263,6 +269,9 @@ def _send_tg(tg_id, text, parse_mode=None):
 def _send_ig(ig_user_id, text):
     """Send IG DM to a user (requires 24h window — user must have messaged recently)."""
     try:
+        import send_guard
+        if not send_guard.allow('ig', ig_user_id):
+            return False
         from config import IG_FALLBACK_TOKEN
         r = requests.post('https://graph.instagram.com/v25.0/me/messages',
             headers={'Authorization': 'Bearer ' + IG_FALLBACK_TOKEN, 'Content-Type': 'application/json'},
@@ -282,6 +291,9 @@ def _send_ig(ig_user_id, text):
 
 def _send_push(phone, title, body, tag='gomon', url='/app/'):
     try:
+        import send_guard
+        if not send_guard.allow('push', phone):
+            return False
         from push_sender import send_push_to_phone
         return send_push_to_phone(phone, title, body, url, tag)
     except Exception as e:
