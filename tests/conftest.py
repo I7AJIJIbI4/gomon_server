@@ -215,10 +215,10 @@ _push_conn.close()
 # cashback table (used by /api/deposit/balance and appt_reminder.py)
 _cb_conn = sqlite3.connect(_pwa.DB_PATH)
 _cb_conn.execute(
-    'CREATE TABLE IF NOT EXISTS cashback ('
-    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, amount REAL,'
-    '  procedure_name TEXT, procedure_price REAL DEFAULT 0, appt_date TEXT,'
-    "  created_at TEXT DEFAULT (datetime('now')),"
+    'CREATE TABLE IF NOT EXISTS cashback ('       # як у проді
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, amount REAL NOT NULL,'
+    '  procedure_name TEXT, procedure_price REAL, appt_date TEXT,'
+    "  source TEXT DEFAULT 'auto', created_at TEXT DEFAULT CURRENT_TIMESTAMP,"
     '  UNIQUE(phone, procedure_name, appt_date))'
 )
 _cb_conn.execute(
@@ -230,9 +230,17 @@ _cb_conn.execute(
     '  approved_at TEXT, wfp_transaction_id TEXT, wfp_transaction_status TEXT)'
 )
 _cb_conn.execute(
-    'CREATE TABLE IF NOT EXISTS deposit_deductions ('
-    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, amount REAL,'
-    "  reason TEXT, created_by TEXT, created_at TEXT DEFAULT (datetime('now')))"
+    'CREATE TABLE IF NOT EXISTS deposit_deductions ('   # як у проді: deducted_by, не created_by
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, amount REAL NOT NULL,'
+    '  reason TEXT, deducted_by TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)'
+)
+_cb_conn.execute(
+    'CREATE TABLE IF NOT EXISTS cashback_pending ('     # як у проді
+    '  id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL, client_name TEXT,'
+    '  procedure_generic TEXT NOT NULL, drug_specific TEXT NOT NULL, price REAL NOT NULL,'
+    '  appt_date TEXT NOT NULL, appt_time TEXT, specialist TEXT, confirmed_by TEXT,'
+    '  confirmed_at TEXT, accrued INTEGER DEFAULT 0,'
+    '  UNIQUE(phone, procedure_generic, appt_date))'
 )
 _cb_conn.execute(
     'CREATE TABLE IF NOT EXISTS notification_log ('
