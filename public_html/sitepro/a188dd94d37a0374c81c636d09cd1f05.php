@@ -833,7 +833,7 @@
 <!-- TRUST BAR 2 -->
 <div class="trust-bar">
   <div class="trust-inner">
-    <div class="trust-item reveal"><div class="trust-num">500+</div><div class="trust-label">Задоволених клієнтів</div></div>
+    <div class="trust-item reveal"><div class="trust-num">600+</div><div class="trust-label">Задоволених клієнтів</div></div>
     <div class="trust-item reveal"><div class="trust-num">2/2</div><div class="trust-label">Спеціаліста з мед. освітою</div></div>
     <div class="trust-item reveal"><div class="trust-num">50+</div><div class="trust-label">Процедур та послуг</div></div>
     <div class="trust-item reveal"><div class="trust-num">2019</div><div class="trust-label">Рік заснування</div></div>
