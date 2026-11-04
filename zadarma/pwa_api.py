@@ -5285,9 +5285,14 @@ def _wfp_sign(params_list, secret):
     sign_string = ';'.join(str(p) for p in params_list)
     return hmac.new(secret.encode(), sign_string.encode(), hashlib.md5).hexdigest()
 
-def _get_deposit_balance(phone):
-    """Get client deposit balance (deposits - deductions, excluding cashback redeems)."""
-    conn = sqlite3.connect(DB_PATH)
+def _get_deposit_balance(phone, conn=None):
+    """Get client deposit balance (deposits - deductions, excluding cashback redeems).
+
+    conn — щоб прочитати в тій самій транзакції, що й зміна (тоді не закривається).
+    """
+    own = conn is None
+    if own:
+        conn = sqlite3.connect(DB_PATH)
     try:
         deposited = conn.execute(
             "SELECT COALESCE(SUM(amount_uah), 0) FROM deposits WHERE phone=? AND status='Approved'",
@@ -5297,7 +5302,8 @@ def _get_deposit_balance(phone):
             (norm_phone(phone),)).fetchone()[0]
         return round(deposited - deducted, 2)
     finally:
-        conn.close()
+        if own:
+            conn.close()
 
 CASHBACK_MIN_REDEEM = 500  # мінімум для списання
 
@@ -5574,17 +5580,19 @@ def admin_deposit_add_cash():
     # Insert as Approved deposit with 'cash' marker
     import secrets
     order_id = 'cash_{}_{}'.format(secrets.token_hex(4), int(time.time()))
+    # Баланс читаємо в тій самій транзакції, до commit: або внесено і є що показати,
+    # або нічого не внесено. Раніше читання йшло після commit, і його збій давав адміну
+    # помилку при вже внесеній готівці — повторне натискання вносило вдруге.
     conn = sqlite3.connect(DB_PATH, timeout=5)
     try:
         conn.execute(
             "INSERT INTO deposits (phone, amount_eur, amount_uah, order_id, status, wfp_transaction_status, created_at) "
             "VALUES (?, 0, ?, ?, 'Approved', 'cash', datetime('now'))",
             (phone, amount, order_id))
+        new_balance = _get_deposit_balance(phone, conn)
         conn.commit()
     finally:
         conn.close()
-    # Get new balance
-    new_balance = _get_deposit_balance(phone)
     logger.info('Cash deposit added: {} +{} UAH by {} (total: {})'.format(phone, amount, request.admin_phone, new_balance))
     return jsonify({'ok': True, 'amount': amount, 'new_balance': new_balance})
 

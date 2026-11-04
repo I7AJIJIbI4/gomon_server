@@ -164,6 +164,30 @@ def test_specialist_can_take_cash(client, specialist_token, admin_token, pwa):
     assert _balance(client, admin_token, phone) == (400, 0)
 
 
+def test_add_cash_is_all_or_nothing(client, admin_token, pwa, monkeypatch):
+    """Збій читання балансу не має лишати внесену готівку при помилці для адміна:
+    інакше повторне натискання вносить удруге (виправлено 04.11.2026)."""
+    phone = _phone()
+    real = pwa._get_deposit_balance
+
+    def _locked(p, conn=None):
+        raise sqlite3.OperationalError('database is locked')
+    monkeypatch.setattr(pwa, '_get_deposit_balance', _locked)
+    try:
+        status = client.post('/api/admin/deposit/add-cash', json={'phone': phone, 'amount': 500},
+                             headers=auth(admin_token)).status_code
+    except sqlite3.OperationalError:
+        status = 500          # тестовий клієнт прокидає виняток; у проді це 500
+    assert status != 200
+    assert _q(pwa, 'SELECT 1 FROM deposits WHERE phone=?', (phone,)) == [], 'помилка, а гроші внесено'
+
+    monkeypatch.setattr(pwa, '_get_deposit_balance', real)
+    rv = client.post('/api/admin/deposit/add-cash', json={'phone': phone, 'amount': 500},
+                     headers=auth(admin_token))
+    assert rv.get_json()['new_balance'] == 500
+    assert _balance(client, admin_token, phone) == (500, 0), 'повтор вніс рівно один раз'
+
+
 @pytest.mark.xfail(strict=True, reason=(
     'Прод-баг, чекає рішення власника: amount="inf" проходить перевірку amount<=0 '
     'і записується в deposits — депозит клієнта стає нескінченним. NaN дає 500 '
