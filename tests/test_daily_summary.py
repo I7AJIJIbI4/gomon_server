@@ -14,33 +14,14 @@ count. Those rows overcount twice over:
 The mismatch showed up on 11 of the preceding days; on 15.09 the body listed 2
 and the total said 8.
 """
-import os
-import sys
 import sqlite3
 import logging
-import logging.handlers
-import importlib.util
 import pytest
-
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
-
-
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
+from conftest import load_real  # noqa: E402
 
 
 def _load_sms_reminder(db_path):
-    spec = importlib.util.spec_from_file_location(
-        'sms_reminder_real', os.path.join(ZADARMA, 'sms_reminder.py'))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules['sms_reminder_real'] = mod
-    _orig = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig
+    mod = load_real('sms_reminder_real', 'sms_reminder.py')
     mod.DB_PATH = db_path
     return mod
 

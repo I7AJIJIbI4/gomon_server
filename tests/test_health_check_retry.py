@@ -17,34 +17,14 @@ NameResolutionError for api.telegram.org — nothing resolved at all.
 `check_endpoint` now retries once before reporting a failure. A real outage
 survives both attempts; a dropped DNS query does not.
 """
-import os
-import sys
-import logging
-import logging.handlers
-import importlib.util
 
 import pytest
-
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
-
-
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
+from conftest import load_real  # noqa: E402
 
 
 @pytest.fixture(scope='module')
 def hc():
-    spec = importlib.util.spec_from_file_location(
-        'health_check_real', os.path.join(ZADARMA, 'health_check.py'))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules['health_check_real'] = mod
-    _orig = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig
+    mod = load_real('health_check_real', 'health_check.py')
     return mod
 
 

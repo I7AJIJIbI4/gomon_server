@@ -11,36 +11,17 @@
 повертають None/{} і на мережевій помилці теж; запамʼятати це на годину
 означало б покласти запис на годину.
 """
-import os
 import sys
-import logging
-import logging.handlers
-import importlib.util
 
 import pytest
-
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
-
-
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
+from conftest import load_real  # noqa: E402
 
 
 @pytest.fixture
 def wl():
     """Свіжий wlaunch_api на кожен тест — кеш модульного рівня."""
     sys.modules['config'].WLAUNCH_API_BEARER = 'Bearer test'
-    spec = importlib.util.spec_from_file_location(
-        'wlaunch_api_cache_real', os.path.join(ZADARMA, 'wlaunch_api.py'))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules['wlaunch_api_cache_real'] = mod
-    _orig = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig
+    mod = load_real('wlaunch_api_cache_real', 'wlaunch_api.py')
     mod._LOOKUP_CACHE.clear()
     return mod
 

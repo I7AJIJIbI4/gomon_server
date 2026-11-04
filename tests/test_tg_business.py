@@ -248,27 +248,50 @@ def test_check_ai_should_reply_cooldown():
     assert reason == 'cooldown'
 
 
-def test_check_ai_should_reply_rate_limited():
-    """10+ AI replies today → rate_limited."""
-    cid = 80003
-    conv = 'tg_{}'.format(cid)
-    from datetime import datetime, timedelta
-    # Must be older than the 60s cooldown window but still "today" (Kyiv date) —
-    # a fixed wall-clock string (e.g. "10:00:00") is NOT safe here: the cooldown
-    # check compares created_at against real UTC datetime('now', '-60 seconds') as
-    # a plain string, so a hardcoded clock time sorts as "recent" whenever the
-    # test happens to run before that hour in UTC, false-triggering 'cooldown'.
-    ts = (datetime.utcnow() - timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S')
+def _seed_ai_replies(conv, n=10):
+    """n AI-відповідей 5 хвилин тому, у UTC — як їх пише прод (datetime('now')).
+
+    Час беремо з самого SQLite: з ним порівнює 60-секундний cooldown, тож рядки
+    гарантовано старші за нього за будь-якого годинника Python.
+    Повертає UTC-дату цих рядків.
+    """
+    from datetime import datetime
     c = _conn()
-    for i in range(10):
+    ts = c.execute("SELECT datetime('now','-5 minutes')").fetchone()[0]
+    for i in range(n):
         c.execute(
             "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,1,?)",
             (conv, 'ai_bot', 'Reply {}'.format(i), ts)
         )
     c.commit()
     c.close()
+    return datetime.strptime(ts[:10], '%Y-%m-%d')
+
+
+def test_check_ai_should_reply_rate_limited(frozen_kyiv):
+    """10+ AI replies today → rate_limited. Київський день той самий, що й UTC-дата рядків."""
+    cid = 80003
+    conv = 'tg_{}'.format(cid)
+    day = _seed_ai_replies(conv)
+    frozen_kyiv(day.replace(hour=12))
     should, reason = _tgbiz._check_ai_should_reply(conv, cid)
     assert not should
+    assert reason == 'rate_limited'
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    'Прод-баг, чекає рішення власника: created_at у UTC, а ліміт рахує «сьогодні» '
+    'за київською датою. З 00:00 до 02:00 (влітку 03:00) Києва щойно надіслані '
+    'відповіді не рахуються — денний ліміт обнуляється. Коли виправлять, тест '
+    'почервоніє як XPASS — тоді зняти xfail.'))
+def test_rate_limit_counts_replies_right_after_kyiv_midnight(frozen_kyiv):
+    """00:30 Києва = 22:30 UTC попереднього дня: 10 відповідей 5 хв тому мають рахуватись."""
+    from datetime import timedelta
+    cid = 80006
+    conv = 'tg_{}'.format(cid)
+    day = _seed_ai_replies(conv)
+    frozen_kyiv((day + timedelta(days=1)).replace(hour=0, minute=30))
+    should, reason = _tgbiz._check_ai_should_reply(conv, cid)
     assert reason == 'rate_limited'
 
 
@@ -295,15 +318,20 @@ def test_check_ai_should_reply_auto_greeting_not_counted():
     cid = 80005
     conv = 'tg_{}'.format(cid)
     c = _conn()
-    # Client message and admin message within 5s of each other (auto-greeting)
-    ts = '2026-06-01 10:00:00'
+    # Client message and admin message within 5s of each other (auto-greeting).
+    # Час відносний: адмінське повідомлення має потрапити у вікно AI_ADMIN_PAUSE,
+    # інакше його ніхто не вибирає і фільтр автопривітання не перевіряється —
+    # так було з фіксованим '2026-06-01 10:00:00' після 04.06.2026.
+    ts_sql = "datetime('now','-1 hour')"
     c.execute(
-        "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,0,?)",
-        (conv, str(cid), 'Hi', ts)
+        "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) "
+        "VALUES ('telegram',?,?,?,0,{})".format(ts_sql),
+        (conv, str(cid), 'Hi')
     )
     c.execute(
-        "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) VALUES ('telegram',?,?,?,1,?)",
-        (conv, '99999', 'Auto-greeting', ts)  # same second = within 5s
+        "INSERT INTO messages (platform, conversation_id, sender_id, content, is_from_admin, created_at) "
+        "VALUES ('telegram',?,?,?,1,{})".format(ts_sql),
+        (conv, '99999', 'Auto-greeting')  # same second = within 5s
     )
     c.commit()
     c.close()

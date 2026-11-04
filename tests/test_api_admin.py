@@ -188,19 +188,22 @@ def test_calendar_post_creates_appointment(client, admin_token, pwa):
         'time': '10:00',
         'duration': 60,
     }
-    # Mock both _req (HTTP) and create_wlaunch_appointment (imported lazily)
-    with patch.object(pwa, '_req') as mock_req, \
-         patch.dict(sys.modules, {'wlaunch_api': sys.modules.get('wlaunch_api')}):
-        mock_req.post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {'appointment': {'id': 'wl-test-id'}}
-        )
+    # Раніше stub повертав dict замість (wl_id, err), запит щоразу падав у 503,
+    # а тест приймав 503 — успішний шлях не перевірявся взагалі.
+    with patch.object(sys.modules['wlaunch_api'], 'create_wlaunch_appointment',
+                      lambda *a, **kw: ('wl-test-id', None)):
         rv = client.post('/api/admin/calendar/appointments',
                          json=payload,
                          headers=auth(admin_token))
 
-    # Accept 200, 201 (created), or 503 (if WLaunch mock integration fails)
-    assert rv.status_code in (200, 201, 503)
+    assert rv.status_code == 200, rv.get_data(as_text=True)
+    assert rv.get_json().get('wlaunch_id') == 'wl-test-id'
+    conn = sqlite3.connect(pwa.DB_PATH)
+    row = conn.execute(
+        "SELECT client_phone, specialist, date, time, status FROM manual_appointments"
+        " WHERE wlaunch_id='wl-test-id'").fetchone()
+    conn.close()
+    assert row == ('380671234567', 'victoria', '2026-12-01', '10:00', 'CONFIRMED')
 
 
 def test_calendar_specialist_sees_only_own(client, specialist_token):

@@ -15,41 +15,24 @@
   - слот перевіряється на момент створення, а не на момент, коли клієнт
     відкрив сторінку.
 """
-import os
 import sys
 import sqlite3
-import logging
-import logging.handlers
-import importlib.util
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
-
-
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
+from tz_utils import kyiv_now  # noqa: E402  — та сама «сьогодні», що й у коді
+from conftest import load_real  # noqa: E402
 
 
 @pytest.fixture(scope='module')
 def bk():
-    spec = importlib.util.spec_from_file_location(
-        'booking_real', os.path.join(ZADARMA, 'booking.py'))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules['booking_real'] = mod
-    _orig = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig
+    mod = load_real('booking_real', 'booking.py')
     return mod
 
 
-TOMORROW = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-YESTERDAY = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+TOMORROW = (kyiv_now() + timedelta(days=1)).strftime('%Y-%m-%d')
+YESTERDAY = (kyiv_now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
 MENU = [
     {'name': 'Біорепарація шкіри', 'duration_min': 30, 'specialists': ['victoria'],

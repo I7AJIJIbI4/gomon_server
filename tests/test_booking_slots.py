@@ -11,35 +11,16 @@
     Горизонт запису дорівнює тому, наскільки наперед лікар заповнила розклад —
     станом на 25.10.2026 це ~7 днів.
 """
-import os
 import sys
 import sqlite3
-import logging
-import logging.handlers
-import importlib.util
 from datetime import datetime, timedelta
 
 import pytest
 
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
+from tz_utils import kyiv_now  # noqa: E402  — та сама «сьогодні», що й у коді
 
 
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
-
-
-def _load(name, filename):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(ZADARMA, filename))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    _orig = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig
-    return mod
+from conftest import load_real as _load  # noqa: E402
 
 
 @pytest.fixture(scope='module')
@@ -162,8 +143,8 @@ MENU = [
      'wl_id': 'svc-3', 'classify': 'auto'},
 ]
 
-TOMORROW = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-NEXT_WEEK = (datetime.now() + timedelta(days=8)).strftime('%Y-%m-%d')
+TOMORROW = (kyiv_now() + timedelta(days=1)).strftime('%Y-%m-%d')
+NEXT_WEEK = (kyiv_now() + timedelta(days=8)).strftime('%Y-%m-%d')
 
 
 @pytest.fixture
@@ -277,12 +258,12 @@ class TestGetFreeSlots:
             bs.get_free_slots('Онлайн-консультація', TOMORROW, TOMORROW)
 
     def test_past_dates_are_skipped(self, bs, slots):
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        yesterday = (kyiv_now() - timedelta(days=1)).strftime('%Y-%m-%d')
         days = bs.get_free_slots('Біорепарація шкіри', yesterday, TOMORROW)
-        assert all(d['date'] >= datetime.now().strftime('%Y-%m-%d') for d in days)
+        assert all(d['date'] >= kyiv_now().strftime('%Y-%m-%d') for d in days)
 
     def test_range_is_capped(self, bs, slots):
-        far = (datetime.now() + timedelta(days=400)).strftime('%Y-%m-%d')
+        far = (kyiv_now() + timedelta(days=400)).strftime('%Y-%m-%d')
         days = bs.get_free_slots('Біорепарація шкіри', TOMORROW, far)
         assert len(days) <= bs.MAX_RANGE_DAYS
 
@@ -307,26 +288,26 @@ class TestClampRange:
     звідти десятирічний розклад, скільки б днів ми потім не віддали."""
 
     def test_horizon_is_two_weeks_from_today(self, bs):
-        today = datetime.now().date()
+        today = kyiv_now().date()
         f, t = bs.clamp_range(today.strftime('%Y-%m-%d'),
                               (today + timedelta(days=400)).strftime('%Y-%m-%d'))
         assert t == (today + timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
 
     def test_horizon_counts_from_today_not_from_range_start(self, bs):
         """Інакше запит із `from` у майбутньому відкрив би запис за горизонт."""
-        today = datetime.now().date()
+        today = kyiv_now().date()
         far = (today + timedelta(days=10)).strftime('%Y-%m-%d')
         _, t = bs.clamp_range(far, (today + timedelta(days=90)).strftime('%Y-%m-%d'))
         assert t == (today + timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
 
     def test_range_entirely_beyond_the_horizon_is_refused(self, bs):
-        today = datetime.now().date()
+        today = kyiv_now().date()
         with pytest.raises(ValueError, match='горизонт'):
             bs.clamp_range((today + timedelta(days=60)).strftime('%Y-%m-%d'),
                            (today + timedelta(days=70)).strftime('%Y-%m-%d'))
 
     def test_short_range_is_left_alone(self, bs):
-        today = datetime.now().date()
+        today = kyiv_now().date()
         f = (today + timedelta(days=1)).strftime('%Y-%m-%d')
         t = (today + timedelta(days=3)).strftime('%Y-%m-%d')
         assert bs.clamp_range(f, t) == (f, t)
@@ -341,10 +322,10 @@ class TestClampRange:
             bs.clamp_range('28.10.2026', '2026-10-30')
 
     def test_wlaunch_never_sees_the_raw_range(self, bs, slots):
-        far = (datetime.now() + timedelta(days=4000)).strftime('%Y-%m-%d')
+        far = (kyiv_now() + timedelta(days=4000)).strftime('%Y-%m-%d')
         bs.get_free_slots('Біорепарація шкіри', TOMORROW, far)
         _, asked_to = slots['schedule_calls'][0]
-        horizon = (datetime.now().date() +
+        horizon = (kyiv_now().date() +
                    timedelta(days=bs.BOOKING_HORIZON_DAYS)).strftime('%Y-%m-%d')
         assert asked_to == horizon
 

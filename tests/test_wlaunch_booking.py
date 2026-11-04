@@ -21,20 +21,15 @@ it misses, the booking fails outright with service_not_found.
 WLAUNCH_SERVICES below is the live catalogue as of 25.10.2026 (33 active,
 non-group services), captured so these tests never touch the network.
 """
-import os
 import sys
 import json
 import sqlite3
-import logging
-import logging.handlers
-import importlib.util
 
 import pytest
 from unittest.mock import patch
 
 from conftest import auth, _pwa
-
-ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
+from conftest import load_real  # noqa: E402
 
 # Живий каталог WLaunch, знятий 25.10.2026 (33 активні послуги, без груп)
 WLAUNCH_SERVICES = [
@@ -54,11 +49,6 @@ WLAUNCH_SERVICES = [
 ]
 
 
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
-
-
 class _FakeResp(object):
     """Відповідь WLaunch на POST — щоб тест ніколи не ходив у мережу."""
     status_code = 200
@@ -76,16 +66,7 @@ def wl():
     # config-стаб у conftest не містить цього символу, а модуль його імпортує
     sys.modules['config'].WLAUNCH_API_BEARER = 'Bearer test_bearer'
 
-    spec = importlib.util.spec_from_file_location(
-        'wlaunch_api_booking_real', os.path.join(ZADARMA, 'wlaunch_api.py'))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules['wlaunch_api_booking_real'] = mod
-    _orig_rfh = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig_rfh
+    mod = load_real('wlaunch_api_booking_real', 'wlaunch_api.py')
 
     catalogue = {}
     for i, name in enumerate(WLAUNCH_SERVICES):

@@ -46,33 +46,52 @@ def test_send_otp_rate_limit(client):
 
 # ── /api/auth/verify ─────────────────────────────────────────────────────
 
-def test_verify_wrong_code(client):
-    phone = '0503333333'
-    # Write an OTP to DB first
+def _store_otp(raw_phone, code, ttl=300, attempts=0):
+    """Код кладемо під нормалізованим номером — саме так його шукає verify.
+
+    Під сирим '050…' (як було) verify відповідав code_not_found, і тести на
+    неправильний та прострочений код ніколи не доходили до своїх перевірок.
+    """
+    from user_db import normalize_phone
+    phone = normalize_phone(raw_phone)
     conn = sqlite3.connect(_pwa.OTP_DB)
     conn.execute(
         'INSERT OR REPLACE INTO otp_codes (phone, code, expires_at, attempts) VALUES (?,?,?,?)',
-        (phone, '123456', int(time.time()) + 300, 0)
+        (phone, code, int(time.time()) + ttl, attempts)
     )
     conn.commit()
     conn.close()
+    return phone
 
-    rv = client.post('/api/auth/verify', json={'phone': phone, 'code': '000000'})
+
+def _attempts(phone):
+    conn = sqlite3.connect(_pwa.OTP_DB)
+    row = conn.execute('SELECT attempts FROM otp_codes WHERE phone=?', (phone,)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def test_verify_wrong_code(client):
+    phone = _store_otp('0503333333', '123456')
+    rv = client.post('/api/auth/verify', json={'phone': '0503333333', 'code': '000000'})
     assert rv.status_code == 400
+    assert rv.get_json()['error'] == 'wrong_code'
+    assert _attempts(phone) == 1
 
 
 def test_verify_expired_code(client):
-    phone = '0504444444'
-    conn = sqlite3.connect(_pwa.OTP_DB)
-    conn.execute(
-        'INSERT OR REPLACE INTO otp_codes (phone, code, expires_at, attempts) VALUES (?,?,?,?)',
-        (phone, '999999', int(time.time()) - 10, 0)  # expired
-    )
-    conn.commit()
-    conn.close()
-
-    rv = client.post('/api/auth/verify', json={'phone': phone, 'code': '999999'})
+    _store_otp('0504444444', '999999', ttl=-10)
+    rv = client.post('/api/auth/verify', json={'phone': '0504444444', 'code': '999999'})
     assert rv.status_code == 400
+    assert rv.get_json()['error'] == 'code_expired'
+
+
+def test_verify_locks_after_five_attempts(client):
+    """Навіть правильний код після 5 невдалих спроб не пускає — інакше OTP перебирається."""
+    _store_otp('0506666666', '424242', attempts=5)
+    rv = client.post('/api/auth/verify', json={'phone': '0506666666', 'code': '424242'})
+    assert rv.status_code == 429
+    assert rv.get_json()['error'] == 'too_many_attempts'
 
 
 def test_verify_correct_code(client):
@@ -101,8 +120,14 @@ def test_verify_pin_auth(client):
         'phone': '380000000001',
         'code': '1234',
     })
-    # 200 with token, or 400 if PIN_AUTH flow is phone-format-sensitive
-    assert rv.status_code in (200, 400)
+    assert rv.status_code == 200
+    assert rv.get_json().get('token')
+
+
+def test_verify_pin_auth_wrong_pin(client):
+    rv = client.post('/api/auth/verify', json={'phone': '380000000001', 'code': '9999'})
+    assert rv.status_code == 400
+    assert rv.get_json()['error'] == 'wrong_code'
 
 
 # ── /api/me ───────────────────────────────────────────────────────────────

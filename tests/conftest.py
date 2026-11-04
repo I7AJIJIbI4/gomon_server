@@ -64,7 +64,7 @@ def _make_wlaunch():
     m.get_branch_id              = lambda: 'test-branch-id'
     m.get_specialist             = lambda phone: 'victoria'
     m.parse_appt_time            = lambda t: t
-    m.create_wlaunch_appointment = lambda *a, **kw: {'id': 'wl-mock-id'}
+    m.create_wlaunch_appointment = lambda *a, **kw: ('wl-mock-id', None)   # як справжня: (wl_id, err)
     m.get_wlaunch_resources      = lambda: []
     m.get_free_gaps_today        = lambda specialist: None
     m.format_free_gaps           = lambda gaps: []
@@ -224,7 +224,7 @@ _cb_conn.execute(
 _cb_conn.execute(
     'CREATE TABLE IF NOT EXISTS deposits ('
     '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
-    '  order_ref TEXT UNIQUE, order_id TEXT UNIQUE,'
+    '  order_id TEXT UNIQUE,'   # як у проді: колонки order_ref там немає
     '  phone TEXT, amount_eur REAL, amount_uah REAL, status TEXT,'
     "  created_at TEXT DEFAULT (datetime('now')),"
     '  approved_at TEXT, wfp_transaction_id TEXT, wfp_transaction_status TEXT)'
@@ -368,3 +368,109 @@ def superadmin_token():
 def auth(token: str) -> dict:
     """Return Authorization header dict for use in test_client calls."""
     return {'Authorization': f'Bearer {token}'}
+
+
+# ── 6. Спільні помічники для тестів, що вантажать справжні модулі ──────────
+
+_ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
+
+
+def load_real(name, filename, db_path=None):
+    """Завантажити справжній модуль з zadarma/ під псевдонімом.
+
+    Псевдонім лишає stub-и з розділу 2 недоторканими для pwa_api. Логер модуля
+    отримує NullHandler замість RotatingFileHandler на /var/log/gomon/...
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, os.path.join(_ZADARMA, filename))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    _orig = logging.handlers.RotatingFileHandler
+    logging.handlers.RotatingFileHandler = _NullRotatingHandler
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        logging.handlers.RotatingFileHandler = _orig
+    if db_path:
+        mod.DB_PATH = db_path
+    return mod
+
+
+@pytest.fixture
+def frozen_kyiv(monkeypatch):
+    """Зупинити годинник на київському часі: freeze('2026-10-28 21:15').
+
+    Підміняє datetime усередині tz_utils, тож kyiv_now() і utc_to_kyiv(None)
+    повертають заморожений час незалежно від того, як модуль їх імпортував.
+    Без цього тести, що читають справжній годинник, падали в певні години:
+    до 10:00 Києва, після 22:00 UTC на CI, між 00:00 і 02:05 Києва.
+    Повертає функцію; її результат — заморожений київський datetime.
+    """
+    import tz_utils
+    from datetime import datetime as _real_dt, timedelta
+
+    def freeze(kyiv):
+        k = _real_dt.strptime(kyiv, '%Y-%m-%d %H:%M') if isinstance(kyiv, str) else kyiv
+        utc = next(k - timedelta(hours=off) for off in (3, 2)
+                   if tz_utils.kyiv_offset(k - timedelta(hours=off)) == off)
+
+        class _Frozen(_real_dt):
+            @classmethod
+            def utcnow(cls):
+                return utc
+
+            @classmethod
+            def now(cls, tz=None):
+                return utc if tz is None else _real_dt.now(tz)
+
+        monkeypatch.setattr(tz_utils, 'datetime', _Frozen)
+        return k
+
+    return freeze
+
+
+@pytest.fixture(autouse=True)
+def _no_network(_restore_stubs, monkeypatch):
+    """Тести не ходять в інтернет: зовнішнє з'єднання — одразу помилка.
+
+    Раніше збереження прайсу у фоні стукало на mock-wlaunch.test через DNS.
+    Flask test client сокетів не відкриває, тож йому це не заважає.
+    """
+    import socket
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _guard(host, *a, **kw):
+        if host in ('localhost', '127.0.0.1', '::1', None):
+            return _orig_getaddrinfo(host, *a, **kw)
+        raise OSError('network blocked in tests: {}'.format(host))
+
+    monkeypatch.setattr(socket, 'getaddrinfo', _guard)
+
+
+_STUBS = ('config', 'wlaunch_api', 'sms_fly', 'notifier', 'push_sender', 'loyalty')
+_STUB_MODULES = {n: sys.modules[n] for n in _STUBS if n in sys.modules}
+
+
+@pytest.fixture(autouse=True)
+def _restore_stubs():
+    """Повернути атрибути stub-модулів після кожного тесту.
+
+    Тести присвоювали `sys.modules['wlaunch_api'].create_wlaunch_appointment = ...`
+    усередині `patch.dict(sys.modules)`. patch.dict відновлює лише ключі
+    словника, не атрибути модуля, тож підміна жила до кінця сесії: результат
+    тесту залежав від того, що запускалось перед ним. Знімок робимо з тих
+    самих об'єктів модулів, що встановив розділ 2, навіть якщо тест підмінив
+    ключ у sys.modules.
+    """
+    # Знімається першим (від нього залежить _no_network, а через нього monkeypatch),
+    # тож відновлює останнім — після того, як monkeypatch повернув своє.
+    saved = {n: dict(vars(m)) for n, m in _STUB_MODULES.items()}
+    yield
+    for n, m in _STUB_MODULES.items():
+        current = vars(m)
+        for k in list(current):
+            if k not in saved[n]:
+                delattr(m, k)
+        for k, v in saved[n].items():
+            if current.get(k, object()) is not v:
+                setattr(m, k, v)

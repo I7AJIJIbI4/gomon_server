@@ -13,33 +13,12 @@ import sys
 import json
 import types
 import sqlite3
-import logging
-import logging.handlers
-import importlib.util
 import pytest
 
 ZADARMA = os.path.join(os.path.dirname(__file__), '..', 'zadarma')
 
 
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
-
-
-def _load_real(name, filename, db_path=None):
-    """Load a zadarma module under an alias so conftest's stubs stay intact."""
-    spec = importlib.util.spec_from_file_location(name, os.path.join(ZADARMA, filename))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    _orig_rfh = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig_rfh
-    if db_path:
-        mod.DB_PATH = db_path
-    return mod
+from conftest import load_real as _load_real  # noqa: E402
 
 
 # fcntl is POSIX-only; appt_reminder imports it at module level

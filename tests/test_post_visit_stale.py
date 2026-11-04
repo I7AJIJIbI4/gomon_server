@@ -21,9 +21,6 @@ visit — only the thank-you/review message is dropped.
 import os
 import sys
 import sqlite3
-import logging
-import logging.handlers
-import importlib.util
 from datetime import datetime, timedelta
 
 import pytest
@@ -33,25 +30,7 @@ sys.path.insert(0, ZADARMA)
 from tz_utils import kyiv_now  # noqa: E402
 
 
-class _NullRotatingHandler(logging.NullHandler):
-    def __init__(self, *a, **kw):
-        super().__init__()
-
-
-def _load_real(name, filename, db_path=None):
-    """Load a zadarma module under an alias so conftest's stubs stay intact."""
-    spec = importlib.util.spec_from_file_location(name, os.path.join(ZADARMA, filename))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    _orig_rfh = logging.handlers.RotatingFileHandler
-    logging.handlers.RotatingFileHandler = _NullRotatingHandler
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        logging.handlers.RotatingFileHandler = _orig_rfh
-    if db_path:
-        mod.DB_PATH = db_path
-    return mod
+from conftest import load_real as _load_real  # noqa: E402
 
 
 def _ago(days):
@@ -204,7 +183,10 @@ class TestCashbackBacklogFlush:
     """photo_reminder.py --cashback-notify після масового підтвердження в боті."""
 
     @pytest.fixture
-    def flush(self, tmp_path, monkeypatch, notif):
+    def flush(self, tmp_path, monkeypatch, notif, frozen_kyiv):
+        # Повідомлення йдуть з 10:00 (візит без часу) — без заморозки ці тести
+        # падали, якщо їх запускали вночі чи зранку.
+        frozen_kyiv(datetime.combine(kyiv_now().date(), datetime.min.time()).replace(hour=12))
         _make_otp_db(str(tmp_path / 'otp_sessions.db'), app_phones=['380936487807'])
         photo = _load_real('photo_reminder_stale_real', 'photo_reminder.py', notif._db_file)
 

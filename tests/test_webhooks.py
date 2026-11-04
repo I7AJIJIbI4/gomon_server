@@ -10,7 +10,6 @@ import json
 import time
 import sqlite3
 import pytest
-from unittest.mock import patch, MagicMock
 from conftest import _pwa
 
 
@@ -44,52 +43,69 @@ def test_deposit_callback_invalid_signature(client):
     assert rv.status_code in (200, 400, 403)
 
 
-def test_deposit_callback_valid_signature_approved(client, pwa):
-    """Valid HMAC sig + Approved status → deposit row upserted."""
-    order_ref = f'VALID-{int(time.time())}'
-    phone = '380991000001'
-    amount = 5
-
-    # Insert a pending deposit row
+def _seed_pending_deposit(pwa, order_id, phone='380991000001'):
     conn = sqlite3.connect(pwa.DB_PATH)
     conn.execute(
-        "INSERT OR REPLACE INTO deposits (order_ref, phone, amount_eur, status) VALUES (?,?,?,?)",
-        (order_ref, phone, amount, 'Pending')
-    )
+        "INSERT INTO deposits (order_id, phone, amount_eur, amount_uah, status)"
+        " VALUES (?,?,5,0,'pending')", (order_id, phone))
     conn.commit()
     conn.close()
 
-    merchant = 'test_merchant'
-    secret = 'test_secret'
-    sig = _wfp_sig(
-        secret,
-        merchant, order_ref, amount, 'EUR', '123456', '411111...', 'Approved', '1100'
-    )
 
-    payload = {
-        'merchantAccount': merchant,
-        'orderReference': order_ref,
-        'amount': amount,
-        'currency': 'EUR',
-        'authCode': '123456',
-        'cardPan': '411111...',
-        'transactionStatus': 'Approved',
-        'reasonCode': '1100',
-        'merchantSignature': sig,
+def _deposit_status(pwa, order_id):
+    conn = sqlite3.connect(pwa.DB_PATH)
+    row = conn.execute('SELECT status FROM deposits WHERE order_id=?', (order_id,)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def _wfp_payload(order_id, status='Approved', sig=None, amount=5):
+    fields = ('test_merchant', order_id, amount, 'EUR', '123456', '411111...', status, '1100')
+    return {
+        'merchantAccount': fields[0], 'orderReference': order_id, 'amount': amount,
+        'currency': 'EUR', 'authCode': '123456', 'cardPan': '411111...',
+        'transactionStatus': status, 'reasonCode': '1100',
+        'merchantSignature': sig or _wfp_sig('test_secret', *fields),
     }
 
-    with patch.object(pwa, '_req') as mock_req:
-        mock_req.post.return_value = MagicMock(status_code=200, json=lambda: {})
-        rv = client.post('/api/deposit/callback', json=payload)
 
-    # WayForPay expects 200 regardless of outcome
+def test_deposit_callback_valid_signature_approved(client, pwa):
+    """Валідний підпис + Approved → депозит підтверджено.
+
+    Раніше тест вставляв рядок у колонку order_ref, якої в проді немає (код
+    оновлює WHERE order_id=?), і приймав 'Pending' — тобто проходив, навіть
+    якщо оплачений депозит ніколи не застосовувався.
+    """
+    order_id = 'VALID-{}'.format(int(time.time() * 1000))
+    _seed_pending_deposit(pwa, order_id)
+
+    rv = client.post('/api/deposit/callback', json=_wfp_payload(order_id))
+
     assert rv.status_code == 200
+    assert rv.get_json()['status'] == 'accept'
+    assert _deposit_status(pwa, order_id) == 'Approved'
 
-    conn = sqlite3.connect(pwa.DB_PATH)
-    row = conn.execute('SELECT status FROM deposits WHERE order_ref=?', (order_ref,)).fetchone()
-    conn.close()
-    if row:
-        assert row[0] in ('Approved', 'Pending')  # Pending if sig check failed in test env
+
+def test_deposit_callback_bad_signature_leaves_deposit_unpaid(client, pwa):
+    """Підроблений callback не має підтверджувати депозит."""
+    order_id = 'FORGED-{}'.format(int(time.time() * 1000))
+    _seed_pending_deposit(pwa, order_id)
+
+    rv = client.post('/api/deposit/callback', json=_wfp_payload(order_id, sig='badsignature'))
+
+    assert rv.status_code == 200
+    assert rv.get_json()['status'] == 'refuse'
+    assert _deposit_status(pwa, order_id) == 'pending'
+
+
+def test_deposit_callback_declined_is_recorded(client, pwa):
+    order_id = 'DECL-{}'.format(int(time.time() * 1000))
+    _seed_pending_deposit(pwa, order_id)
+
+    rv = client.post('/api/deposit/callback', json=_wfp_payload(order_id, status='Declined'))
+
+    assert rv.status_code == 200
+    assert _deposit_status(pwa, order_id) == 'Declined'
 
 
 # ── /api/deposit/balance ─────────────────────────────────────────────────

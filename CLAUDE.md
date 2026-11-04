@@ -126,12 +126,11 @@ id INT, phone TEXT, endpoint TEXT, p256dh TEXT, auth TEXT, active INT
 
 ### Таблиця `deposits`
 ```sql
-id INTEGER PRIMARY KEY, order_ref TEXT UNIQUE, phone TEXT, amount_eur REAL,
-amount_uah REAL, status TEXT, created_at TEXT, approved_at TEXT,
-wfp_transaction_id TEXT
+id INTEGER PRIMARY KEY, phone TEXT, amount_eur REAL, amount_uah REAL,
+order_id TEXT UNIQUE, status TEXT, wfp_transaction_status TEXT, created_at TEXT
 ```
 - WayForPay deposit records (5 EUR)
-- Status: Pending → Approved / Declined / Expired
+- Status: pending → Approved / Declined / Expired (WayForPay `orderReference` = наш `order_id`)
 
 ### Таблиця `deposit_deductions`
 ```sql
