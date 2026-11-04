@@ -1172,6 +1172,19 @@ def _ig_process_reply(sender_id):
 @app.route('/api/webhook/wlaunch', methods=['POST'])
 def wlaunch_webhook():
     """Handle WLaunch webhook — send notification to client on appointment events."""
+    # Маршрут відкритий з інтернету, а CANCELLED розсилає клієнту й спеціалісту
+    # повідомлення про скасування — без перевірки це міг зробити будь-хто з будь-яким
+    # номером (виявлено 04.11.2026). Тепер потрібен ?token=WLAUNCH_WEBHOOK_SECRET;
+    # поки секрету в config.py немає, вебхук вимкнено повністю.
+    import hmac as _hmac
+    import config as _cfg
+    secret = getattr(_cfg, 'WLAUNCH_WEBHOOK_SECRET', '') or ''
+    token = request.args.get('token', '') or request.headers.get('X-Webhook-Token', '')
+    if not secret or not _hmac.compare_digest(str(token), str(secret)):
+        logger.warning('WLaunch webhook refused: {} from {}'.format(
+            'disabled (no secret configured)' if not secret else 'bad token', request.remote_addr))
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
     data = request.get_json() or {}
     status = data.get('status', '')
     client_phone = data.get('client_phone', '')
@@ -5624,41 +5637,48 @@ def admin_cashback_redeem():
     new_total = round(total - amount, 2)
     logger.info('Cashback redeemed: {} UAH for {}, by {}'.format(amount, phone, request.admin_phone))
 
-    # Check tier upgrade after redeem
-    tier_after = _get_client_tier(phone)
-    tier_before_key = None
-    # Estimate tier before this redeem (one less redeem)
-    from loyalty import TIERS
-    redeems_before = max((tier_after.get('redeems', 1)) - 1, 0)
-    visits = tier_after.get('visits', 0)
-    tier_before = TIERS[0]
-    for t in TIERS:
-        if visits >= t['min_visits'] or redeems_before >= t['min_redeems']:
-            tier_before = t
-        else:
-            break
-    tier_upgraded = tier_after['key'] != tier_before['key']
+    # Гроші вже списано (commit вище) — далі лише рівень лояльності й повідомлення.
+    # Їхній збій не має перетворювати проведене списання на 500: адмін вирішить,
+    # що не вийшло, натисне ще раз і спише вдруге (виявлено 04.11.2026).
+    try:
+        # Check tier upgrade after redeem
+        tier_after = _get_client_tier(phone)
+        tier_before_key = None
+        # Estimate tier before this redeem (one less redeem)
+        from loyalty import TIERS
+        redeems_before = max((tier_after.get('redeems', 1)) - 1, 0)
+        visits = tier_after.get('visits', 0)
+        tier_before = TIERS[0]
+        for t in TIERS:
+            if visits >= t['min_visits'] or redeems_before >= t['min_redeems']:
+                tier_before = t
+            else:
+                break
+        tier_upgraded = tier_after['key'] != tier_before['key']
 
-    # Notify client about cashback redemption + tier upgrade (background)
-    import threading
-    def _notify_redeem():
-        try:
-            from notifier import notify_client, _first_name
-            fname = _first_name(None, phone=phone)
-            tg_text = '✅ {}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
-            sms_text = '{}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
-            if tier_upgraded:
-                tg_text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
-                    tier_after['name'], tier_after['rate'] * 100)
-                sms_text += '\nВітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
-                    tier_after['name'], tier_after['rate'] * 100)
-            notify_client(phone, tg_text, sms_text,
-                push_title='Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
-                push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
-                push_tag='cashback_redeem', push_url='/app/#home')
-        except Exception as e:
-            logger.error('cashback redeem notify error: {}'.format(e))
-    threading.Thread(target=_notify_redeem, daemon=True).start()
+        # Notify client about cashback redemption + tier upgrade (background)
+        import threading
+        def _notify_redeem():
+            try:
+                from notifier import notify_client, _first_name
+                fname = _first_name(None, phone=phone)
+                tg_text = '✅ {}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
+                sms_text = '{}, списано {:.0f} грн кешбеку. Залишок: {:.0f} грн'.format(fname, amount, new_total)
+                if tier_upgraded:
+                    tg_text += '\n\n🎉 Вітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
+                        tier_after['name'], tier_after['rate'] * 100)
+                    sms_text += '\nВітаємо! Ваш рівень підвищено до {}! Тепер ваш кешбек — {:.1f}%'.format(
+                        tier_after['name'], tier_after['rate'] * 100)
+                notify_client(phone, tg_text, sms_text,
+                    push_title='Рівень {}!'.format(tier_after['name']) if tier_upgraded else 'Кешбек списано',
+                    push_body='Списано {:.0f} грн. Залишок: {:.0f} грн'.format(amount, new_total),
+                    push_tag='cashback_redeem', push_url='/app/#home')
+            except Exception as e:
+                logger.error('cashback redeem notify error: {}'.format(e))
+        threading.Thread(target=_notify_redeem, daemon=True).start()
+    except Exception as e:
+        logger.error('cashback redeem post-commit step failed for {} ({} UAH already deducted): {}'.format(
+            phone, amount, e))
 
     return jsonify({'ok': True, 'new_cashback_balance': new_cb})
 

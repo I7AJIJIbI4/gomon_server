@@ -305,11 +305,9 @@ def test_repeated_redeem_cannot_overspend(client, admin_token, pwa, real_loyalty
     assert sum(a for a, _, _ in _deductions(pwa, phone)) == 400
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-ризик, чекає рішення власника: списання комітиться ДО підрахунку рівня '
-    'лояльності й запуску повідомлення. Якщо там виняток — адмін бачить 500, хоча '
-    'гроші вже списано, і повторне натискання списує вдруге.'))
 def test_redeem_reports_success_if_money_was_taken(client, admin_token, pwa, monkeypatch, notified):
+    """Списання комітиться до підрахунку рівня й повідомлення. Якщо ті падають, адмін
+    має побачити успіх — інакше натисне ще раз і спише вдруге (виправлено 04.11.2026)."""
     phone = _phone()
     _cashback(pwa, phone, 600)
 

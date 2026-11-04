@@ -418,15 +418,20 @@ def test_anthropic_failure_sends_nothing(pwa, ai):
 
 # ── WLaunch ───────────────────────────────────────────────────────────────────
 
+WL_SECRET = 'wl-test-secret'
+WL_URL = '/api/webhook/wlaunch?token=' + WL_SECRET
+
+
 @pytest.fixture
 def cancellations(monkeypatch):
     sent = []
     monkeypatch.setattr(sys.modules['notifier'], 'send_cancellation', sent.append)
+    monkeypatch.setattr(sys.modules['config'], 'WLAUNCH_WEBHOOK_SECRET', WL_SECRET, raising=False)
     return sent
 
 
 def test_wlaunch_cancellation_notifies_with_parsed_fields(client, cancellations):
-    rv = client.post('/api/webhook/wlaunch', json={
+    rv = client.post(WL_URL, json={
         'status': 'CANCELLED', 'client_phone': '0671234567', 'client_name': 'Ірина',
         'services': 'Біорепарація шкіри', 'specialist': 'Victoria Gomon',
         'start_time': '2026-11-10T14:30:00', 'appt_id': 'wl-1'})
@@ -439,23 +444,43 @@ def test_wlaunch_cancellation_notifies_with_parsed_fields(client, cancellations)
 @pytest.mark.parametrize('status', ['CONFIRMED', 'CONFIRMED_BY_CLIENT', 'DONE', ''])
 def test_wlaunch_other_statuses_send_nothing(client, cancellations, status):
     """Підтвердження шле сам WLaunch — дублювати не можна."""
-    rv = client.post('/api/webhook/wlaunch', json={'status': status, 'client_phone': '0671234567'})
+    rv = client.post(WL_URL, json={'status': status, 'client_phone': '0671234567'})
     assert rv.status_code == 200
     assert cancellations == []
 
 
 def test_wlaunch_without_phone_is_rejected(client, cancellations):
-    assert client.post('/api/webhook/wlaunch', json={'status': 'CANCELLED'}).status_code == 400
+    assert client.post(WL_URL, json={'status': 'CANCELLED'}).status_code == 400
     assert cancellations == []
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Прод-діра, чекає рішення власника: /api/webhook/wlaunch відкритий з інтернету '
-    'без підпису чи секрету (перевірено 04.11.2026, у логах nginx звернень немає — '
-    'вебхук у WLaunch так і не налаштовано). Будь-хто може POST-ом status=CANCELLED '
-    'розіслати клієнту й спеціалісту повідомлення про скасування.'))
-def test_wlaunch_webhook_rejects_unsigned_requests_from_outside(client, cancellations):
-    rv = client.post('/api/webhook/wlaunch', environ_base=OUTSIDE, json={
-        'status': 'CANCELLED', 'client_phone': '0671234567', 'start_time': '2026-11-10T14:30:00'})
-    assert rv.status_code in (401, 403)
+_CANCEL = {'status': 'CANCELLED', 'client_phone': '0671234567', 'start_time': '2026-11-10T14:30:00'}
+
+
+def test_wlaunch_webhook_rejects_requests_without_the_token(client, cancellations):
+    """Маршрут відкритий з інтернету: без токена будь-хто розсилав би клієнтам
+    повідомлення про скасування (виявлено й закрито 04.11.2026)."""
+    rv = client.post('/api/webhook/wlaunch', environ_base=OUTSIDE, json=_CANCEL)
+    assert rv.status_code == 403
+    assert cancellations == []
+
+
+@pytest.mark.parametrize('token', ['wrong', WL_SECRET + 'x', ''])
+def test_wlaunch_webhook_rejects_a_wrong_token(client, cancellations, token):
+    rv = client.post('/api/webhook/wlaunch?token=' + token, json=_CANCEL)
+    assert rv.status_code == 403
+    assert cancellations == []
+
+
+def test_wlaunch_webhook_accepts_the_token_as_a_header(client, cancellations):
+    rv = client.post('/api/webhook/wlaunch', headers={'X-Webhook-Token': WL_SECRET}, json=_CANCEL)
+    assert rv.status_code == 200
+    assert len(cancellations) == 1
+
+
+def test_wlaunch_webhook_is_off_until_a_secret_is_configured(client, cancellations, monkeypatch):
+    """Як на сервері зараз: секрету в config.py немає — вебхук не приймає нічого."""
+    monkeypatch.setattr(sys.modules['config'], 'WLAUNCH_WEBHOOK_SECRET', '', raising=False)
+    for url in ('/api/webhook/wlaunch', '/api/webhook/wlaunch?token='):
+        assert client.post(url, json=_CANCEL).status_code == 403
     assert cancellations == []

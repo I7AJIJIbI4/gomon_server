@@ -693,6 +693,7 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **Python 3.12** на сервері (venv `/opt/gomon/venv`)
 - **nginx** веб-сервер, certbot SSL, HSTS
 - **WLaunch cancel**: `POST {"appointment":{"id":...,"status":"CANCELLED"}}` (не PATCH, не DELETE)
+- **Вебхук WLaunch** (`POST /api/webhook/wlaunch`): відкритий з інтернету, тож вимагає `?token=` (або заголовок `X-Webhook-Token`), що збігається з `WLAUNCH_WEBHOOK_SECRET` у `config.py`. Поки секрету немає — 403 на все, вебхук вимкнено (так з 04.11.2026; у WLaunch він ще не налаштований). Щоб увімкнути: згенерувати секрет (`python3 -c "import secrets;print(secrets.token_urlsafe(32))"`), прописати в `config.py`, перезапустити `gomon-api` і вказати у WLaunch URL `https://drgomon.beauty/api/webhook/wlaunch?token=<секрет>`
 - **WLaunch обов'язковий**: при створенні записів WLaunch повинен підтвердити. Якщо WLaunch відхиляє (unavailable, 422) — запис НЕ створюється. Fallback local тільки при network/500 помилках
 - **WLaunch breaks**: перерви синхронізуються через `/resource/{rid}/schedule/day` (type=OFF). Видалення через POST з `{frame:{active:false}}`
 - **Sync**: `sync_appointments.py` мержить нові записи зі старими по `appt_id` (до 50). `--deep` для повної історії
