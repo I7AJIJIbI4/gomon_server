@@ -894,7 +894,7 @@ GomonAI працює в **трьох незалежних каналах** з є
 |-------|----------|--------|-----------|---------|-----------|
 | **Сайт** (gomon-widget.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 5/день (guest) | sessionStorage | Ні |
 | **Додаток** (gomon-chat.js) | `chat.php` | claude-sonnet-4-6 + fallback chain | 10/день (authed) | in-memory JS | Ні |
-| **Telegram Business** | `tg_business_listener.py` | claude-sonnet-4-5 | 20/день | БД messages | **Так** → адмін |
+| **Telegram Business** | `tg_business_listener.py` | claude-sonnet-5-5 | 20/день | БД messages | **Так** → адмін |
 
 ### System prompt
 
@@ -916,7 +916,7 @@ GomonAI працює в **трьох незалежних каналах** з є
 ### chat.php — модель fallback chain
 
 ```
-claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claude-haiku-4-5
+claude-sonnet-4-6 → claude-sonnet-5-5 → claude-haiku-4-5
 ```
 - Кешована модель у `/opt/gomon/app/private_data/active_model.txt`
 - 429 (rate limit) НЕ пробує наступну модель (key-level, не model-level)
@@ -935,7 +935,7 @@ claude-sonnet-4-6 → claude-sonnet-4-5 → claude-3-5-sonnet-20241022 → claud
    - `_check_ai_should_reply()` — admin pause + rate limit
    - `_build_system_prompt()` — prompt + клієнт + прайс + акції
    - `_get_conversation_history()` — останні 20 повідомлень з БД, alternating roles
-   - `_call_anthropic()` → claude-sonnet-4-5
+   - `_call_anthropic()` → claude-sonnet-5-5
    - Перевірка `<CANCEL>` / `<CANCEL date="YYYY-MM-DD">` → `_cancel_client_appointment()` → WLaunch + DB + notifier
    - Перевірка `<ESCALATE>` тегу → повідомлення адміну
    - `_send_ai_reply()` — через Business Bot API з `business_connection_id`, `parse_mode='Markdown'` з plain text fallback

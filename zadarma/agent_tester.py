@@ -22,7 +22,7 @@ GOLDEN_SET_PATH = os.path.join(os.path.dirname(__file__), '..', 'private_data', 
 SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), '..', 'system_prompt.txt')
 REPORT_PATH = os.path.join(os.path.dirname(__file__), '..', 'private_data', 'agent_test_report.json')
 
-AGENT_MODEL = 'claude-sonnet-4-5'
+AGENT_MODEL = 'claude-sonnet-5-5'
 JUDGE_MODEL = 'claude-haiku-4-5-20251001'
 JUDGE_RUNS = 3  # кількість запусків судді для стабільної оцінки
 

@@ -536,8 +536,7 @@ if ($source === 'site') {
 // Порядок пріоритету: найновіші спочатку
 $model_chain = [
     'claude-sonnet-4-6',
-    'claude-sonnet-4-5',
-    'claude-3-5-sonnet-20241022',
+    'claude-sonnet-5-5',
     'claude-haiku-4-5-20251001',
 ];
 
