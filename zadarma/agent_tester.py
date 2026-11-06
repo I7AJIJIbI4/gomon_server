@@ -144,13 +144,16 @@ def _load_config():
 def _call_anthropic(api_key, model, system, messages, max_tokens=1024, temperature=0.3):
     import urllib.request
     import urllib.error
-    payload = json.dumps({
+    payload = {
         'model': model,
         'max_tokens': max_tokens,
-        'temperature': temperature,
         'system': system,
         'messages': messages,
-    }).encode('utf-8')
+    }
+    # Sonnet 5.x відхиляє temperature (HTTP 400 "deprecated for this model")
+    if not model.startswith('claude-sonnet-5'):
+        payload['temperature'] = temperature
+    payload = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
         'https://api.anthropic.com/v1/messages',
         data=payload,
