@@ -583,12 +583,17 @@ foreach ($models_to_try as $idx => $model) {
         }
     }
 
-    $payload = json_encode([
+    $body = [
         'model'      => $model,
         'max_tokens' => 1024,
         'system'     => $system_prompt,
         'messages'   => $api_messages,
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    // Sonnet 5.x за замовчуванням думає: thinking-блок іде першим і з'їдає max_tokens
+    if (strpos($model, 'claude-sonnet-5') === 0) {
+        $body['thinking'] = ['type' => 'between_tools'];
+    }
+    $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
 
     $ch = curl_init('https://api.anthropic.com/v1/messages');
     curl_setopt_array($ch, [
@@ -637,7 +642,12 @@ if (!$used_model) {
 }
 
 $claude_data = json_decode($raw, true);
-$reply       = $claude_data['content'][0]['text'] ?? '';
+$reply       = '';
+foreach (($claude_data['content'] ?? []) as $block) {
+    if (($block['type'] ?? '') === 'text') {
+        $reply .= $block['text'] ?? '';
+    }
+}
 
 if (!$reply) {
     http_response_code(502);

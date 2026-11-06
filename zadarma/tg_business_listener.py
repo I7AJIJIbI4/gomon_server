@@ -493,12 +493,16 @@ def _download_tg_photo(file_id):
 
 def _call_anthropic(system_prompt, messages):
     """Call Anthropic API and return reply text."""
-    payload = json.dumps({
+    body = {
         'model': AI_MODEL,
         'max_tokens': 1024,
         'system': system_prompt,
         'messages': messages,
-    })
+    }
+    # Sonnet 5.x за замовчуванням думає: thinking-блок іде першим і з'їдає max_tokens
+    if AI_MODEL.startswith('claude-sonnet-5'):
+        body['thinking'] = {'type': 'between_tools'}
+    payload = json.dumps(body)
     try:
         r = requests.post(
             'https://api.anthropic.com/v1/messages',
@@ -513,7 +517,7 @@ def _call_anthropic(system_prompt, messages):
             data = r.json()
             content = data.get('content', [])
             if content and isinstance(content, list) and len(content) > 0:
-                return content[0].get('text', '').strip()
+                return ''.join(b.get('text', '') for b in content if b.get('type') == 'text').strip()
             logger.warning('Anthropic returned empty content: {}'.format(str(data)[:200]))
             return None
         else:

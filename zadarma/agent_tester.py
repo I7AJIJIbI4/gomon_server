@@ -153,6 +153,8 @@ def _call_anthropic(api_key, model, system, messages, max_tokens=1024, temperatu
     # Sonnet 5.x відхиляє temperature (HTTP 400 "deprecated for this model")
     if not model.startswith('claude-sonnet-5'):
         payload['temperature'] = temperature
+    else:
+        payload['thinking'] = {'type': 'between_tools'}
     payload = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
         'https://api.anthropic.com/v1/messages',
@@ -166,7 +168,7 @@ def _call_anthropic(api_key, model, system, messages, max_tokens=1024, temperatu
     try:
         with urllib.request.urlopen(req, timeout=45) as resp:
             data = json.loads(resp.read())
-        return data['content'][0]['text'].strip()
+        return ''.join(b.get('text', '') for b in data['content'] if b.get('type') == 'text').strip()
     except urllib.error.HTTPError as e:
         body = e.read().decode('utf-8', errors='replace')
         raise RuntimeError('Anthropic HTTP {}: {}'.format(e.code, body[:200]))
