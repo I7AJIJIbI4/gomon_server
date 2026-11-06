@@ -590,8 +590,9 @@ foreach ($models_to_try as $idx => $model) {
         'messages'   => $api_messages,
     ];
     // Sonnet 5.x за замовчуванням думає: thinking-блок іде першим і з'їдає max_tokens
-    if (strpos($model, 'claude-sonnet-5') === 0) {
+    if ($model === 'claude-sonnet-5-5') {
         $body['thinking'] = ['type' => 'between_tools'];
+        $body['output_config'] = ['effort' => 'medium'];
     }
     $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
 

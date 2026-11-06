@@ -500,8 +500,9 @@ def _call_anthropic(system_prompt, messages):
         'messages': messages,
     }
     # Sonnet 5.x за замовчуванням думає: thinking-блок іде першим і з'їдає max_tokens
-    if AI_MODEL.startswith('claude-sonnet-5'):
+    if AI_MODEL == 'claude-sonnet-5-5':
         body['thinking'] = {'type': 'between_tools'}
+        body['output_config'] = {'effort': 'medium'}
     payload = json.dumps(body)
     try:
         r = requests.post(
@@ -517,7 +518,16 @@ def _call_anthropic(system_prompt, messages):
             data = r.json()
             content = data.get('content', [])
             if content and isinstance(content, list) and len(content) > 0:
-                return ''.join(b.get('text', '') for b in content if b.get('type') == 'text').strip()
+                text = ''.join(b.get('text', '') for b in content if b.get('type') == 'text').strip()
+                if data.get('stop_reason') != 'end_turn':
+                    logger.warning('Anthropic stop_reason={} stop_details={}'.format(
+                        data.get('stop_reason'), data.get('stop_details')))
+                if not text:
+                    # Відмова моделі / порожня відповідь: не лишаємо клієнта мовчки,
+                    # віддаємо розмову адміну через існуючий шлях <ESCALATE>
+                    logger.warning('Anthropic returned no text: {}'.format(str(data)[:300]))
+                    return '<ESCALATE>'
+                return text
             logger.warning('Anthropic returned empty content: {}'.format(str(data)[:200]))
             return None
         else:

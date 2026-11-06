@@ -151,10 +151,11 @@ def _call_anthropic(api_key, model, system, messages, max_tokens=1024, temperatu
         'messages': messages,
     }
     # Sonnet 5.x відхиляє temperature (HTTP 400 "deprecated for this model")
-    if not model.startswith('claude-sonnet-5'):
+    if model != 'claude-sonnet-5-5':
         payload['temperature'] = temperature
     else:
         payload['thinking'] = {'type': 'between_tools'}
+        payload['output_config'] = {'effort': 'medium'}
     payload = json.dumps(payload).encode('utf-8')
     req = urllib.request.Request(
         'https://api.anthropic.com/v1/messages',
