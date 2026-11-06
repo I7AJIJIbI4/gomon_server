@@ -34,7 +34,7 @@ POLL_TIMEOUT = 30
 AI_RATE_LIMIT = 10       # max AI replies per client per day
 AI_ADMIN_PAUSE = 259200  # 72 hours — don't reply if admin replied recently
 AI_MAX_HISTORY = 20      # max messages in context
-AI_MODEL = 'claude-sonnet-5-5'
+AI_MODEL = 'claude-sonnet-4-6'
 
 # Logging
 logger = logging.getLogger('tg_business')
