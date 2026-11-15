@@ -52,6 +52,7 @@
 | `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
 | `zadarma/ig_health.py` | Cron: перевіряє IG-токен через graph.instagram.com, TG-алерт за 7 днів до кінця і при протуханні. `--dry-run` не пише прапорці і не шле TG |
 | `zadarma/wl_catalog.py` | **Кеш каталогу послуг WLaunch** + детектор розходжень. `--sync` / `--dry-run` / `--show`. Основа меню онлайн-запису |
+| `zadarma/cashback_confirm.py` | Підтвердження ціни лікаркою (бот ×2, IG): `confirm_photo_tasks` закриває завдання лише названої процедури; `same_procedure` — порівняння назв |
 | `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
 ### Systemd Services
@@ -162,6 +163,8 @@ appt_date TEXT, created_at TEXT, UNIQUE(phone, procedure_name, appt_date)
 ```
 - 3% від суми процедури, auto-accrued by appt_reminder.py --feedback
 - Dedup: phone+procedure+date
+- Скасований візит кешбеку не дає: `photo_reminder.visit_is_cancelled(conn, phone, date, procedure)` перевіряється в `check_pending_cashback_reminders` і `_process_pending_cashback`. Записи з тією ж процедурою вирішують за весь день; невідомий візит кешбек НЕ блокує
+- `photo_tasks` / `cashback_pending` ключуються phone+date+назва процедури (не appt_id). `run_feedback` бере записи з `_collect_appts` (дедуп manual↔WLaunch за `wlaunch_id`)
 
 ---
 
@@ -428,6 +431,8 @@ ssh root@45.94.157.127 'cd /opt/gomon/app && crontab -l | diff - deploy/crontab 
 ## Deploy Flow
 
 Код знаходиться на сервері у `/opt/gomon/app/` (git repo). Деплой через `git pull` + restart.
+
+**Що перезапускати, bump-и й перевірки — скіл `.claude/skills/gomon-deploy`.** Пуш і деплой — лише з явного дозволу на кожну дію (`gomon-rules`); у `.claude/settings.json` для них навмисно немає allow-правил. На сервері `git pull`, ніколи `reset --hard`. Скрипти старого хостингу (`update.sh` тощо) видалено 15.11.2026.
 
 **Remote на сервері — SSH, не HTTPS.** `git@github.com:I7AJIJIbI4/gomon_server.git` через read-only deploy key `/root/.ssh/id_ed25519_github_deploy` (прописаний у `/root/.ssh/config`). Анонімний HTTPS перестав працювати 02.09.2026: GitHub віддає 200 на `GET /info/refs`, але 401 на `POST /git-upload-pack` — виглядає як тротлінг анонімного git-трафіку з IP дата-центру. Симптом оманливий: git просить `Username for https://github.com`, хоча репозиторій публічний і `curl` з того ж сервера дає 200.
 
@@ -920,6 +925,8 @@ claude-sonnet-4-6 → claude-sonnet-5-5 → claude-haiku-4-5
 ```
 - Кешована модель у `/opt/gomon/app/private_data/active_model.txt`
 - 429 (rate limit) НЕ пробує наступну модель (key-level, не model-level)
+- `claude-sonnet-5-5`: без `temperature` (400), за замовчуванням першим іде `thinking`-блок — текст брати з усіх `text`-блоків, слати `thinking:{type:"between_tools"}` + `output_config:{effort:"medium"}`. Порожня відповідь у TG → `<ESCALATE>`
+- Нову модель міряти `agent_tester.py --sample 15 --seed 7` (~1 $ за прогін, промпт ~16K токенів). 06.11.2026 тести вичерпали баланс прод-ключа — AI-чати лежали
 - Rate limit списується ПІСЛЯ успішної відповіді (не до)
 - Клієнтський timeout: 25с, серверний: 20с (primary) / 12с (fallback)
 
@@ -1104,6 +1111,7 @@ chat_id TEXT PRIMARY KEY, biz_conn_id TEXT NOT NULL
 - **`request.remote_addr` за nginx** — НЕ прибирати `ProxyFix(app.wsgi_app, x_for=1)` з `pwa_api.py`. Без нього nginx-проксі робить `remote_addr` рівним `127.0.0.1` для КОЖНОГО запиту з інтернету, і всі localhost-гарди (`/api/internal/*`, `/api/deposit/reconcile`, `/api/deposit/create-internal`, `/api/chat/cancel-appointment`, `/api/webhook/ig-*`) пускають публічний трафік. Легітимні виклики йдуть напряму на `127.0.0.1:5001` без `X-Forwarded-For`, тому їх ProxyFix не зачіпає. Перевірка: `curl -s https://drgomon.beauty/api/internal/free-gaps-today` має дати `403 forbidden`, не `400`.
 - **`notification_log.reference` для `spec_new`** — формат `appt_id|date|time`, щоб перенесення запису оголошувалось повторно. Старі рядки (до 23.09.2026) мають голий `appt_id` і окремо перевіряються як «вже надіслано» — не видаляти цю перевірку, інакше при деплої спеціалісти отримають пачку вже відомих записів як «нові».
 - **CSS `transform` на hover** — НЕ видаляти `.adm-tl-appt:hover{transform:scale(1.01)}` — без нього інші CSS зміни можуть зламати stacking order
+- **Тести на Windows** — `appt_reminder` читає `prices.json` без `encoding=` (cp1251): у фікстурах писати JSON з ASCII-екрануванням; для модулів з `import fcntl` — заглушка (див. `tests/test_appt_collection.py`). `tests/test_webhooks_inbound.py` окремим файлом падає на `no such table: photo_tasks` — запускати весь набір
 
 ### Instagram AI — у проді
 
