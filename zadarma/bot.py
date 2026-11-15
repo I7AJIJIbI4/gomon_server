@@ -932,11 +932,10 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
             "(phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
             (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S')))
-        # Also update photo_tasks if exists
-        conn.execute(
-            "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, cashback_price=?, cashback_confirmed_at=? "
-            "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','needs_price','pending')",
-            (drug_name, price, _kn().strftime('%Y-%m-%d %H:%M:%S'), phone, appt_date))
+        # Also update photo_tasks if exists — лише завдання цієї процедури
+        from cashback_confirm import confirm_photo_tasks
+        confirm_photo_tasks(conn, phone, appt_date, procedure, drug_name, price,
+                            _kn().strftime('%Y-%m-%d %H:%M:%S'))
         conn.commit()
         conn.close()
 
@@ -1073,10 +1072,9 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
                 "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
                 (state['phone'], state['procedure'], 'Ціна вручну', price,
                  state['date'], str(user_id), _kn_str))
-            conn.execute(
-                "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug='Ціна вручну', cashback_price=?, cashback_confirmed_at=? "
-                "WHERE client_phone=? AND appt_date=? AND cashback_status IN ('needs_drug','needs_price','pending')",
-                (price, _kn_str, state['phone'], state['date']))
+            from cashback_confirm import confirm_photo_tasks
+            confirm_photo_tasks(conn, state['phone'], state['date'], state['procedure'],
+                                'Ціна вручну', price, _kn_str)
             conn.commit()
             conn.close()
             cashback_amount = round(price * 0.03, 2)

@@ -237,6 +237,24 @@ def test_price_reply_across_new_year_keeps_the_visit_year(client, pwa, cashback_
         [('confirmed',)]
 
 
+def test_price_reply_confirms_only_the_named_visit_of_two_that_day(client, pwa, cashback_ig, frozen_kyiv):
+    """Два живі візити в один день: ціна біорепарації не має підтвердити ботокс."""
+    frozen_kyiv('2026-11-04 12:00')
+    doctor, phone = _sid(), '380507770004'
+    _photo_task(pwa, phone, '2026-11-03', proc='Ботулінотерапія')
+    _exec(pwa, "INSERT INTO photo_tasks (client_phone, client_name, procedure_name, specialist,"
+               " appt_date, cashback_status) VALUES (?, 'Ірина', 'Біорепарація шкіри', 'victoria',"
+               " '2026-11-03', 'needs_drug')", (phone,))
+    _tagged_request(pwa, doctor, phone, '1103', '💰 Кешбек: Ірина (Біорепарація шкіри)\n\n'
+                    '  Біорепарація Rejuran S — ₴3500\n  Біорепарація Rejuran HB — ₴4200')
+    client.post('/api/webhook/ig-message', json={
+        'sender_id': 'page', 'recipient_id': doctor, 'is_echo': True, 'text': '3500'})
+
+    assert dict(_q(pwa, 'SELECT procedure_name, cashback_status FROM photo_tasks'
+                        ' WHERE client_phone=?', (phone,))) == {
+        'Ботулінотерапія': 'needs_drug', 'Біорепарація шкіри': 'confirmed'}
+
+
 # ── ig-ai-reply: черга ────────────────────────────────────────────────────────
 
 @pytest.fixture

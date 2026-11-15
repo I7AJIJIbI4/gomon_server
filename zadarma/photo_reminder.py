@@ -539,36 +539,45 @@ def check_pending_photos():
 _DEAD_STATUSES = ('CANCELLED', 'NO_SHOW')
 
 
-def visit_is_cancelled(conn, phone, date_str):
-    """True, якщо в клієнта на цю дату є записи, але жоден не живий.
+from cashback_confirm import same_procedure as _same_procedure  # noqa: E402
+
+
+def visit_is_cancelled(conn, phone, date_str, procedure=None):
+    """True, якщо візит, за який підтверджено кешбек, скасовано.
 
     Лікар переносить візит так: скасовує поточний запис і створює новий. Завдання
-    photo_tasks / cashback_pending прив'язані до телефону й дати, а не до запису,
-    тож без цієї перевірки підтверджена ціна нарахувала б кешбек за візит, якого
-    не було. Жодного запису на дату — не «скасований» (невідомо), кешбек не блокуємо.
+    photo_tasks / cashback_pending прив'язані до телефону, дати й назви процедури,
+    а не до запису, тож без цієї перевірки підтверджена ціна нарахувала б кешбек
+    за візит, якого не було.
+
+    Якщо на дату є записи з цією процедурою, вирішують лише вони (два візити в один
+    день, один скасовано: ціна ботоксу не йде за живу біорепарацію й навпаки).
+    Інакше дивимось на всі записи дня. Жодного запису — не «скасований» (невідомо),
+    кешбек не блокуємо.
     """
     if not phone:
         return False
     tail = '%' + phone[-9:]
-    total = live = 0
+    appts = []                       # (service, status)
     for (sj,) in conn.execute("SELECT services_json FROM clients WHERE phone LIKE ?", (tail,)):
         try:
             items = json.loads(sj or '[]')
         except Exception:
             continue
         for it in items:
-            if it.get('date') != date_str:
-                continue
-            total += 1
-            if (it.get('status') or '').upper() not in _DEAD_STATUSES:
-                live += 1
-    for (st,) in conn.execute(
-            "SELECT status FROM manual_appointments WHERE client_phone LIKE ? AND date=?",
-            (tail, date_str)):
-        total += 1
-        if (st or '').upper() not in _DEAD_STATUSES:
-            live += 1
-    return total > 0 and live == 0
+            if it.get('date') == date_str:
+                appts.append((it.get('service'), it.get('status')))
+    for svc, st in conn.execute(
+            "SELECT procedure_name, status FROM manual_appointments "
+            "WHERE client_phone LIKE ? AND date=?", (tail, date_str)):
+        appts.append((svc, st))
+
+    if procedure:
+        same = [a for a in appts if _same_procedure(a[0], procedure)]
+        if same:
+            appts = same
+    live = [a for a in appts if (a[1] or '').upper() not in _DEAD_STATUSES]
+    return bool(appts) and not live
 
 
 def check_pending_cashback_reminders(dry_run=False):
@@ -612,7 +621,7 @@ def check_pending_cashback_reminders(dry_run=False):
         _vc = None
     for r in rows:
         try:
-            cancelled = _vc is not None and visit_is_cancelled(_vc, r[1], r[6])
+            cancelled = _vc is not None and visit_is_cancelled(_vc, r[1], r[6], r[3])
         except Exception as _ve:      # немає таблиць/БД — не блокуємо гроші клієнта
             logger.warning('visit_is_cancelled error: {}'.format(_ve))
             cancelled = False

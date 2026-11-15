@@ -355,12 +355,12 @@ def test_manual_cancelled_task_earns_nothing(confirmed):
 
 # ── 3. cashback_pending: підтвердження через бота, нарахування через 24 год ───
 
-def _pending(db, appt_date=OLD_DAY):
+def _pending(db, appt_date=OLD_DAY, procedure='Ботулінотерапія'):
     conn = sqlite3.connect(db)
     conn.execute(
-        'INSERT INTO cashback_pending (phone, drug_specific, price, appt_date,'
-        " confirmed_at) VALUES (?,'Ботулінотерапія 1 зона (Neuronox)',2200,?,"
-        "'2026-11-08 10:00:00')", (PHONE, appt_date))
+        'INSERT INTO cashback_pending (phone, procedure_generic, drug_specific, price,'
+        " appt_date, confirmed_at) VALUES (?,?,'Ботулінотерапія 1 зона (Neuronox)',2200,?,"
+        "'2026-11-08 10:00:00')", (PHONE, procedure, appt_date))
     conn.commit()
     conn.close()
 
@@ -398,3 +398,99 @@ def test_pending_dry_run_for_a_cancelled_visit_writes_nothing(fb):
 
     assert _cashback(fb._db_file) == []
     assert _accrued(fb._db_file) == 0
+
+
+# ── 4. два візити в один день, один скасовано ─────────────────────────────────
+#
+# Підтвердження ціни прив'язане до телефону, дати й назви процедури. Скасований
+# візит не повинен брати кешбек за ціну, підтверджену для його живого сусіда.
+
+BOTOX = 'Ботулінотерапія'
+BIO = 'Біорепарація шкіри'
+
+
+def test_two_visits_cancelled_one_confirmed_gets_nothing(confirmed):
+    """Лікарка підтвердила ціну ботоксу, але ботокс того дня скасовано."""
+    _set_services(confirmed._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 12, service=BIO)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert _cashback(confirmed._db_file) == []
+    assert confirmed._sent == []
+    assert _task_status(confirmed._db_file)[0] == 'cancelled'
+
+
+def test_two_visits_live_one_confirmed_still_pays(confirmed):
+    """Те саме, але підтверджено ціну живого візиту (біорепарації)."""
+    conn = sqlite3.connect(confirmed._db_file)
+    conn.execute('UPDATE photo_tasks SET procedure_name=?', (BIO,))
+    conn.commit()
+    conn.close()
+    _set_services(confirmed._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 12, service=BIO)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert [r[0] for r in _cashback(confirmed._db_file)] == [OLD_DAY]
+
+
+def test_two_visits_with_a_cancelled_manual_one(confirmed):
+    """Скасований ручний ботокс і живий WLaunch-візит того ж дня."""
+    _add_manual(confirmed._db_file, OLD_DAY, '10:00', 'CANCELLED', proc=BOTOX)
+    _set_services(confirmed._db_file, [_wl('b', OLD_DAY, 12, service=BIO)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert _cashback(confirmed._db_file) == []
+    assert _task_status(confirmed._db_file)[0] == 'cancelled'
+
+
+def test_unknown_procedure_falls_back_to_the_whole_day(confirmed):
+    """Назви в записах немає (бот узяв шматок із дужок) — рішає весь день, як раніше."""
+    conn = sqlite3.connect(confirmed._db_file)
+    conn.execute("UPDATE photo_tasks SET procedure_name='щось невідоме'")
+    conn.commit()
+    conn.close()
+    _set_services(confirmed._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 12, service=BIO)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert [r[0] for r in _cashback(confirmed._db_file)] == [OLD_DAY]
+
+
+def test_pending_two_visits_cancelled_one_is_closed_not_paid(fb):
+    _set_services(fb._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 12, service=BIO)])
+    _pending(fb._db_file, procedure=BOTOX)
+    assert fb._process_pending_cashback() == 0
+
+    assert _cashback(fb._db_file) == []
+    assert _accrued(fb._db_file) == 1
+
+
+def test_pending_two_visits_live_one_is_paid(fb):
+    _set_services(fb._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 12, service=BIO)])
+    _pending(fb._db_file, procedure=BIO)
+    assert fb._process_pending_cashback() == 1
+
+    assert [r[0] for r in _cashback(fb._db_file)] == [OLD_DAY]
+
+
+@pytest.mark.parametrize('service, procedure, same', [
+    ('Ботулінотерапія', 'ботулінотерапія', True),                       # регістр
+    ('Smart Біоревіталізація, Ботулінотерапія',
+     'Ботулінотерапія, Smart Біоревіталізація', True),                  # порядок
+    ('Гіалуронідаза (розчинення філера)', 'розчинення філера', True),   # дужки з бота
+    ('Ліполітики (обличчя, 4 мл)', 'обличчя, 4 мл', True),
+    ('Ботулінотерапія, Консультація', 'Консультація', False),           # не шматок чужого візиту
+    ('Біорепарація шкіри', 'Ботулінотерапія', False),
+    ('', 'Ботулінотерапія', False),
+    ('Ботулінотерапія', '', False),
+])
+def test_procedure_name_matching(service, procedure, same):
+    photo = _load_real('photo_reminder_match', 'photo_reminder.py')
+    assert photo._same_procedure(service, procedure) is same

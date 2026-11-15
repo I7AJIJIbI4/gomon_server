@@ -521,14 +521,14 @@ def _process_pending_cashback(dry_run=False):
     conn = _db()
     try:
         rows = conn.execute(
-            "SELECT id, phone, drug_specific, price, appt_date, confirmed_at "
+            "SELECT id, phone, drug_specific, price, appt_date, confirmed_at, procedure_generic "
             "FROM cashback_pending WHERE accrued=0 AND confirmed_at IS NOT NULL"
         ).fetchall()
     finally:
         conn.close()
 
     accrued = 0
-    for row_id, phone, drug, price, appt_date, confirmed_at in rows:
+    for row_id, phone, drug, price, appt_date, confirmed_at, procedure in rows:
         try:
             confirmed_dt = datetime.strptime(confirmed_at, '%Y-%m-%d %H:%M:%S')
             if now < confirmed_dt + timedelta(hours=24):
@@ -542,7 +542,7 @@ def _process_pending_cashback(dry_run=False):
             from photo_reminder import visit_is_cancelled
             _vc = _db()
             try:
-                _cancelled = visit_is_cancelled(_vc, phone, appt_date)
+                _cancelled = visit_is_cancelled(_vc, phone, appt_date, procedure)
             finally:
                 _vc.close()
         except Exception as _ve:   # не блокуємо гроші клієнта через збій перевірки
