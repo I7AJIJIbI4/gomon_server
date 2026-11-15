@@ -52,7 +52,7 @@
 | `zadarma/photo_reminder.py` | Cron: `--create` (21:30 Kyiv) Drive папки + TG спеціалістам; `--check` (11:00 Kyiv) перевірка фото + TG адміну |
 | `zadarma/ig_health.py` | Cron: перевіряє IG-токен через graph.instagram.com, TG-алерт за 7 днів до кінця і при протуханні. `--dry-run` не пише прапорці і не шле TG |
 | `zadarma/wl_catalog.py` | **Кеш каталогу послуг WLaunch** + детектор розходжень. `--sync` / `--dry-run` / `--show`. Основа меню онлайн-запису |
-| `zadarma/cashback_confirm.py` | Підтвердження ціни лікаркою (бот ×2, IG): `confirm_photo_tasks` закриває завдання лише названої процедури; `same_procedure` — порівняння назв |
+| `zadarma/cashback_confirm.py` | Підтвердження ціни лікаркою (бот ×2, IG): `confirm_photo_tasks` закриває завдання лише названої процедури (не впізнано — лише якщо непідтверджене завдання дня одне); `save_pending` — єдиний запис у `cashback_pending`; `same_procedure` — порівняння назв |
 | `zadarma/gdrive.py` | Google Drive API v3 wrapper: JWT auth через openssl, створення папок, share, підрахунок файлів |
 
 ### Systemd Services
