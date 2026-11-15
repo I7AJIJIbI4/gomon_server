@@ -118,14 +118,35 @@ def test_procedure_with_brackets_is_matched(conn, cc):
     assert _rows(conn)[BIO][0] == 'needs_drug'
 
 
-def test_unrecognised_procedure_confirms_the_whole_day_as_before(conn, cc):
-    """Назву не впізнали — поведінка лишається колишньою, підтвердження не губиться."""
+def test_unrecognised_procedure_with_several_visits_confirms_nothing(conn, cc):
+    """Назву не впізнали, а непідтверджених візитів кілька — ціну не розносимо на всі."""
     _task(conn, BOTOX)
     _task(conn, BIO)
     n = cc.confirm_photo_tasks(conn, PHONE, DAY, 'щось невідоме', 'Ціна вручну', 1000, TS)
 
-    assert n == 2
-    assert {s for s, _, _ in _rows(conn).values()} == {'confirmed'}
+    assert n == 0
+    assert {s for s, _, _ in _rows(conn).values()} == {'needs_drug'}
+
+
+def test_drug_from_brackets_of_a_combined_visit_does_not_confirm_the_neighbour(conn, cc):
+    """«Ботулінотерапія (Neuronox), Біорепарація»: бот бере «Neuronox», і раніше
+    ціна ботоксу йшла й окремому візиту на біорепарацію."""
+    _task(conn, 'Ботулінотерапія (Neuronox), Біорепарація')
+    _task(conn, BIO)
+    n = cc.confirm_photo_tasks(conn, PHONE, DAY, 'Neuronox', 'Neuronox', 2200, TS)
+
+    assert n == 0
+    assert _rows(conn)[BIO] == ('needs_drug', None, None)
+
+
+def test_unrecognised_procedure_confirms_the_only_pending_task(conn, cc):
+    """Одне непідтверджене завдання поруч із уже підтвердженим — його й закриваємо."""
+    _task(conn, BOTOX, status='confirmed')
+    _task(conn, BIO)
+    n = cc.confirm_photo_tasks(conn, PHONE, DAY, 'щось невідоме', 'Ціна вручну', 1000, TS)
+
+    assert n == 1
+    assert _rows(conn)[BIO] == ('confirmed', 'Ціна вручну', 1000)
 
 
 def test_single_task_is_confirmed_even_if_the_name_differs(conn, cc):
@@ -143,3 +164,45 @@ def test_no_raw_date_wide_photo_tasks_confirm_left(fname):
         src = fh.read()
     assert not re.search(r"UPDATE photo_tasks SET cashback_status='confirmed'", src)
     assert 'confirm_photo_tasks' in src
+
+
+# ── save_pending: повторне підтвердження не скидає закритий рядок ─────────────
+
+@pytest.fixture
+def pconn():
+    c = sqlite3.connect(':memory:')
+    c.execute(
+        'CREATE TABLE cashback_pending (id INTEGER PRIMARY KEY AUTOINCREMENT,'
+        ' phone TEXT NOT NULL, client_name TEXT, procedure_generic TEXT NOT NULL,'
+        ' drug_specific TEXT NOT NULL, price REAL NOT NULL, appt_date TEXT NOT NULL,'
+        ' appt_time TEXT, specialist TEXT, confirmed_by TEXT, confirmed_at TEXT,'
+        ' accrued INTEGER DEFAULT 0, UNIQUE(phone, procedure_generic, appt_date))')
+    yield c
+    c.close()
+
+
+def _pend(c):
+    return c.execute('SELECT drug_specific, price, accrued FROM cashback_pending').fetchall()
+
+
+def test_save_pending_inserts_and_updates_while_waiting(pconn, cc):
+    assert cc.save_pending(pconn, PHONE, '', BOTOX, 'Neuronox', 2200, DAY, '1', TS)
+    assert cc.save_pending(pconn, PHONE, '', BOTOX, 'Xeomin', 2600, DAY, '1', TS)
+    assert _pend(pconn) == [('Xeomin', 2600, 0)]
+
+
+@pytest.mark.parametrize('closed', [1, -1])
+def test_save_pending_does_not_reopen_a_closed_row(pconn, cc, closed):
+    """Раніше INSERT OR REPLACE скидав accrued=0: кешбек ішов удруге, а
+    скасований візит повертався в чергу."""
+    cc.save_pending(pconn, PHONE, '', BOTOX, 'Neuronox', 2200, DAY, '1', TS)
+    pconn.execute('UPDATE cashback_pending SET accrued=?', (closed,))
+
+    assert not cc.save_pending(pconn, PHONE, '', BOTOX, 'Xeomin', 2600, DAY, '1', TS)
+    assert _pend(pconn) == [('Neuronox', 2200, closed)]
+
+
+@pytest.mark.parametrize('fname', ['bot.py', 'pwa_api.py'])
+def test_no_insert_or_replace_into_cashback_pending_left(fname):
+    with open(os.path.join(ZADARMA, fname), encoding='utf-8') as fh:
+        assert 'INSERT OR REPLACE INTO cashback_pending' not in fh.read()

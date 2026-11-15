@@ -311,6 +311,7 @@ def print_report(results, ci=False):
 
 
 def main():
+    global AGENT_MODEL
     parser = argparse.ArgumentParser()
     parser.add_argument('--sample', type=int, default=30,
                         help='Кількість прикладів для тестування (0 = всі)')
@@ -322,7 +323,10 @@ def main():
                         help='Pass rate %% below which CI fails (default 65)')
     parser.add_argument('--ci', action='store_true',
                         help='Output Markdown for GitHub Actions step summary')
+    parser.add_argument('--model', default=AGENT_MODEL,
+                        help='Модель агента (за замовчуванням %(default)s), напр. claude-sonnet-5-5')
     args = parser.parse_args()
+    AGENT_MODEL = args.model
 
     if not os.path.exists(args.input):
         sys.exit('Golden set not found: {}. Run golden_set_builder.py first.'.format(args.input))

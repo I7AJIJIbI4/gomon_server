@@ -491,19 +491,18 @@ def _download_tg_photo(file_id):
         return None, None
 
 
+# Порожня відповідь моделі: клієнт отримує цю фразу, адмін — ескалацію
+NO_TEXT_HANDOFF = 'Дякую за повідомлення! Лікар Вікторія відповість вам у найближчий вільний час.'
+
+
 def _call_anthropic(system_prompt, messages):
     """Call Anthropic API and return reply text."""
-    body = {
+    payload = json.dumps({
         'model': AI_MODEL,
         'max_tokens': 1024,
         'system': system_prompt,
         'messages': messages,
-    }
-    # Sonnet 5.x за замовчуванням думає: thinking-блок іде першим і з'їдає max_tokens
-    if AI_MODEL == 'claude-sonnet-5-5':
-        body['thinking'] = {'type': 'between_tools'}
-        body['output_config'] = {'effort': 'medium'}
-    payload = json.dumps(body)
+    })
     try:
         r = requests.post(
             'https://api.anthropic.com/v1/messages',
@@ -526,7 +525,7 @@ def _call_anthropic(system_prompt, messages):
                     # Відмова моделі / порожня відповідь: не лишаємо клієнта мовчки,
                     # віддаємо розмову адміну через існуючий шлях <ESCALATE>
                     logger.warning('Anthropic returned no text: {}'.format(str(data)[:300]))
-                    return '<ESCALATE>'
+                    return NO_TEXT_HANDOFF + ' <ESCALATE>'
                 return text
             logger.warning('Anthropic returned empty content: {}'.format(str(data)[:200]))
             return None

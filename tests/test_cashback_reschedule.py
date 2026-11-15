@@ -191,6 +191,26 @@ def test_same_day_reschedule_pays_one_visit(fb):
     assert [a['time'] for a in fb._post_visits] == ['15:00']
 
 
+def test_feedback_dry_run_accrues_nothing(fb):
+    """--feedback --dry-run раніше нараховував справжній кешбек до перевірки dry_run."""
+    _set_services(fb._db_file, [_wl('a', OLD_DAY, 10)])
+    fb.run_feedback(dry_run=True, override_date=OLD_DAY)
+
+    assert _cashback(fb._db_file) == []
+    assert fb._post_visits == []
+
+
+@pytest.mark.parametrize('status', ['CANCELED', 'CANCEL', 'ANNULLED', 'REJECTED', 'NO_SHOW'])
+def test_visit_is_cancelled_knows_every_dead_status(fb, status):
+    """Той самий набір статусів, що sms_reminder.CANCELLED_STATUSES."""
+    _set_services(fb._db_file, [_wl('a', OLD_DAY, 10, status=status)])
+    conn = sqlite3.connect(fb._db_file)
+    try:
+        assert sys.modules['photo_reminder'].visit_is_cancelled(conn, PHONE, OLD_DAY)
+    finally:
+        conn.close()
+
+
 @pytest.mark.parametrize('status', ['CANCELLED', 'cancelled', 'NO_SHOW'])
 def test_cancelled_and_no_show_never_earn(fb, status):
     _set_services(fb._db_file, [_wl('old', OLD_DAY, 10, status=status)])
@@ -379,7 +399,7 @@ def test_pending_cashback_for_a_cancelled_visit_is_closed_not_paid(fb):
     assert fb._process_pending_cashback() == 0
 
     assert _cashback(fb._db_file) == []
-    assert _accrued(fb._db_file) == 1
+    assert _accrued(fb._db_file) == -1   # закрито без виплати
 
 
 def test_pending_cashback_for_a_live_visit_is_paid(fb):
@@ -467,7 +487,7 @@ def test_pending_two_visits_cancelled_one_is_closed_not_paid(fb):
     assert fb._process_pending_cashback() == 0
 
     assert _cashback(fb._db_file) == []
-    assert _accrued(fb._db_file) == 1
+    assert _accrued(fb._db_file) == -1   # закрито без виплати
 
 
 def test_pending_two_visits_live_one_is_paid(fb):
@@ -494,3 +514,65 @@ def test_pending_two_visits_live_one_is_paid(fb):
 def test_procedure_name_matching(service, procedure, same):
     photo = _load_real('photo_reminder_match', 'photo_reminder.py')
     assert photo._same_procedure(service, procedure) is same
+
+
+# ── 4. appt_id, повторне підтвердження, повторне сповіщення ───────────────────
+
+def test_task_appt_id_decides_over_the_procedure_name(confirmed):
+    """Два ботокси в один день: 10:00 скасовано, 15:00 живий. Завдання саме
+    скасованого візиту (appt_id=wl_a) кешбеку не дає, хоча за назвою живий є."""
+    conn = sqlite3.connect(confirmed._db_file)
+    conn.execute("UPDATE photo_tasks SET appt_id='wl_a'")
+    conn.commit()
+    conn.close()
+    _set_services(confirmed._db_file, [
+        _wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX),
+        _wl('b', OLD_DAY, 15, service=BOTOX)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert _cashback(confirmed._db_file) == []
+    assert _task_status(confirmed._db_file)[0] == 'cancelled'
+
+
+def test_task_appt_id_of_a_live_manual_visit_pays(confirmed):
+    """Ручний запис (appt_id = його id) живий, а WLaunch-ботокс того дня скасовано."""
+    _set_services(confirmed._db_file, [_wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX)])
+    _add_manual(confirmed._db_file, OLD_DAY, '15:00', 'CONFIRMED', proc=BOTOX)
+    conn = sqlite3.connect(confirmed._db_file)
+    mid = conn.execute('SELECT id FROM manual_appointments').fetchone()[0]
+    conn.execute('UPDATE photo_tasks SET appt_id=?', (str(mid),))
+    conn.commit()
+    conn.close()
+    confirmed.check_pending_cashback_reminders()
+
+    assert [r[0] for r in _cashback(confirmed._db_file)] == [OLD_DAY]
+
+
+def test_unknown_appt_id_falls_back_to_the_procedure_name(confirmed):
+    conn = sqlite3.connect(confirmed._db_file)
+    conn.execute("UPDATE photo_tasks SET appt_id='wl_gone'")
+    conn.commit()
+    conn.close()
+    _set_services(confirmed._db_file, [_wl('a', OLD_DAY, 10, status='CANCELLED', service=BOTOX)])
+    confirmed.check_pending_cashback_reminders()
+
+    assert _cashback(confirmed._db_file) == []
+
+
+def test_pending_already_in_cashback_is_closed_without_a_second_notice(fb, monkeypatch):
+    """Рядок кешбеку вже є (наприклад, повторне підтвердження) — не кажемо клієнту
+    «нараховано» вдруге."""
+    notices = []
+    monkeypatch.setattr(sys.modules['notifier'], 'notify_client',
+                        lambda *a, **kw: notices.append(a))
+    _set_services(fb._db_file, [_wl('v', OLD_DAY, 10, service=BOTOX)])
+    _pending(fb._db_file)
+    conn = sqlite3.connect(fb._db_file)
+    conn.execute("INSERT INTO cashback (phone, amount, procedure_name, appt_date)"
+                 " VALUES (?, 66, 'Ботулінотерапія 1 зона (Neuronox)', ?)", (PHONE, OLD_DAY))
+    conn.commit()
+    conn.close()
+
+    assert fb._process_pending_cashback() == 0
+    assert _accrued(fb._db_file) == 1
+    assert notices == []

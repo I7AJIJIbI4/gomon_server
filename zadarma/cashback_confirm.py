@@ -14,6 +14,31 @@ photo_reminder підтягує з нього `same_procedure`.
 
 PENDING_STATUSES = ('needs_drug', 'needs_price', 'pending')
 
+# cashback_pending.accrued: 0 — чекає, 1 — нараховано (або сума < 1 грн),
+# -1 — закрито без виплати, бо візит скасовано
+ACCRUED_CANCELLED = -1
+
+
+def save_pending(conn, phone, client_name, procedure, drug, price, appt_date,
+                 confirmed_by, confirmed_at):
+    """Записує підтверджену лікаркою ціну в cashback_pending.
+
+    Раніше всі три шляхи робили INSERT OR REPLACE з accrued=0: повторне
+    підтвердження вже нарахованого візиту скидало accrued, і кешбек ішов удруге
+    (з іншим препаратом — окремим рядком cashback), а закритий скасований візит
+    повертався в чергу. Тепер ціну можна змінити лише доки рядок чекає.
+    Повертає True, якщо записано, False — рядок уже закритий.
+    """
+    cur = conn.execute(
+        "INSERT INTO cashback_pending (phone, client_name, procedure_generic, drug_specific,"
+        " price, appt_date, confirmed_by, confirmed_at, accrued) VALUES (?,?,?,?,?,?,?,?,0) "
+        "ON CONFLICT(phone, procedure_generic, appt_date) DO UPDATE SET"
+        " drug_specific=excluded.drug_specific, price=excluded.price,"
+        " confirmed_by=excluded.confirmed_by, confirmed_at=excluded.confirmed_at"
+        " WHERE cashback_pending.accrued=0",
+        (phone, client_name or '', procedure, drug, price, appt_date, confirmed_by, confirmed_at))
+    return cur.rowcount > 0
+
 
 def same_procedure(service, procedure):
     """Назва з завдання/підтвердження vs назва послуги в записі.
@@ -36,8 +61,9 @@ def confirm_photo_tasks(conn, phone, appt_date, procedure, drug, price, confirme
     """Позначає підтвердженим завдання саме цієї процедури; повертає, скільки оновлено.
 
     Не комітить — це робить викликач разом із cashback_pending. Якщо процедуру
-    впізнати не вдалося (бот узяв шматок із дужок, назви немає), поведінка як раніше:
-    підтверджуються всі непідтверджені завдання того дня.
+    впізнати не вдалося (бот узяв шматок із дужок, назви немає), підтверджується
+    лише єдине непідтверджене завдання дня. Коли таких кілька, нічого не чіпаємо:
+    інакше ціна однієї процедури пішла б за всі візити дня.
     """
     tasks = conn.execute(
         "SELECT id, procedure_name, cashback_status FROM photo_tasks "
@@ -45,8 +71,10 @@ def confirm_photo_tasks(conn, phone, appt_date, procedure, drug, price, confirme
     named = [t for t in tasks if same_procedure(t[1], procedure)]
     # Процедуру впізнано серед завдань дня — чіпаємо лише її, і лише якщо вона ще не
     # підтверджена (повторний клік не має перекинути ціну на сусідній візит).
-    # Не впізнано — усі непідтверджені завдання дня, як було.
+    # Не впізнано — лише якщо непідтверджене завдання дня одне.
     ids = [tid for tid, _, st in (named or tasks) if st in PENDING_STATUSES]
+    if not named and len(ids) > 1:
+        ids = []
     for tid in ids:
         conn.execute(
             "UPDATE photo_tasks SET cashback_status='confirmed', cashback_drug=?, "

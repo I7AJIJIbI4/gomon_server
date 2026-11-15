@@ -536,29 +536,33 @@ def check_pending_photos():
         len(rows), updated, sum(len(v) for v in by_spec.values())))
 
 
-_DEAD_STATUSES = ('CANCELLED', 'NO_SHOW')
+# Той самий набір, що sms_reminder.CANCELLED_STATUSES
+_DEAD_STATUSES = ('CANCELLED', 'CANCELED', 'CANCEL', 'ANNULLED', 'REJECTED', 'NO_SHOW')
 
 
 from cashback_confirm import same_procedure as _same_procedure  # noqa: E402
 
 
-def visit_is_cancelled(conn, phone, date_str, procedure=None):
+def visit_is_cancelled(conn, phone, date_str, procedure=None, appt_id=None):
     """True, якщо візит, за який підтверджено кешбек, скасовано.
 
     Лікар переносить візит так: скасовує поточний запис і створює новий. Завдання
     photo_tasks / cashback_pending прив'язані до телефону, дати й назви процедури,
-    а не до запису, тож без цієї перевірки підтверджена ціна нарахувала б кешбек
-    за візит, якого не було.
+    тож без цієї перевірки підтверджена ціна нарахувала б кешбек за візит, якого
+    не було.
 
-    Якщо на дату є записи з цією процедурою, вирішують лише вони (два візити в один
-    день, один скасовано: ціна ботоксу не йде за живу біорепарацію й навпаки).
-    Інакше дивимось на всі записи дня. Жодного запису — не «скасований» (невідомо),
-    кешбек не блокуємо.
+    Хто вирішує, від точнішого до загальнішого:
+    - `appt_id` завдання (`wl_<id>` для WLaunch або id ручного запису), якщо такий
+      запис знайшовся;
+    - записи дня з цією процедурою (два візити в один день, один скасовано: ціна
+      ботоксу не йде за живу біорепарацію й навпаки);
+    - усі записи дня.
+    Жодного запису — не «скасований» (невідомо), кешбек не блокуємо.
     """
     if not phone:
         return False
     tail = '%' + phone[-9:]
-    appts = []                       # (service, status)
+    appts = []                       # (ids, service, status)
     for (sj,) in conn.execute("SELECT services_json FROM clients WHERE phone LIKE ?", (tail,)):
         try:
             items = json.loads(sj or '[]')
@@ -566,18 +570,37 @@ def visit_is_cancelled(conn, phone, date_str, procedure=None):
             continue
         for it in items:
             if it.get('date') == date_str:
-                appts.append((it.get('service'), it.get('status')))
-    for svc, st in conn.execute(
-            "SELECT procedure_name, status FROM manual_appointments "
+                appts.append(({'wl_' + str(it.get('appt_id') or '')},
+                              it.get('service'), it.get('status')))
+    for mid, wid, svc, st in conn.execute(
+            "SELECT id, wlaunch_id, procedure_name, status FROM manual_appointments "
             "WHERE client_phone LIKE ? AND date=?", (tail, date_str)):
-        appts.append((svc, st))
+        ids = {str(mid)}
+        if wid:
+            ids.add('wl_' + str(wid))
+        appts.append((ids, svc, st))
 
-    if procedure:
-        same = [a for a in appts if _same_procedure(a[0], procedure)]
+    by_id = [a for a in appts if appt_id and str(appt_id) in a[0]]
+    if by_id:
+        appts = by_id
+    elif procedure:
+        same = [a for a in appts if _same_procedure(a[1], procedure)]
         if same:
             appts = same
-    live = [a for a in appts if (a[1] or '').upper() not in _DEAD_STATUSES]
+    live = [a for a in appts if (a[2] or '').upper() not in _DEAD_STATUSES]
     return bool(appts) and not live
+
+
+def visit_is_cancelled_safe(conn, phone, date_str, procedure=None, appt_id=None):
+    """`visit_is_cancelled`, що не валить нарахування: збій перевірки (немає таблиці,
+    зіпсований JSON) — візит вважається живим, гроші клієнта не блокуємо."""
+    if conn is None:
+        return False
+    try:
+        return visit_is_cancelled(conn, phone, date_str, procedure, appt_id)
+    except Exception as e:
+        logger.warning('visit_is_cancelled error: {}'.format(e))
+        return False
 
 
 def check_pending_cashback_reminders(dry_run=False):
@@ -594,7 +617,7 @@ def check_pending_cashback_reminders(dry_run=False):
 
     conn = sqlite3.connect(DB_PATH, timeout=5)
     rows = conn.execute(
-        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist, cashback_confirmed_at "
+        "SELECT id, client_phone, client_name, procedure_name, cashback_drug, cashback_price, appt_date, appt_time, specialist, cashback_confirmed_at, appt_id "
         "FROM photo_tasks "
         "WHERE cashback_status='confirmed' AND cashback_notified_at IS NULL").fetchall()
     conn.close()
@@ -620,23 +643,16 @@ def check_pending_cashback_reminders(dry_run=False):
     except Exception:
         _vc = None
     for r in rows:
-        try:
-            cancelled = _vc is not None and visit_is_cancelled(_vc, r[1], r[6], r[3])
-        except Exception as _ve:      # немає таблиць/БД — не блокуємо гроші клієнта
-            logger.warning('visit_is_cancelled error: {}'.format(_ve))
-            cancelled = False
-        if not cancelled:
+        if not visit_is_cancelled_safe(_vc, r[1], r[6], r[3], r[10]):
             live_rows.append(r)
             continue
         logger.info('{}cashback skip (visit cancelled): {} {} {}'.format(
             '[dry-run] ' if dry_run else '', r[1], r[6], r[4] or r[3]))
         if not dry_run:
             try:
-                _cc = sqlite3.connect(DB_PATH, timeout=5)
-                _cc.execute("UPDATE photo_tasks SET cashback_status='cancelled', "
+                _vc.execute("UPDATE photo_tasks SET cashback_status='cancelled', "
                             "cashback_notified_at=datetime('now') WHERE id=?", (r[0],))
-                _cc.commit()
-                _cc.close()
+                _vc.commit()
             except Exception as _ue:
                 logger.warning('close cancelled task error: {}'.format(_ue))
     if _vc is not None:

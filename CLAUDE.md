@@ -65,7 +65,7 @@
 ### Frontend (PWA)
 | Файл | Призначення |
 |------|-------------|
-| `public_html/app/index.html` | **Весь PWA** (~121KB, SPA на vanilla JS) |
+| `public_html/app/index.html` | **Весь PWA** (~450KB, SPA на vanilla JS) |
 | `public_html/app/sw.js` | Service Worker: кеш, push, navigate |
 | `public_html/app/manifest.json` | PWA маніфест (іконки, назва, display:standalone) |
 | `public_html/app/gomon-chat.js` | GomonAI чат-віджет |
@@ -91,7 +91,7 @@ last_service TEXT, last_visit TEXT, visits_count INT,
 services_json TEXT  -- JSON масив [{appt_id, date, hour, service, status, specialist}]
 ```
 - `phone` — нормалізований номер (тільки цифри), напр. `380933297777`
-- `services_json` — топ-15 записів, відсортовано за датою (новіші першими)
+- `services_json` — до 50 записів, відсортовано за датою (новіші першими)
 - Статуси: `CONFIRMED_BY_CLIENT`, `CANCELLED`, `CONFIRMED`, тощо
 - `specialist` — `'victoria'` або `'anastasia'` (заповнюється при sync через `resources[].phone`)
 
@@ -163,8 +163,8 @@ appt_date TEXT, created_at TEXT, UNIQUE(phone, procedure_name, appt_date)
 ```
 - 3% від суми процедури, auto-accrued by appt_reminder.py --feedback
 - Dedup: phone+procedure+date
-- Скасований візит кешбеку не дає: `photo_reminder.visit_is_cancelled(conn, phone, date, procedure)` перевіряється в `check_pending_cashback_reminders` і `_process_pending_cashback`. Записи з тією ж процедурою вирішують за весь день; невідомий візит кешбек НЕ блокує
-- `photo_tasks` / `cashback_pending` ключуються phone+date+назва процедури (не appt_id). `run_feedback` бере записи з `_collect_appts` (дедуп manual↔WLaunch за `wlaunch_id`)
+- Скасований візит кешбеку не дає: `photo_reminder.visit_is_cancelled_safe(conn, phone, date, procedure, appt_id)` перевіряється в `check_pending_cashback_reminders` і `_process_pending_cashback`. Вирішує запис за `photo_tasks.appt_id` (`wl_<id>` або id ручного запису), інакше записи з тією ж процедурою, інакше весь день; невідомий візит і збій перевірки кешбек НЕ блокують
+- `photo_tasks` / `cashback_pending` ключуються phone+date+назва процедури. `cashback_pending.accrued`: 0 чекає, 1 нараховано, -1 закрито (візит скасовано). Писати лише через `cashback_confirm.save_pending` — він не відкриває закритий рядок (колишній `INSERT OR REPLACE` скидав `accrued` і платив удруге). `run_feedback` бере записи з `_collect_appts` (дедуп manual↔WLaunch за `wlaunch_id`)
 
 ---
 
@@ -231,8 +231,8 @@ _redeemCashback(phone, amount)    // списання кешбеку
 ```
 
 ### Важливо: дві функції `_fmtDate`
-- `_fmtDate(d)` (рядок ~1486) — приймає `Date` об'єкт → повертає `YYYY-MM-DD` (для calendar)
-- `_fmtDateStr(d)` (рядок ~3031) — приймає рядок `YYYY-MM-DD` → повертає `DD.MM.YYYY` (для відображення)
+- `_fmtDate(d)` — приймає `Date` об'єкт → повертає `YYYY-MM-DD` (для calendar)
+- `_fmtDateStr(d)` — приймає рядок `YYYY-MM-DD` → повертає `DD.MM.YYYY` (для відображення)
 - **НЕ перейменовувати** і не додавати третю функцію з тим самим іменем!
 
 ---
@@ -348,7 +348,7 @@ _redeemCashback(phone, amount)    // списання кешбеку
   }
 ]
 ```
-- Топ-15 записів, нові першими
+- До 50 записів, нові першими
 - `specialist` — заповнюється `sync_appointments.py` через `resources[].phone`
 
 ---
@@ -505,6 +505,16 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 ---
 
+## Тести
+
+```bash
+python -m pytest tests -q          # весь набір; те саме запускає pre-push хук
+```
+- `tests/conftest.py` підставляє заглушки (`config`, `wlaunch_api`, `sms_fly`, `notifier`, `push_sender`, `loyalty`) і тимчасові БД; заглушку `fcntl` для Windows ставить сам тестовий файл (див. `tests/test_appt_collection.py`)
+- `load_real(alias, file, db_path)` — справжній модуль під окремим іменем, поверх заглушок
+- `frozen_kyiv('YYYY-MM-DD HH:MM')` — фіксує `kyiv_now()`
+- Новий тест на баг спершу має впасти на старому коді
+
 ## Правила розробки
 
 ### Перед деплоєм JS-коду обов'язково перевірити:
@@ -544,18 +554,6 @@ navigator.serviceWorker.addEventListener('message', e => {
 15. **prices.json readable**: `curl -s https://drgomon.beauty/sitepro/modal_prices.php | head -c 50` — не порожній `{}`
 16. **promos.json**: `curl -s https://drgomon.beauty/promos.php | head -c 50` — не порожній
 17. **SQLite locks**: `fuser zadarma/users.db` — ніхто не тримає lock
-
----
-
-## Конфіденційні файли (НЕ в git)
-
-- `zadarma/config.py` — API ключі (є `config.example.php` як шаблон)
-- `zadarma/vapid_private.key` — VAPID приватний ключ
-- `zadarma/vapid_public.txt` — VAPID публічний ключ
-- `private_data/prices.json` — прайс-лист
-- `public_html/app/config.php` — конфіг чату
-
-> На сервері шляхи з префіксом `/opt/gomon/app/` (symlink `/home/gomoncli/` → `/opt/gomon/app/`)
 
 ---
 
@@ -716,10 +714,10 @@ navigator.serviceWorker.addEventListener('message', e => {
 - **WLaunch в календарі**: показуються з бейджом `WL`, не редагуються через адмінку (тільки через WLaunch)
 - **PIN_AUTH**: словник `{phone: pin}` у pwa_api.py для bypass SMS OTP. Наразі: `16452040153` (тестовий аккаунт Анастасії, PIN `0375`)
 - **Міжнародні номери в auth**: `formatPhone()` і `sendOtp()` визначають міжнародний номер як `≥11 цифр і не починається з 0`. В такому випадку `380` НЕ додається. UA-номери (0XXXXXXXXX або XXXXXXXXX) — як і раніше. Для тестового `+1`: вводити `16452040153` у поле (незважаючи на `+38` в префіксі — працює функціонально).
-- **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY захардкоджений в ендпоінті). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються. Картка показує `procedure.price` (з prices.json). Якщо клієнт новий — картка показує поле вводу телефону; при підтвердженні клієнт автоматично зберігається через `POST /api/admin/clients/add`. `_load_clients_for_ai()` сортує клієнтів без `NULLS LAST` (не підтримується SQLite 3.6).
+- **Admin AI assistant**: `/api/admin/ai-intent` — NLP через `claude-sonnet-4-6` (ANTHROPIC_KEY з `config.py`). Повертає `{action, client, client_options, procedure, procedure_options, date, time, specialist, notes, reply}`. "null" рядки від моделі нормалізуються до `None`. Markdown-блоки у відповіді стрипаються. Картка показує `procedure.price` (з prices.json). Якщо клієнт новий — картка показує поле вводу телефону; при підтвердженні клієнт автоматично зберігається через `POST /api/admin/clients/add`. `_load_clients_for_ai()` сортує клієнтів без `NULLS LAST` (не підтримується SQLite 3.6).
 - **Specialist stats filter**: `/api/admin/stats` для ролі `specialist` фільтрує `visits_month` і `recent` по `specialist` полю у `services_json`. Тестовий акаунт `16452040153` → `'anastasia'` в `SPECIALIST_MAP`.
 - **Push dedup**: `push_sender.py::save_subscription()` лімітує до 2 активних підписок на телефон (найновіші), щоб уникнути дублікатів push.
-- **Часові зони**: СКРІЗЬ kyiv_now() — Python (tz_utils), PHP (date_default_timezone_set), cron (TZ=Europe/Kyiv). НІКОЛИ datetime.now() або utcnow() для порівняння дат.
+- **Часові зони**: СКРІЗЬ kyiv_now() — Python (tz_utils), PHP (date_default_timezone_set), cron (UTC + `kyiv_gate.py`, див. розділ Cron). НІКОЛИ datetime.now() або utcnow() для порівняння дат.
 - **Слово "клініка"**: ЗАБОРОНЕНО у всіх текстах для клієнтів. Замість цього: "Dr. Gomon Cosmetology", "простір Dr. Gomon", "студія", "ми"/"у нас". Правило прописане в system_prompt.txt.
 - **AI скасування записів**: TG Business бот і GomonAI в додатку можуть скасовувати записи клієнтів через теги `<CANCEL>` / `<CANCEL date="YYYY-MM-DD">`. AI спочатку уточнює, потім скасовує найближчий або вказаний запис. Скасування проходить через WLaunch + local DB + notifier (як при скасуванні адміном). Гостям — відмова з порадою авторизуватись.
 - **AI НЕ записує**: Бот не створює записи. При запиті на запис збирає ПІБ, телефон, процедуру, час → ескалює до лікаря через `<ESCALATE>`.
@@ -733,7 +731,7 @@ navigator.serviceWorker.addEventListener('message', e => {
 
 | Місце | localStorage ключ | Ліміт |
 |-------|------------------|-------|
-| Сайт (`gomon-widget.js`) | `gw_rl` | 10/день |
+| Сайт (`gomon-widget.js`) | `gw_rl` | 5/день |
 | PWA гість | `gc_rl_guest` | 5/день |
 | PWA авторизований | `gc_rl_{phone}` | 10/день |
 
@@ -868,8 +866,7 @@ var conversionMap = {
 
 **#5 Guest dead end:** Гість може використовувати AI-асистента на auth-екрані або Telegram-бот. Для повноцінної реєстрації — зателефонувати або написати в Instagram Direct. Не потребує коду — UX вже покриває.
 
-**#6 Chat rate limit (localStorage → серверний):**
-Рекомендовано: нова таблиця `chat_rate(phone TEXT, date TEXT, count INT, UNIQUE(phone,date))` в otp_sessions.db. При кожному запиті до chat.php перевіряти count < 20. Найнадійніший варіант.
+**#6 Chat rate limit (localStorage → серверний):** зроблено — `chat.php` сам рахує ліміт (5/день гість, 10/день авторизований, депозит за сьогодні знімає ліміт), localStorage лишився лише для UX.
 
 **#10 Manual appointments sync TO WLaunch:** Поки не імплементовано. Manual записи живуть тільки в нашій БД. WLaunch не знає про них. При міграції з WLaunch — реалізувати POST до WLaunch API при створенні manual запису.
 
@@ -885,7 +882,7 @@ var conversionMap = {
 
 ### Cron (оновлено 2026-04-14)
 
-Дивись головну секцію "Cron (crontab -l)" вище — єдине джерело правди. `TZ=Europe/Kyiv`.
+Дивись головну секцію "Cron (crontab -l)" вище — єдине джерело правди.
 
 ---
 
@@ -925,8 +922,8 @@ claude-sonnet-4-6 → claude-sonnet-5-5 → claude-haiku-4-5
 ```
 - Кешована модель у `/opt/gomon/app/private_data/active_model.txt`
 - 429 (rate limit) НЕ пробує наступну модель (key-level, не model-level)
-- `claude-sonnet-5-5`: без `temperature` (400), за замовчуванням першим іде `thinking`-блок — текст брати з усіх `text`-блоків, слати `thinking:{type:"between_tools"}` + `output_config:{effort:"medium"}`. Порожня відповідь у TG → `<ESCALATE>`
-- Нову модель міряти `agent_tester.py --sample 15 --seed 7` (~1 $ за прогін, промпт ~16K токенів). 06.11.2026 тести вичерпали баланс прод-ключа — AI-чати лежали
+- `claude-sonnet-5-5`: без `temperature` (400), за замовчуванням першим іде `thinking`-блок — текст брати з усіх `text`-блоків, слати `thinking:{type:"between_tools"}` + `output_config:{effort:"medium"}`. Порожня відповідь у TG → клієнту `NO_TEXT_HANDOFF` + `<ESCALATE>` адміну
+- Нову модель міряти `agent_tester.py --model <id> --sample 15 --seed 7` (~1 $ за прогін, промпт ~16K токенів). 06.11.2026 тести вичерпали баланс прод-ключа — AI-чати лежали
 - Rate limit списується ПІСЛЯ успішної відповіді (не до)
 - Клієнтський timeout: 25с, серверний: 20с (primary) / 12с (fallback)
 

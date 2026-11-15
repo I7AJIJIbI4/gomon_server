@@ -471,7 +471,9 @@ def run_feedback(dry_run=False, override_date=None):
             _status = cashback_classify(procedure)
         except ImportError:
             _status = 'needs_price' if ',' in procedure else 'auto'
-        if _status == 'auto':
+        if _status == 'auto' and dry_run:
+            logger.info('    [DRY-RUN] кешбек не нараховуємо')
+        elif _status == 'auto':
             try:
                 _accrue_cashback(appt)
                 cashback_ok += 1
@@ -528,6 +530,14 @@ def _process_pending_cashback(dry_run=False):
         conn.close()
 
     accrued = 0
+    # Одне з'єднання на всю перевірку скасувань, а не нове на кожен рядок
+    try:
+        from photo_reminder import visit_is_cancelled_safe
+        from cashback_confirm import ACCRUED_CANCELLED
+        _vc = _db() if rows else None
+    except Exception as _ie:         # не блокуємо гроші клієнта через збій перевірки
+        logger.warning('    visit check unavailable: {}'.format(_ie))
+        _vc = None
     for row_id, phone, drug, price, appt_date, confirmed_at, procedure in rows:
         try:
             confirmed_dt = datetime.strptime(confirmed_at, '%Y-%m-%d %H:%M:%S')
@@ -537,27 +547,14 @@ def _process_pending_cashback(dry_run=False):
             continue
 
         # Візит скасовано після підтвердження ціни (перенесення = скасувати + створити
-        # новий) — кешбеку немає; закриваємо запис, щоб не крутився щоразу.
-        try:
-            from photo_reminder import visit_is_cancelled
-            _vc = _db()
-            try:
-                _cancelled = visit_is_cancelled(_vc, phone, appt_date, procedure)
-            finally:
-                _vc.close()
-        except Exception as _ve:   # не блокуємо гроші клієнта через збій перевірки
-            logger.warning('    visit_is_cancelled error: {}'.format(_ve))
-            _cancelled = False
-        if _cancelled:
+        # новий) — кешбеку немає; закриваємо запис (accrued=-1), щоб не крутився щоразу.
+        if _vc is not None and visit_is_cancelled_safe(_vc, phone, appt_date, procedure):
             logger.info('    {}pending cashback skip (visit cancelled): {} {}'.format(
                 '[DRY] ' if dry_run else '', phone, appt_date))
             if not dry_run:
-                c = _db()
-                try:
-                    c.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
-                    c.commit()
-                finally:
-                    c.close()
+                _vc.execute("UPDATE cashback_pending SET accrued=? WHERE id=?",
+                            (ACCRUED_CANCELLED, row_id))
+                _vc.commit()
             continue
 
         if dry_run:
@@ -578,11 +575,15 @@ def _process_pending_cashback(dry_run=False):
         c = _db()
         total = 0
         try:
-            c.execute(
+            ins = c.execute(
                 "INSERT OR IGNORE INTO cashback (phone, amount, procedure_name, procedure_price, appt_date) VALUES (?,?,?,?,?)",
                 (phone, cashback_amount, drug, price, appt_date))
             c.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
             c.commit()
+            if ins.rowcount == 0:
+                # Такий кешбек уже є — повторне «нараховано» клієнту не шлемо
+                logger.info('    pending cashback already in cashback: {} {} {}'.format(phone, drug, appt_date))
+                continue
             accrued += 1
             logger.info('    pending cashback accrued: {} +{} ({}  ₴{})'.format(phone, cashback_amount, drug, price))
 
@@ -623,6 +624,8 @@ def _process_pending_cashback(dry_run=False):
         except Exception as e:
             logger.error('    cashback threshold push error: {}'.format(e))
 
+    if _vc is not None:
+        _vc.close()
     return accrued
 
 # ─── Режим --specialist (сповіщення спеціалістам, о 20:00) ──────────────────

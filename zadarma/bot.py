@@ -927,13 +927,10 @@ async def cashback_drug_callback(update, context: ContextTypes.DEFAULT_TYPE):
 
     confirmer = str(update.effective_user.id)
     try:
-        conn.execute(
-            "INSERT OR REPLACE INTO cashback_pending "
-            "(phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-            (phone, '', procedure, drug_name, price, appt_date, confirmer, _kn().strftime('%Y-%m-%d %H:%M:%S')))
+        from cashback_confirm import confirm_photo_tasks, save_pending
+        save_pending(conn, phone, '', procedure, drug_name, price, appt_date, confirmer,
+                     _kn().strftime('%Y-%m-%d %H:%M:%S'))
         # Also update photo_tasks if exists — лише завдання цієї процедури
-        from cashback_confirm import confirm_photo_tasks
         confirm_photo_tasks(conn, phone, appt_date, procedure, drug_name, price,
                             _kn().strftime('%Y-%m-%d %H:%M:%S'))
         conn.commit()
@@ -1066,13 +1063,9 @@ async def general_text_handler(update, context: ContextTypes.DEFAULT_TYPE):
             from tz_utils import kyiv_now
             conn = sqlite3.connect('/home/gomoncli/zadarma/users.db', timeout=10)
             _kn_str = kyiv_now().strftime('%Y-%m-%d %H:%M:%S')
-            conn.execute(
-                "INSERT OR REPLACE INTO cashback_pending "
-                "(phone, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                (state['phone'], state['procedure'], 'Ціна вручну', price,
-                 state['date'], str(user_id), _kn_str))
-            from cashback_confirm import confirm_photo_tasks
+            from cashback_confirm import confirm_photo_tasks, save_pending
+            save_pending(conn, state['phone'], '', state['procedure'], 'Ціна вручну', price,
+                         state['date'], str(user_id), _kn_str)
             confirm_photo_tasks(conn, state['phone'], state['date'], state['procedure'],
                                 'Ціна вручну', price, _kn_str)
             conn.commit()

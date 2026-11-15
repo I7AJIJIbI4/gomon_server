@@ -407,3 +407,26 @@ def test_check_ai_should_reply_auto_greeting_not_counted():
     should, reason = _tgbiz._check_ai_should_reply(conv, cid)
     assert should
     assert reason == 'ok'
+
+
+# ── порожня відповідь моделі ───────────────────────────────────────────────
+
+class _Resp:
+    status_code = 200
+
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
+
+
+def test_empty_model_reply_gives_client_a_handoff_and_escalates(monkeypatch):
+    """Модель повернула лише thinking-блок: адмін отримує ескалацію, а клієнт —
+    фразу про очікування, а не тишу."""
+    data = {'content': [{'type': 'thinking', 'thinking': '...'}], 'stop_reason': 'refusal'}
+    monkeypatch.setattr(_tgbiz.requests, 'post', lambda *a, **kw: _Resp(data))
+    reply = _tgbiz._call_anthropic('sys', [{'role': 'user', 'content': 'привіт'}])
+
+    assert '<ESCALATE>' in reply
+    assert reply.replace('<ESCALATE>', '').strip() == _tgbiz.NO_TEXT_HANDOFF

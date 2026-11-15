@@ -795,11 +795,9 @@ def ig_message_webhook():
                         # Save to cashback_pending + photo_tasks
                         try:
                             _kn_str = _kn_cb().strftime('%Y-%m-%d %H:%M:%S')
-                            conn.execute(
-                                "INSERT OR REPLACE INTO cashback_pending (phone, client_name, procedure_generic, drug_specific, price, appt_date, confirmed_by, confirmed_at, accrued) "
-                                "VALUES (?,?,?,?,?,?,?,?,0)",
-                                (_full_phone, '', _cb_proc, _drug_name, _price_val, _appt_date, 'ig_doctor', _kn_str))
-                            from cashback_confirm import confirm_photo_tasks
+                            from cashback_confirm import confirm_photo_tasks, save_pending
+                            save_pending(conn, _full_phone, '', _cb_proc, _drug_name, _price_val,
+                                         _appt_date, 'ig_doctor', _kn_str)
                             confirm_photo_tasks(conn, _full_phone, _appt_date, _cb_proc,
                                                 _drug_name, _price_val, _kn_str)
                             conn.commit()
