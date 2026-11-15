@@ -9,13 +9,12 @@
 
 ### 2. Деплой на сервер
 ```bash
-# На локальній машині
-chmod +x deploy_sync_improvements.sh
-./deploy_sync_improvements.sh
-
+# Окремого скрипта деплою більше немає — див. скіл .claude/skills/gomon-deploy/SKILL.md
 # На сервері
-cd /home/gomoncli/zadarma
-git pull origin main
+cd /opt/gomon/app
+git status --short
+git pull
+systemctl restart gomon-api gomon-bot gomon-tgbiz   # user_db.py спільний для всіх трьох
 ```
 
 ### 3. Тестування нових команд
@@ -121,20 +120,19 @@ journalctl -u zadarma-bot -f
 
 Якщо щось піде не так:
 
-1. **Зупинити бота:**
+1. **Відкотити код** — локально, не на сервері (правки відстежуваних файлів на сервері знищить наступний `pull`):
    ```bash
-   pkill -f "python3 bot.py"
+   git revert <hash>
+   git push origin main        # з дозволу
    ```
+   На сервері потім `git pull`.
 
-2. **Відновити з резерву:**
-   ```bash
-   cp users.db.backup users.db
-   git checkout HEAD~1 -- user_db.py bot.py
-   ```
+2. **Відновити базу, якщо її зіпсовано** — з `/opt/gomon/backups/` (щоденний бекап) або ручного резерву перед деплоєм.
 
-3. **Перезапустити старий бот:**
+3. **Перезапустити сервіси через systemd** (не `pkill` і не `python3 bot.py &` — це другий бот поруч із `gomon-bot.service`):
    ```bash
-   python3 bot.py &
+   systemctl restart gomon-api gomon-bot gomon-tgbiz
+   systemctl is-active gomon-api gomon-bot gomon-tgbiz
    ```
 
 ## 📊 Очікувані результати

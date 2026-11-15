@@ -122,7 +122,6 @@ zadarma/
 ├── wlaunch_api.py          ← Існуючий файл (без змін)
 ├── config.py               ← Існуючий файл (без змін)
 │
-├── deploy_sync_improvements.sh  ← Скрипт деплою
 ├── TESTING_PLAN.md         ← План тестування
 └── SYNC_IMPROVEMENTS.md    ← Цей документ
 ```
@@ -150,29 +149,24 @@ logger.info(f"🆔 Телефон {phone} перейшов від {old_id} до 
 ## 🏃‍♂️ Інструкції з деплою
 
 ### 1. Локальна підготовка
-```bash
-# Зробити скрипт виконуваним
-chmod +x deploy_sync_improvements.sh
-
-# Запустити деплой
-./deploy_sync_improvements.sh
-```
+Окремого скрипта деплою більше немає. Актуальний процес — скіл `.claude/skills/gomon-deploy/SKILL.md` і розділ «Deploy Flow» у `CLAUDE.md`.
 
 ### 2. На сервері
 ```bash
-cd /home/gomoncli/zadarma
+cd /opt/gomon/app
 
-# Зупинити бота
-pkill -f "python3 bot.py"
+# Резерв бази (щоденний бекап і так є в /opt/gomon/backups/)
+cp zadarma/users.db /opt/gomon/backups/users.db.manual.$(date +%Y%m%d_%H%M%S)
 
-# Створити резерв
-cp users.db users.db.backup.$(date +%Y%m%d_%H%M%S)
+# Оновити код: змінені відстежувані файли в status — зупинись і розберись
+git status --short
+git pull
 
-# Оновити код
-git pull origin main
-
-# Перезапустити бота
-python3 bot.py &
+# Перезапуск лише через systemd. Не pkill і не `python3 bot.py &`:
+# так поруч із gomon-bot.service стартує другий бот.
+# user_db.py спільний, тож перезапускаються всі, хто його імпортує.
+systemctl restart gomon-api gomon-bot gomon-tgbiz
+systemctl is-active gomon-api gomon-bot gomon-tgbiz
 ```
 
 ### 3. Перевірка роботи
@@ -192,7 +186,7 @@ python3 bot.py &
 3. **Перевірити права адміністратора**: `ADMIN_USER_IDS` в `config.py`
 
 ### Під час деплою:
-1. **Зупинити бота** перед оновленням файлів
+1. **Не зупиняти бота руками**: після `git pull` перезапустити сервіси через `systemctl restart`
 2. **Перевірити логи** після перезапуску
 3. **Протестувати основні функції** перед широким використанням
 
