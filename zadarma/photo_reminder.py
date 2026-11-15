@@ -536,6 +536,41 @@ def check_pending_photos():
         len(rows), updated, sum(len(v) for v in by_spec.values())))
 
 
+_DEAD_STATUSES = ('CANCELLED', 'NO_SHOW')
+
+
+def visit_is_cancelled(conn, phone, date_str):
+    """True, якщо в клієнта на цю дату є записи, але жоден не живий.
+
+    Лікар переносить візит так: скасовує поточний запис і створює новий. Завдання
+    photo_tasks / cashback_pending прив'язані до телефону й дати, а не до запису,
+    тож без цієї перевірки підтверджена ціна нарахувала б кешбек за візит, якого
+    не було. Жодного запису на дату — не «скасований» (невідомо), кешбек не блокуємо.
+    """
+    if not phone:
+        return False
+    tail = '%' + phone[-9:]
+    total = live = 0
+    for (sj,) in conn.execute("SELECT services_json FROM clients WHERE phone LIKE ?", (tail,)):
+        try:
+            items = json.loads(sj or '[]')
+        except Exception:
+            continue
+        for it in items:
+            if it.get('date') != date_str:
+                continue
+            total += 1
+            if (it.get('status') or '').upper() not in _DEAD_STATUSES:
+                live += 1
+    for (st,) in conn.execute(
+            "SELECT status FROM manual_appointments WHERE client_phone LIKE ? AND date=?",
+            (tail, date_str)):
+        total += 1
+        if (st or '').upper() not in _DEAD_STATUSES:
+            live += 1
+    return total > 0 and live == 0
+
+
 def check_pending_cashback_reminders(dry_run=False):
     """Send post_visit (cashback + review) for confirmed drug-selection cashback.
     Sends next day after doctor confirmed, at the client's original visit time.
@@ -568,6 +603,36 @@ def check_pending_cashback_reminders(dry_run=False):
         if current_time >= send_from:
             filtered.append(r)
     rows = filtered
+
+    # Візит скасовано (перенесення = скасувати + створити новий) — кешбеку й подяки немає.
+    live_rows = []
+    try:
+        _vc = sqlite3.connect(DB_PATH, timeout=5)
+    except Exception:
+        _vc = None
+    for r in rows:
+        try:
+            cancelled = _vc is not None and visit_is_cancelled(_vc, r[1], r[6])
+        except Exception as _ve:      # немає таблиць/БД — не блокуємо гроші клієнта
+            logger.warning('visit_is_cancelled error: {}'.format(_ve))
+            cancelled = False
+        if not cancelled:
+            live_rows.append(r)
+            continue
+        logger.info('{}cashback skip (visit cancelled): {} {} {}'.format(
+            '[dry-run] ' if dry_run else '', r[1], r[6], r[4] or r[3]))
+        if not dry_run:
+            try:
+                _cc = sqlite3.connect(DB_PATH, timeout=5)
+                _cc.execute("UPDATE photo_tasks SET cashback_status='cancelled', "
+                            "cashback_notified_at=datetime('now') WHERE id=?", (r[0],))
+                _cc.commit()
+                _cc.close()
+            except Exception as _ue:
+                logger.warning('close cancelled task error: {}'.format(_ue))
+    if _vc is not None:
+        _vc.close()
+    rows = live_rows
 
     if not rows:
         return

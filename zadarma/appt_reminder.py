@@ -430,19 +430,10 @@ def run_feedback(dry_run=False, override_date=None):
     target_date = override_date or kyiv_now().date().strftime('%Y-%m-%d')
     logger.info('=== FEEDBACK: перевіряємо записи на {} ==='.format(target_date))
 
-    manual = _get_manual_appts(target_date)
-    wlaunch = _get_wlaunch_appts(target_date)
-    # Dedup manual vs wlaunch by phone+time (keep manual), but allow multiple procedures per client
-    manual_keys = set()
-    for a in manual:
-        ph = (a.get('client_phone') or '')[-9:]
-        manual_keys.add((ph, a.get('time', '')))
-    appts = list(manual)
-    for a in wlaunch:
-        ph = (a.get('client_phone') or '')[-9:]
-        if (ph, a.get('time', '')) not in manual_keys:
-            appts.append(a)
-    logger.info('Знайдено {} записів (manual={}, wlaunch={})'.format(len(appts), len(manual), len(appts) - len(manual)))
+    # Той самий збір і дедуп manual↔wlaunch (за wlaunch_id, а для старих — телефон+час),
+    # що й у брифінгу: власна копія дедупу пропускала manual-копію з іншим часом.
+    appts = _collect_appts(target_date)
+    logger.info('Знайдено {} записів'.format(len(appts)))
 
     sent = skipped = failed = cashback_ok = 0
 
@@ -543,6 +534,30 @@ def _process_pending_cashback(dry_run=False):
             if now < confirmed_dt + timedelta(hours=24):
                 continue  # Not yet 24h
         except (ValueError, TypeError):
+            continue
+
+        # Візит скасовано після підтвердження ціни (перенесення = скасувати + створити
+        # новий) — кешбеку немає; закриваємо запис, щоб не крутився щоразу.
+        try:
+            from photo_reminder import visit_is_cancelled
+            _vc = _db()
+            try:
+                _cancelled = visit_is_cancelled(_vc, phone, appt_date)
+            finally:
+                _vc.close()
+        except Exception as _ve:   # не блокуємо гроші клієнта через збій перевірки
+            logger.warning('    visit_is_cancelled error: {}'.format(_ve))
+            _cancelled = False
+        if _cancelled:
+            logger.info('    {}pending cashback skip (visit cancelled): {} {}'.format(
+                '[DRY] ' if dry_run else '', phone, appt_date))
+            if not dry_run:
+                c = _db()
+                try:
+                    c.execute("UPDATE cashback_pending SET accrued=1 WHERE id=?", (row_id,))
+                    c.commit()
+                finally:
+                    c.close()
             continue
 
         if dry_run:
