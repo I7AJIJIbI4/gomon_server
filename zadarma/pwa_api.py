@@ -5364,6 +5364,9 @@ def deposit_rates():
     amount_uah = round(5.0 * eur_rate, 2) if eur_rate else 0
     return jsonify({'eur_rate': eur_rate, 'amount_eur': 5.0, 'amount_uah': amount_uah})
 
+MAX_INSTALLMENTS = 3
+
+
 def _do_deposit_create(phone):
     """Shared logic for deposit creation (used by both public and internal endpoints)."""
     data = request.get_json() or {}
@@ -5380,6 +5383,9 @@ def _do_deposit_create(phone):
     # Installments only for amounts >= 1000
     if installments and amount_uah < 1000:
         return jsonify({'error': 'installments_min_1000'}), 400
+    # Мерчанту дозволено до 3 частин: на 4+ WayForPay ховає оплату частинами (від 5 000 грн
+    # її не було). Урізаємо, а не відхиляємо — старі закешовані версії додатка шлють 4–10.
+    installments = min(installments, MAX_INSTALLMENTS)
 
     client = get_client(phone)
     client_name = ((client.get('first_name') or '') + ' ' + (client.get('last_name') or '')).strip() if client else ''
@@ -5709,13 +5715,17 @@ def admin_cashback_redeem():
 
 @app.route('/api/deposit/reconcile', methods=['POST'])
 def deposit_reconcile():
-    """Check all pending deposits via WFP CHECK_STATUS and update local DB. Called by cron or manually."""
+    """Check all pending deposits via WFP CHECK_STATUS and update local DB. Called by cron or manually.
+
+    Вікно 90 днів, а не доба: інакше замовлення, яке не встигли перевірити (ключ
+    WayForPay був поламаний з вересня по листопад 2026), лишається pending назавжди.
+    """
     if request.remote_addr not in ('127.0.0.1', '::1'):
         return jsonify({'error': 'forbidden'}), 403
     from config import WFP_MERCHANT_ACCOUNT, WFP_MERCHANT_SECRET
     conn = sqlite3.connect(DB_PATH)
     pending = conn.execute(
-        "SELECT order_id, phone FROM deposits WHERE status='pending' AND created_at > datetime('now', '-1 day')"
+        "SELECT order_id, phone FROM deposits WHERE status='pending' AND created_at > datetime('now', '-90 days')"
     ).fetchall()
     updated = 0
     for order_id, phone in pending:
@@ -5730,6 +5740,10 @@ def deposit_reconcile():
                 'apiVersion': 1,
             }, timeout=10)
             data = resp.json()
+            if str(data.get('reasonCode')) == '1113':
+                _wfp_signature_alert(order_id)
+            else:
+                _wfp_signature_ok()
             tx_status = data.get('transactionStatus', '')
             if tx_status in ('Approved', 'Declined', 'Expired', 'Refunded', 'Voided'):
                 amount = float(data.get('amount', 0))
@@ -5743,6 +5757,43 @@ def deposit_reconcile():
     conn.commit()
     conn.close()
     return jsonify({'ok': True, 'checked': len(pending), 'updated': updated})
+
+WFP_SIGNATURE_FLAG = '/opt/gomon/wfp_signature_bad.flag'
+
+
+def _wfp_signature_alert(order_id):
+    """WayForPay відхиляє наш підпис (1113): ключ або логін мерчанта в config.py не ті,
+    і жодне онлайн-поповнення не проходить. Так тривало з 01.09 по 19.11.2026, і
+    ніхто не знав. Одна TG-тривога на збій: прапорець знімає перша нормальна відповідь."""
+    if os.path.exists(WFP_SIGNATURE_FLAG):
+        return
+    try:
+        with open(WFP_SIGNATURE_FLAG, 'w') as f:
+            f.write(order_id)
+    except OSError as e:
+        logger.error('cannot write {}: {}'.format(WFP_SIGNATURE_FLAG, e))
+    logger.error('WayForPay 1113 Invalid signature (order {})'.format(order_id))
+    try:
+        from config import TELEGRAM_TOKEN, ADMIN_USER_ID
+        _req.post('https://api.telegram.org/bot{}/sendMessage'.format(TELEGRAM_TOKEN), json={
+            'chat_id': ADMIN_USER_ID,
+            'text': ('WayForPay відхиляє підпис (1113 Invalid signature): онлайн-поповнення '
+                     'балансу в додатку не працює.\n\nЗвірте WFP_MERCHANT_ACCOUNT і '
+                     'WFP_MERCHANT_SECRET у config.py з кабінетом WayForPay, потім '
+                     'systemctl restart gomon-api.\n\nЗамовлення: {}'.format(order_id)),
+        }, timeout=10)
+    except Exception as e:
+        logger.error('WFP signature alert failed: {}'.format(e))
+
+
+def _wfp_signature_ok():
+    if os.path.exists(WFP_SIGNATURE_FLAG):
+        try:
+            os.remove(WFP_SIGNATURE_FLAG)
+            logger.info('WayForPay signature accepted again, alert flag cleared')
+        except OSError as e:
+            logger.error('cannot remove {}: {}'.format(WFP_SIGNATURE_FLAG, e))
+
 
 @app.route('/api/deposit/check', methods=['POST'])
 @require_auth

@@ -5771,7 +5771,8 @@ async function _depositTopUp(amount, installments) {
   if (!amount || amount < 100) { showToast('Мінімум 100 грн'); return; }
   if (amount > 50000) { showToast('Максимум 50 000 грн'); return; }
   var body = {amount: amount};
-  if (installments) body.installments = amount >= 10000 ? 10 : amount >= 7000 ? 6 : amount >= 5000 ? 4 : 3;
+  // Мерчанту WayForPay дозволено до 3 частин: на 4+ віджет ховає оплату частинами
+  if (installments) body.installments = 3;
   try {
     var r = await api('/deposit/create', {method:'POST', body: JSON.stringify(body)});
     if (!r.ok || !r.widget_params) {

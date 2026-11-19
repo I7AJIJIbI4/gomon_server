@@ -132,6 +132,8 @@ order_id TEXT UNIQUE, status TEXT, wfp_transaction_status TEXT, created_at TEXT
 ```
 - WayForPay deposit records (5 EUR)
 - Status: pending → Approved / Declined / Expired (WayForPay `orderReference` = наш `order_id`)
+- Оплата частинами — завжди 3 частини (`MAX_INSTALLMENTS`, сервер урізає більше). У кабінеті WayForPay мерчанту дозволено: ПриватБанк і А-Банк — 2 або 3, Monobank, OTP, ПУМБ — лише 3. На 4+ віджет ховає оплату частинами (до 19.11.2026 так було від 5 000 грн)
+- `/api/deposit/reconcile` (cron */5) перевіряє pending за 90 днів. Відповідь `1113 Invalid signature` = ключ/логін мерчанта в `config.py` не ті (так було 01.09–19.11.2026, жодне онлайн-поповнення не пройшло): одна TG-тривога адміну, прапорець `/opt/gomon/wfp_signature_bad.flag` знімає перша нормальна відповідь
 
 ### Таблиця `deposit_deductions`
 ```sql
