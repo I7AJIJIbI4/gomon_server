@@ -5746,8 +5746,12 @@ def deposit_reconcile():
                 _wfp_signature_ok()
             tx_status = data.get('transactionStatus', '')
             if tx_status in ('Approved', 'Declined', 'Expired', 'Refunded', 'Voided'):
-                amount = float(data.get('amount', 0))
-                conn.execute("UPDATE deposits SET status=?, amount_uah=?, wfp_transaction_status=? WHERE order_id=?",
+                # «Order Not Found» (віджет відхилив, замовлення не створене) приходить
+                # з amount='' — float('') падав, і замовлення висіло pending назавжди.
+                # Порожня сума — лишаємо нашу.
+                amount = float(data.get('amount') or 0) or None
+                conn.execute("UPDATE deposits SET status=?, amount_uah=COALESCE(?, amount_uah),"
+                             " wfp_transaction_status=? WHERE order_id=?",
                              (tx_status, amount, tx_status, order_id))
                 updated += 1
                 if tx_status == 'Approved':

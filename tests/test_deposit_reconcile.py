@@ -83,6 +83,20 @@ def test_pending_from_weeks_ago_is_still_reconciled(pwa, client, wfp):
     assert _status(pwa, 'rec_old') == 'Approved'
 
 
+def test_order_not_found_with_empty_amount_is_closed(pwa, client, wfp):
+    """WayForPay на незнайдене замовлення віддає amount='': float('') падав, і
+    замовлення перевірялось кожні 5 хв, так і лишаючись pending."""
+    wfp['reply'] = {'reason': 'Order Not Found', 'reasonCode': 1127,
+                    'transactionStatus': 'Declined', 'amount': ''}
+    _deposit(pwa, 'rec_nf', 3)
+    _reconcile(client)
+
+    conn = sqlite3.connect(pwa.DB_PATH)
+    row = conn.execute("SELECT status, amount_uah FROM deposits WHERE order_id='rec_nf'").fetchone()
+    conn.close()
+    assert row == ('Declined', 3000)
+
+
 def test_pending_beyond_90_days_is_left_alone(pwa, client, wfp):
     _deposit(pwa, 'rec_ancient', 120)
     _reconcile(client)
