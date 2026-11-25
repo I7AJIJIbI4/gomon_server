@@ -111,6 +111,9 @@ SERVICE_INTERVALS = {
     'мигдал':                        18,
     'феруло':                        18,
     'пілінг':                        18,
+    'appeex':                        18,
+    'peel':                          18,   # BioRePeel, Redness / Xeroskin Peel
+    'bio c':                         18,
     # Карбокситерапія (14 днів)
     'карбокситерапія':               14,
     'carbotherapy':                  14,
@@ -229,7 +232,7 @@ def get_service_category(service_name):
                              'hair loss', 'hair vital', 'монако', 'monaco']):
         return 'meso'
     if any(k in s for k in ['prx', 'kemikum', 'пілінг', 'азелаїн', 'мигдал',
-                             'феруло', 'карбокситерапія']):
+                             'феруло', 'карбокситерапія', 'appeex', 'peel', 'bio c']):
         return 'peeling'
     if any(k in s for k in ['drumroll', 'пресотерапія', 'pressotherapy']):
         return 'body'

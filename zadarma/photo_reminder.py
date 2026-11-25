@@ -54,6 +54,7 @@ PROCEDURE_TO_CATEGORIES = {
     'Біорепарація шкіри': ['Біорепарація шкіри'],
     'Біоревіталізація шкіри': ['Біоревіталізація шкіри'],
     'Мезотерапія': ['Мезотерапія'],
+    'Колагеностимуляція': ['Колагеностимуляція'],
     'Гіалуронідаза (розчинення філера)': ['_гіалуронідаза'],
     'Консультація': ['_консультація'],
     'Офлайн-консультація': ['_консультація'],
@@ -144,7 +145,8 @@ def _get_drugs_for_procedure(procedure_name):
                 for item in cat.get('items', []):
                     name = item.get('name', '')
                     price_str = item.get('price', '')
-                    if not name or 'безкоштовно' in price_str.lower():
+                    # «300 $» тощо: кнопки рахують гривні — таку ціну лікарка вводить вручну
+                    if not name or 'безкоштовно' in price_str.lower() or '$' in price_str:
                         continue
                     p = re.search(r'\d+', str(price_str).replace(' ', ''))
                     price_val = int(p.group()) if p else 0

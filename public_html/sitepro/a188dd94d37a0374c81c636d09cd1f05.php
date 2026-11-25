@@ -64,11 +64,11 @@
           "description": "WOW-чистка обличчя, кисневий догляд Glow Skin, дермапен з сироваткою Alphascience"
         },
         "priceCurrency": "UAH",
-        "price": "1400",
+        "price": "1500",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "1400",
-          "maxPrice": "1800",
+          "minPrice": "1500",
+          "maxPrice": "2500",
           "priceCurrency": "UAH"
         }
       },
@@ -77,14 +77,14 @@
         "itemOffered": {
           "@type": "Service",
           "name": "Ін'єкційна косметологія",
-          "description": "Контурна пластика губ (Neuramis Deep, Saypha Filler, Perfecta, Neauvia Intense Lips), контурна пластика обличчя (Neuramis Volume, Saypha Volume, Neauvia Stimulate), біорепарація (Rejuran I, Rejuran S, Rejuran HB, Екзосоми Exoxe), біоревіталізація (Neauvia Hydro Deluxe, Skin Booster, Vitaran Tox & Eye), мезотерапія (Plinest One, Fill Up, Hair Loss)"
+          "description": "Контурна пластика губ (Aileene, Neuramis Deep, Saypha Filler, Saypha Lips, Genyal / Xcelence 3, Neauvia Intense Lips), контурна пластика обличчя (Aileene Volume, Neuramis Volume, Saypha Volume, Neauvia Stimulate), колагеностимуляція (Facetem S, Radiesse, True Self 400, PiNkLLA, ZQ-II), біорепарація полінуклеотидами (Vitaran, Plinest, Newest, TwAc), біоревіталізація (Neauvia Hydro Deluxe, IUSE Skin Booster HA20, RRS HA Long Lasting, Revok50), мезотерапія (Plinest One, Biorej, Hair Loss / Hair Vital, мезоботокс «Монако»)"
         },
         "priceCurrency": "UAH",
-        "price": "1400",
+        "price": "1500",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "1400",
-          "maxPrice": "8800",
+          "minPrice": "1500",
+          "maxPrice": "16500",
           "priceCurrency": "UAH"
         }
       },
@@ -93,14 +93,14 @@
         "itemOffered": {
           "@type": "Service",
           "name": "Доглядові процедури та пілінги",
-          "description": "Карбокситерапія, SPA-догляд від Christina, пілінги PRX-T33, KEMIKUM, Simildiet"
+          "description": "Карбокситерапія, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex, BioRePeel, пілінги InnoAesthetics (BIO C, Redness Peel, Xeroskin Peel)"
         },
         "priceCurrency": "UAH",
-        "price": "900",
+        "price": "1500",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "900",
-          "maxPrice": "2500",
+          "minPrice": "1500",
+          "maxPrice": "1800",
           "priceCurrency": "UAH"
         }
       },
@@ -117,14 +117,14 @@
         "itemOffered": {
           "@type": "Service",
           "name": "Апаратна корекція фігури",
-          "description": "DrumRoll масаж для моделювання фігури, пресотерапія «Легкість тіла», релакс-масаж тіла"
+          "description": "DrumRoll масаж для моделювання фігури (усе тіло, DrumRoll Plus), релакс-масаж усього тіла, пресотерапія"
         },
         "priceCurrency": "UAH",
-        "price": "600",
+        "price": "650",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "600",
-          "maxPrice": "1200",
+          "minPrice": "650",
+          "maxPrice": "1400",
           "priceCurrency": "UAH"
         }
       },
@@ -136,11 +136,11 @@
           "description": "Безпечне відбілювання зубів без болю та пошкодження емалі"
         },
         "priceCurrency": "UAH",
-        "price": "1400",
+        "price": "1800",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "1400",
-          "maxPrice": "2200",
+          "minPrice": "1800",
+          "maxPrice": "2600",
           "priceCurrency": "UAH"
         }
       }
@@ -163,7 +163,7 @@
       "name": "Які послуги та ціни у косметолога Dr. Gomon в Черкасах?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Dr. Gomon Cosmetology: WOW-чистка обличчя від 1400 грн, контурна пластика губ від 4000 грн (Neuramis Deep, Saypha Filler, Perfecta, Neauvia), біорепарація Rejuran від 3500 грн, біоревіталізація від 3200 грн, мезотерапія від 1400 грн, пілінги від 900 грн, DrumRoll масаж від 600 грн, пресотерапія 600 грн, відбілювання зубів Magic Smile від 1400 грн. Повний прайс — на сайті та в додатку."
+        "text": "Dr. Gomon Cosmetology: WOW-чистка обличчя від 1800 грн, контурна пластика губ від 4000 грн (Aileene, Neuramis Deep, Saypha, Genyal, Neauvia), біорепарація від 3500 грн, біоревіталізація від 3500 грн, мезотерапія від 1600 грн, пілінги від 1500 грн, DrumRoll масаж від 900 грн, пресотерапія 650 грн, відбілювання зубів Magic Smile від 1800 грн. Повний прайс — на сайті та в додатку."
       }
     },
     {
@@ -195,7 +195,7 @@
       "name": "Що таке DrumRoll масаж?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "DrumRoll масаж: моделювання окремої ділянки 600 грн, всього тіла 900 грн, релакс-масаж 1200 грн. Пресотерапія «Легкість тіла» 600 грн. Курс 5 сеансів зі знижкою -20%, 10 сеансів -30%. Ефективно при болях у спині, м'язовій втомі та набряках."
+        "text": "DrumRoll усе тіло 900 грн (курсом 720 грн), DrumRoll Plus 1100 грн (курсом 880 грн), релакс-масаж усього тіла 1400 грн (курсом 1120 грн), пресотерапія 650 грн (курсом 520 грн). На першу процедуру −40%, при купівлі курсу від 5 процедур −20%. Ефективно при болях у спині, м'язовій втомі та набряках."
       }
     },
     {
@@ -203,7 +203,7 @@
       "name": "Чи є чистка обличчя в Dr. Gomon?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WOW-чистка обличчя 1400 грн (80 хв), WOW-чистка «Сяяння» 1800 грн (90 хв), підліткова делікатна чистка 1800 грн. Глибоке очищення комбінацією апаратних та мануальних технік — ультразвуковий скрабінг, вакуумний гідропілінг, LED-терапія."
+        "text": "WOW-чистка обличчя 1800 грн, WOW-чистка «Сяяння» 2200 грн, WOW-чистка «Ліфтинг» 2500 грн (70–90 хв). Глибоке очищення комбінацією апаратних та мануальних технік — ультразвуковий скрабінг, вакуумний гідропілінг, LED-терапія."
       }
     },
     {
@@ -211,7 +211,7 @@
       "name": "Чи є відбілювання зубів?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Відбілювання зубів Magic Smile: Light (1 засвічування) 1400 грн, Medium (2 засвічування) 1800 грн, Maximum (3 засвічування) 2200 грн. Безпечна система без болю та пошкодження емалі. Від 45 до 90 хвилин залежно від варіанту."
+        "text": "Відбілювання зубів Magic Smile: Light (1 засвічування) 1800 грн, Medium (2 засвічування) 2200 грн, Maximum (3 засвічування) 2600 грн. Безпечна система без болю та пошкодження емалі. Від 45 до 90 хвилин залежно від варіанту."
       }
     }
   ]
@@ -1043,9 +1043,9 @@
   var serviceData = {
     1: { num: '01', title: 'Апаратна косметологія', desc: 'WOW-чистка обличчя з ультразвуковим скрабінгом, вакуумним гідропілінгом, LED-терапією та безін\'єкційною мезотерапією. Кисневий догляд Glow Skin. Дермапен з сироваткою Alphascience.', tags: ['WOW-чистка', 'Гідропілінг', 'Кисневий догляд', 'Дермапен', 'LED-терапія'] },
     2: { num: '02', title: 'Ін\'єкційна косметологія', desc: 'Преміальні препарати для корекції, відновлення та омолодження шкіри обличчя й тіла.', tags: ['Корекція заломів', 'Контурна пластика', 'Біоревіталізація', 'Мезотерапія'] },
-    3: { num: '03', title: 'Доглядові процедури та пілінги', desc: 'Карбокситерапія, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33 та KEMIKUM, пілінги Simildiet.', tags: ['Карбокситерапія', 'SPA-догляд', 'PRX-T33', 'KEMIKUM', 'Simildiet'] },
+    3: { num: '03', title: 'Доглядові процедури та пілінги', desc: 'Карбокситерапія, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex і BioRePeel, пілінги InnoAesthetics.', tags: ['Карбокситерапія', 'SPA-догляд', 'PRX-T33', 'KEMIKUM', 'APPeex', 'InnoAesthetics'] },
     4: { num: '04', title: 'Домашній догляд та косметика', desc: 'Підбір професійної косметики для домашнього догляду. Бренди: Christina, Alphascience, Simildiet, Holy Land, Bioderma. Актуальні знижки - у нашому Telegram-каналі.', tags: ['Christina', 'Alphascience', 'Simildiet', 'Holy Land', 'Bioderma'], noPrice: true },
-    5: { num: '05', title: 'Апаратна корекція фігури', desc: 'DrumRoll - ударно-імпульсний вакуумний термомасаж для моделювання силуету та релакс-масаж. Лімфодренажна пресотерапія «Легкість тіла».', tags: ['DrumRoll-масаж', 'Пресотерапія', 'Моделювання фігури', 'Релакс-масаж тіла', 'Знижка на курс'] },
+    5: { num: '05', title: 'Апаратна корекція фігури', desc: 'DrumRoll - ударно-імпульсний вакуумний термомасаж для моделювання силуету (усе тіло, DrumRoll Plus) та релакс-масаж усього тіла. Лімфодренажна пресотерапія.', tags: ['DrumRoll-масаж', 'Пресотерапія', 'Моделювання фігури', 'Релакс-масаж тіла', 'Знижка на курс'] },
     6: { num: '06', title: 'Косметичне відбілювання зубів', desc: 'Система Magic Smile - безпечно, без болю та пошкодження емалі.', tags: ['Magic Smile', 'Light', 'Medium', 'Maximum', 'Без болю', 'Захист емалі'] }
   };
   var priceCache = null;

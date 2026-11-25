@@ -161,8 +161,10 @@ def _accrue_cashback(appt):
     if price <= 0:
         logger.info('    cashback skip: no price for "{}"'.format(procedure))
         return
-    # DrumRoll/Пресотерапія — клієнти зазвичай на курсі зі знижкою -20%
-    COURSE_DISCOUNT_PROCEDURES = ['моделювання всього тіла', 'моделювання окремої ділянки',
+    # Тіло — клієнти зазвичай на курсі зі знижкою -20%. Старі назви лишаються для
+    # візитів до перейменування послуг 25.11.2026
+    COURSE_DISCOUNT_PROCEDURES = ['drumroll', 'релакс-масаж усього тіла', 'пресотерапія',
+                                   'моделювання всього тіла', 'моделювання окремої ділянки',
                                    'загальний релакс-масаж всього тіла']
     if any(kw in procedure.lower() for kw in COURSE_DISCOUNT_PROCEDURES):
         price = round(price * 0.8, 2)
