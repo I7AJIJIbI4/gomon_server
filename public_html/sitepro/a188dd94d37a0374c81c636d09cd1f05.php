@@ -61,13 +61,13 @@
         "itemOffered": {
           "@type": "Service",
           "name": "Апаратна косметологія",
-          "description": "WOW-чистка обличчя, киснево-пінний догляд Glow Skin, дермапен з сироваткою Alphascience"
+          "description": "WOW-чистка обличчя, дермапен з сироваткою Alphascience"
         },
         "priceCurrency": "UAH",
-        "price": "1500",
+        "price": "1800",
         "priceSpecification": {
           "@type": "PriceSpecification",
-          "minPrice": "1500",
+          "minPrice": "1800",
           "maxPrice": "2500",
           "priceCurrency": "UAH"
         }
@@ -93,7 +93,7 @@
         "itemOffered": {
           "@type": "Service",
           "name": "Доглядові процедури та пілінги",
-          "description": "Карбокситерапія, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex, BioRePeel, пілінги InnoAesthetics (BIO C, Redness Peel, Xeroskin Peel)"
+          "description": "Карбокситерапія, киснево-пінний догляд Glow Skin, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex, BioRePeel, пілінги InnoAesthetics (BIO C, Redness Peel, Xeroskin Peel)"
         },
         "priceCurrency": "UAH",
         "price": "1500",
@@ -1041,9 +1041,9 @@
 
   // ── SERVICE MODAL ──
   var serviceData = {
-    1: { num: '01', title: 'Апаратна косметологія', desc: 'WOW-чистка обличчя з ультразвуковим скрабінгом, вакуумним гідропілінгом, LED-терапією та безін\'єкційною мезотерапією. Киснево-пінний догляд Glow Skin. Дермапен з сироваткою Alphascience.', tags: ['WOW-чистка', 'Гідропілінг', 'Киснево-пінний догляд', 'Дермапен', 'LED-терапія'] },
+    1: { num: '01', title: 'Апаратна косметологія', desc: 'WOW-чистка обличчя з ультразвуковим скрабінгом, вакуумним гідропілінгом, LED-терапією та безін\'єкційною мезотерапією. Дермапен з сироваткою Alphascience.', tags: ['WOW-чистка', 'Гідропілінг', 'Дермапен', 'LED-терапія'] },
     2: { num: '02', title: 'Ін\'єкційна косметологія', desc: 'Преміальні препарати для корекції, відновлення та омолодження шкіри обличчя й тіла.', tags: ['Корекція заломів', 'Контурна пластика', 'Біоревіталізація', 'Мезотерапія'] },
-    3: { num: '03', title: 'Доглядові процедури та пілінги', desc: 'Карбокситерапія, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex і BioRePeel, пілінги InnoAesthetics.', tags: ['Карбокситерапія', 'SPA-догляд', 'PRX-T33', 'KEMIKUM', 'APPeex', 'InnoAesthetics'] },
+    3: { num: '03', title: 'Доглядові процедури та пілінги', desc: 'Карбокситерапія, киснево-пінний догляд Glow Skin, SPA-догляд від Christina, пілінги-біоревіталізанти PRX-T33, KEMIKUM, APPeex і BioRePeel, пілінги InnoAesthetics.', tags: ['Карбокситерапія', 'Киснево-пінний догляд', 'SPA-догляд', 'PRX-T33', 'KEMIKUM', 'APPeex', 'InnoAesthetics'] },
     4: { num: '04', title: 'Домашній догляд та косметика', desc: 'Підбір професійної косметики для домашнього догляду. Бренди: Christina, Alphascience, Simildiet, Holy Land, Bioderma. Актуальні знижки - у нашому Telegram-каналі.', tags: ['Christina', 'Alphascience', 'Simildiet', 'Holy Land', 'Bioderma'], noPrice: true },
     5: { num: '05', title: 'Апаратна корекція фігури', desc: 'DrumRoll - ударно-імпульсний вакуумний термомасаж для моделювання силуету (усе тіло, DrumRoll Plus) та релакс-масаж усього тіла. Лімфодренажна пресотерапія.', tags: ['DrumRoll-масаж', 'Пресотерапія', 'Моделювання фігури', 'Релакс-масаж тіла', 'Знижка на курс'] },
     6: { num: '06', title: 'Косметичне відбілювання зубів', desc: 'Система Magic Smile - безпечно, без болю та пошкодження емалі.', tags: ['Magic Smile', 'Light', 'Medium', 'Maximum', 'Без болю', 'Захист емалі'] }
