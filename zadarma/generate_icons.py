@@ -25,6 +25,7 @@ def get_font(size):
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/SFNSText.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "C:/Windows/Fonts/arial.ttf",
     ]:
         try:
             return ImageFont.truetype(path, size)
@@ -556,6 +557,72 @@ def _face_sparkle_bubbles(draw, cx, cy):
         draw.ellipse([cx + dx - r, cy + dy - r, cx + dx + r, cy + dy + r], outline=GOLD, width=LW2)
     _sparkle(draw, cx - 55, cy - 30, r=8)
     _sparkle(draw, cx + 55, cy - 30, r=8)
+
+
+def _face_lift_arrows(draw, cx, cy):
+    """Face with upward arrows along the cheeks (WOW «Ліфтинг»)."""
+    _face_oval(draw, cx, cy, r=45)
+    for side in (-1, 1):
+        x = cx + side * 66
+        # стрілка вгору вздовж щоки: стрижень + наконечник
+        draw.line([x, cy + 40, x, cy - 32], fill=GOLD, width=LW)
+        draw.line([x - 9, cy - 22, x, cy - 34, x + 9, cy - 22], fill=GOLD, width=LW, joint='curve')
+        # коротша внутрішня стрілка — контур, що «підтягується»
+        x2 = cx + side * 52
+        draw.line([x2, cy + 58, x2 + side * 4, cy + 30], fill=GOLD2, width=LW2)
+        draw.line([x2 + side * 4 - 6, cy + 37, x2 + side * 4, cy + 28, x2 + side * 4 + 6, cy + 37],
+                  fill=GOLD2, width=LW2)
+    _sparkle(draw, cx + 58, cy - 62, r=7)
+
+
+# --- Прайс 25.11.2026 ---
+
+def icon_appeex(draw, cx, cy):
+    """Tube + DNA helix (peel with PDRN)."""
+    _tube(draw, cx - 28, cy, with_needle=False)
+    _dna_helix(draw, cx + 38, cy, h=60, w=20)
+
+
+def icon_biorepeel(draw, cx, cy):
+    """Flask with sparkles (biorevitalising peel)."""
+    _flask(draw, cx - 12, cy, with_needle=False)
+    _sparkle(draw, cx + 45, cy - 35, r=10)
+    _sparkle(draw, cx + 55, cy + 5, r=6)
+
+
+def icon_bio_c(draw, cx, cy):
+    """Two droplets (2 + 2 ml) with glow."""
+    _droplet(draw, cx - 26, cy + 8, r=24)
+    _droplet(draw, cx + 26, cy + 8, r=24)
+    _sparkle(draw, cx, cy - 55, r=10)
+
+
+def icon_redness_peel(draw, cx, cy):
+    """Face with calmed cheeks and a soothing drop."""
+    _face_oval(draw, cx - 10, cy, r=45)
+    for ex in (cx - 10 - 26, cx - 10 + 26):
+        draw.ellipse([ex - 9, cy + 4, ex + 9, cy + 18], outline=GOLD2, width=LW2)
+    _droplet(draw, cx + 55, cy - 25, r=14)
+
+
+def icon_xeroskin_peel(draw, cx, cy):
+    """Skin layers with a moisture drop."""
+    _skin_layers(draw, cx - 10, cy + 10)
+    _droplet(draw, cx + 50, cy - 40, r=15)
+
+
+def icon_collagen(draw, cx, cy):
+    """Syringe + collagen scaffold."""
+    _syringe(draw, cx - 30, cy, scale=0.9)
+    _cell_pattern(draw, cx + 45, cy, count=5, r=9)
+
+
+def icon_drumroll_plus(draw, cx, cy):
+    """Full body contour + plus (extra time for the back)."""
+    _full_body_contour(draw, cx - 18, cy)
+    px, py = cx + 55, cy - 40
+    draw.line([px - 14, py, px + 14, py], fill=GOLD, width=LW)
+    draw.line([px, py - 14, px, py + 14], fill=GOLD, width=LW)
 
 
 def _face_rays(draw, cx, cy):
@@ -1103,6 +1170,8 @@ ICONS = [
      lambda d, cx, cy: _face_sparkle_bubbles(d, cx, cy)),
     ("wow_glow", "WOW-чистка\n«Сяяння»",
      lambda d, cx, cy: _face_rays(d, cx, cy)),
+    ("wow_lifting", "WOW-чистка\n«Ліфтинг»",
+     lambda d, cx, cy: _face_lift_arrows(d, cx, cy)),
     ("teen_cleaning", "Підліткова\nделікатна чистка",
      lambda d, cx, cy: _soft_face_leaf(d, cx, cy)),
     ("oxygen_glow", "Кисневий догляд\nGlow Skin",
@@ -1141,6 +1210,15 @@ ICONS = [
      lambda d, cx, cy: icon_tooth_sparkle(d, cx, cy, intensity=2)),
     ("whitening_maximum", "Відбілювання зубів\nMaximum",
      lambda d, cx, cy: icon_tooth_sparkle(d, cx, cy, intensity=3)),
+
+    # --- Прайс 25.11.2026 ---
+    ("appeex", "APPeex", icon_appeex),
+    ("biorepeel", "BioRePeel", icon_biorepeel),
+    ("bio_c", "BIO C", icon_bio_c),
+    ("redness_peel", "Redness Peel", icon_redness_peel),
+    ("xeroskin_peel", "Xeroskin Peel", icon_xeroskin_peel),
+    ("collagen", "Колагеностимуляція", icon_collagen),
+    ("drumroll_plus", "DrumRoll Plus", icon_drumroll_plus),
 
     # --- Top-level ---
     ("consultation", "Консультація", icon_consultation),

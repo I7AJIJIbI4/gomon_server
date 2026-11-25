@@ -100,6 +100,15 @@ ICON_SERVICE_MAP = {
     # ── Апаратна косметологія ──
     "wow_cleaning":   "WOW-чистка обличчя",
     "wow_glow":       "WOW-чистка «Сяяння»",
+    "wow_lifting":    "WOW-чистка «Ліфтинг»",
+    # прайс 25.11.2026
+    "appeex":         "APPeex",
+    "biorepeel":      "BioRePeel",
+    "bio_c":          "BIO C",
+    "redness_peel":   "Redness Peel",
+    "xeroskin_peel":  "Xeroskin Peel",
+    "collagen":       "Колагеностимуляція",
+    "drumroll_plus":  "DrumRoll Plus",
     "teen_cleaning":  "Підліткова делікатна чистка",
     "oxygen_glow":    "Кисневий догляд Glow Skin",
     "carboxy":        "Карбокситерапія",

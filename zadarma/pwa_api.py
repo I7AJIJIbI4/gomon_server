@@ -2651,7 +2651,9 @@ def admin_sync_prices():
                     wl_uah = wl_prices[name]
                     if wl_uah > 0:
                         new_price = '\u20b4 {}'.format(wl_uah)
-                        if item.get('price', '') != new_price:
+                        # \u041f\u043e\u0440\u0456\u0432\u043d\u044e\u0454\u043c\u043e \u0441\u0443\u043c\u0443, \u0430 \u043d\u0435 \u0440\u044f\u0434\u043e\u043a: \u00ab\u20b4 900 (\u043a\u0443\u0440\u0441\u043e\u043c \u20b4 720)\u00bb \u0456 \u00ab\u20b4 900\u00bb
+                        # \u2014 \u0442\u0430 \u0441\u0430\u043c\u0430 \u0446\u0456\u043d\u0430, \u0456 \u043a\u0443\u0440\u0441\u043e\u0432\u0430 \u043d\u0435 \u043c\u0430\u0454 \u0437\u043d\u0438\u043a\u0430\u0442\u0438 \u0437 \u043f\u0440\u0430\u0439\u0441\u0443
+                        if _parse_price_uah(item.get('price', '')) != wl_uah * 100:
                             item['price'] = new_price
                             updated += 1
 
@@ -3825,6 +3827,10 @@ def admin_prices_get():
         logger.error('admin_prices_get error: %s', e)
         return jsonify({'error': 'server_error'}), 500
 
+#: Тексти картки процедури в prices.json, яких адмінський редактор не показує
+PRICE_TEXT_FIELDS = ('desc', 'prep', 'aftercare')
+
+
 @app.route('/api/admin/prices/edit', methods=['PUT'])
 @require_full_admin
 def admin_prices_put():
@@ -3873,7 +3879,7 @@ def admin_prices_put():
             item.pop('duration', None)
 
     # Load old prices + durations for diff
-    old_prices, old_durations = {}, {}
+    old_prices, old_durations, old_texts = {}, {}, {}
     try:
         with open(PRICES_PATH, 'r', encoding='utf-8') as f:
             old_data = json.load(f)
@@ -3881,6 +3887,7 @@ def admin_prices_put():
             for item in cat.get('items', []):
                 nm = item.get('name', '')
                 old_prices[nm] = item.get('price', '')
+                old_texts[nm] = {k: item[k] for k in PRICE_TEXT_FIELDS if item.get(k)}
                 # «Було» для тривалості беремо з WLaunch, а не з файлу: у файлі
                 # ми її більше не зберігаємо, інакше кожне збереження виглядало
                 # б як зміна і пушило б у WLaunch усі 56 позицій.
@@ -3893,6 +3900,13 @@ def admin_prices_put():
                     old_durations[nm] = _od
     except Exception:
         pass
+
+    # Редактор описів не показує і не надсилає — без цього кожне збереження прайсу
+    # з адмінки стирало б опис, підготовку й догляд з картки процедури.
+    for cat in data:
+        for item in cat.get('items', []):
+            for k, v in old_texts.get(item.get('name', ''), {}).items():
+                item.setdefault(k, v)
 
     try:
         import tempfile
@@ -3943,6 +3957,35 @@ def _parse_price_uah(price_str):
     return int(m.group()) * 100 if m else None  # kopiyky
 
 
+WL_RESOURCE_TYPE = '3f31393d-0b21-11ed-8355-65920565acdd'
+
+
+def _wl_set_price(sid, amount, headers, price_list_id):
+    """Ціна послуги у WLaunch (amount — копійки). PUT лише створює ціну: на наявну
+    WLaunch відповідає 400 «already created, use method update», тож її оновлюємо
+    POST з id. Через це зміни цін з адмінки до 25.11.2026 у WLaunch не доходили."""
+    from config import WLAUNCH_API_URL, COMPANY_ID
+    url = '{}/company/{}/service/prices'.format(WLAUNCH_API_URL, COMPANY_ID)
+    price = {'service_id': sid, 'amount': amount, 'service_price_list_id': price_list_id,
+             'resource_type_id': WL_RESOURCE_TYPE}
+    try:
+        cur = _req.get('{}/company/{}/service/{}/prices'.format(WLAUNCH_API_URL, COMPANY_ID, sid),
+                       headers=headers, timeout=10)
+        rows = cur.json().get('content', []) if cur.status_code == 200 else []
+        if rows:
+            price['id'] = rows[0]['id']
+            r = _req.post(url, headers=headers, json={'prices': [price]}, timeout=10)
+        else:
+            r = _req.put(url, headers=headers, json={'prices': [price]}, timeout=10)
+        if r.status_code not in (200, 201, 204):
+            logger.warning('WLaunch price sync failed for {}: {} {}'.format(sid, r.status_code, r.text[:200]))
+            return False
+        return True
+    except Exception as e:
+        logger.warning('WLaunch price sync error for {}: {}'.format(sid, e))
+        return False
+
+
 def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None, old_durations=None, new_durations=None):
     """Background sync: push price/duration changes and resource assignments to WLaunch."""
     specialists_map = specialists_map or {}
@@ -3980,9 +4023,8 @@ def _sync_prices_to_wlaunch(old_prices, new_prices, specialists_map=None, old_du
                     amount = _parse_price_uah(price_str)
                     if amount is not None:
                         sid = wl_by_name[name]['id']
-                        _req.put('{}/company/{}/service/prices'.format(WLAUNCH_API_URL, COMPANY_ID),
-                            headers=h, json={'prices': [{'service_id': sid, 'amount': amount, 'service_price_list_id': price_list_id}]}, timeout=10)
-                        price_changed += 1
+                        if _wl_set_price(sid, amount, h, price_list_id):
+                            price_changed += 1
 
                 # Check if duration changed (stored as minutes in prices.json, WLaunch wants seconds)
                 new_dur_min = new_durations.get(name)
