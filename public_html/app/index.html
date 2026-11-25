@@ -4715,7 +4715,7 @@ function renderProcedures(canEdit) {
             ${_priceToNum(item.price) === null
               ? `<input class="adm-proc-price-inp" value="${(item.price||'').replace(/"/g,'&quot;')}" oninput="_procData[${ci}].items[${ii}].price=this.value" placeholder="Ціна"/>`
               : `<label class="adm-proc-price-box"><span>₴</span><input class="adm-proc-price-inp" inputmode="numeric" pattern="[0-9]*" value="${_priceToNum(item.price)}" oninput="this.value=this.value.replace(/\\D/g,'');_procData[${ci}].items[${ii}].price=_numToPrice(this.value)" placeholder="0" title="0 — безкоштовно"/></label>`}
-            <input class="adm-proc-dur-inp" type="number" min="15" max="480" step="15" value="${dur}" oninput="_procData[${ci}].items[${ii}].duration=parseInt(this.value,10)||60" title="Тривалість, хв" placeholder="хв"/>
+            <input class="adm-proc-dur-inp" type="number" value="${dur}" readonly tabindex="-1" title="Тривалість, хв — з WLaunch, змінюється у WLaunch" placeholder="хв"/>
             <button class="adm-proc-del" onclick="deleteProcItem(${ci},${ii})">✕</button>
           </div>
           <div class="adm-proc-specs">

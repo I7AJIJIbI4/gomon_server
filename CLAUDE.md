@@ -291,7 +291,7 @@ _redeemCashback(phone, amount)    // списання кешбеку
 | Endpoint | Метод | Опис |
 |----------|-------|------|
 | `/api/admin/prices/edit` | GET | prices.json у форматі `[{cat, items:[{name,price,specialists}]}]` |
-| `/api/admin/prices/edit` | PUT | Зберегти оновлений prices.json |
+| `/api/admin/prices/edit` | PUT | Зберегти оновлений prices.json (лише наш прайс, у WLaunch нічого не пише) |
 
 ### Депозити та кешбек
 | Endpoint | Метод | Опис |
@@ -323,7 +323,7 @@ _redeemCashback(phone, amount)    // списання кешбеку
 - Ціна — рядок `₴ N`; код (кешбек, кнопки препаратів, діапазон «від–до» в меню запису) бере перше число як гривні. Не гривнева ціна (`300 $`, True Self 400) у кнопки бота не потрапляє — суму лікарка вводить вручну
 - Тіло: `₴ 900 (курсом ₴ 720)`. Кешбек за тіло рахується з курсової ціни (`COURSE_DISCOUNT_PROCEDURES` в `appt_reminder.py`, −20%) — при перейменуванні послуг тіла додавати нові назви туди
 - `desc` / `prep` / `aftercare` позиції — тексти картки процедури на сайті й у додатку (`/api/prices`). Адмінський редактор їх не показує, а при збереженні переносить зі старого файлу за назвою (`PRICE_TEXT_FIELDS`); тривалість картки — з WLaunch, не з прайсу
-- WLaunch зберігає власну ціну послуги (`GET /company/{cid}/service/{sid}/prices`, копійки). `PUT /company/{cid}/service/prices` лише створює ціну — на наявну 400 «already created, use method update»; оновлення — `POST` того ж URL з `id` ціни (`_wl_set_price`). Іконки послуг — `generate_icons.py` → `upload_icons.py`. Кнопка `/api/admin/sync-prices` тягне її в наш прайс і порівнює суму, а не рядок — тож старі ціни у WLaunch повернули б їх і в прайс: при зміні прайсу оновлювати й WLaunch
+- **Прайс і WLaunch не пов'язані** (з 25.11.2026): редактор цін в адмінці змінює лише `prices.json`. Раніше він фоном пушив у WLaunch ціни, тривалість, перейменування, спеціалістів і вимикав послуги, яких немає в прайсі; маршрут `/api/admin/sync-prices` (WLaunch → прайс) теж прибрано. Тривалість редактор показує лише для читання — її змінюють у WLaunch. Ціни в самому WLaunch при зміні прайсу оновлювати окремо: `GET /company/{cid}/service/{sid}/prices` (копійки); `PUT /company/{cid}/service/prices` лише створює ціну (на наявну — 400 «already created, use method update»), оновлення — `POST` того ж URL з `id` ціни. Іконки послуг — `generate_icons.py` → `upload_icons.py`
 - Категорії прайсу прив'язані до коду за точною назвою (`PROCEDURE_TO_CATEGORIES` у `photo_reminder.py` — кнопки препаратів) і за ключовими словами (`PRICE_GROUPS` у `pwa_api.py` + `$catMap` у `modal_prices.php` — картки сайту). Нова категорія = рядок у обох
 
 ### modal_prices.php — формат для модалок сайту

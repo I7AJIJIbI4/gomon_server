@@ -5,8 +5,8 @@
 - Адмінський редактор цін показує й надсилає лише назву, ціну, спеціалістів і
   тривалість. Без злиття зі старим файлом перше ж збереження прайсу з адмінки
   стирало б опис, підготовку й догляд з картки процедури на сайті та в додатку.
-- Кнопка «синхронізувати ціни з WLaunch» порівнювала ціну як рядок і переписувала
-  «₴ 900 (курсом ₴ 720)» на «₴ 900» — курсова ціна зникала з прайсу.
+- Редактор не пов'язаний з WLaunch: збереження прайсу нічого у WLaunch не змінює,
+  а маршруту, що тягнув ціни з WLaunch у прайс, більше немає.
 """
 import json
 
@@ -70,81 +70,36 @@ def test_new_item_from_admin_has_no_borrowed_description(client, full_admin, pri
     assert items['WOW-чистка обличчя']['desc'] == WOW['desc']
 
 
-class _Resp:
-    status_code = 200
-
-    def __init__(self, data):
-        self._data = data
-
-    def json(self):
-        return self._data
-
-
-def _wlaunch(pwa, monkeypatch, prices_uah):
-    """WLaunch з однією текою й послугами {назва: ціна в грн}."""
-    sys_wl = __import__('sys').modules['wlaunch_api']
-    monkeypatch.setattr(sys_wl, 'get_branch_id', lambda: 'branch-1', raising=False)
-    monkeypatch.setattr(sys_wl, 'HEADERS', {}, raising=False)
-    names = list(prices_uah)
-
-    def get(url, params=None, **kw):
-        params = params or {}
-        if url.endswith('/prices'):
-            sid = url.rsplit('/', 2)[-2]
-            return _Resp({'content': [{'amount': prices_uah[names[int(sid)]] * 100}]})
-        if params.get('type') == 'GROUP':
-            return _Resp({'content': [{'id': 'g1'}]})
-        return _Resp({'content': [{'id': str(i), 'name': n} for i, n in enumerate(names)]})
-
-    monkeypatch.setattr(pwa._req, 'get', get)
-
-
-def test_sync_prices_keeps_the_course_price(client, full_admin, prices_file, pwa, monkeypatch):
+def test_saving_prices_from_admin_does_not_touch_wlaunch(client, full_admin, prices_file, pwa,
+                                                         monkeypatch):
+    """Редактор змінює лише наш прайс. Раніше фоновий потік пушив у WLaunch ціни,
+    тривалість, перейменування, спеціалістів і вимикав послуги, яких немає в прайсі."""
     write, read = prices_file
-    write([{'cat': 'Тіло', 'items': [
-        {'name': 'DrumRoll · усе тіло', 'price': '₴ 900 (курсом ₴ 720)', 'specialists': ['anastasia']},
-        {'name': 'Пресотерапія', 'price': '₴ 650 (курсом ₴ 520)', 'specialists': ['anastasia']}]}])
-    _wlaunch(pwa, monkeypatch, {'DrumRoll · усе тіло': 900, 'Пресотерапія': 700})
+    write([{'cat': 'WOW-чистка обличчя', 'items': [dict(WOW)]}])
+    calls = []
+    for m in ('get', 'post', 'put', 'delete'):
+        monkeypatch.setattr(pwa._req, m, lambda *a, _m=m, **kw: calls.append((_m, a)))
+    started = []
+    monkeypatch.setattr('threading.Thread.start', lambda self: started.append(self))
 
-    rv = client.post('/api/admin/sync-prices', headers=auth(full_admin))
+    # Позицію видалено, ціну й тривалість змінено — нічого з цього не йде у WLaunch
+    payload = [{'cat': 'WOW-чистка обличчя', 'items': [
+        {'name': 'Нова чистка', 'price': '₴ 2000', 'specialists': ['anastasia'], 'duration': 45}]}]
+    rv = client.put('/api/admin/prices/edit', json=payload, headers=auth(full_admin))
     assert rv.status_code == 200
-    assert rv.get_json()['updated'] == 1
-
-    items = {i['name']: i['price'] for i in read()[0]['items']}
-    assert items['DrumRoll · усе тіло'] == '₴ 900 (курсом ₴ 720)', 'та сама сума — рядок не чіпаємо'
-    assert items['Пресотерапія'] == '₴ 700', 'інша сума — оновлюємо'
+    assert calls == [] and started == []
+    assert 'duration' not in read()[0]['items'][0]
 
 
-# ── ціна у WLaunch: PUT лише створює, наявну оновлює POST з id ────────────────
-
-class _Rec:
-    def __init__(self, existing):
-        self.existing = existing
-        self.calls = []
-
-    def get(self, url, **kw):
-        return _Resp({'content': [{'id': 'price-1', 'amount': 120000}] if self.existing else []})
-
-    def post(self, url, json=None, **kw):
-        self.calls.append(('POST', json))
-        return _Resp({})
-
-    def put(self, url, json=None, **kw):
-        self.calls.append(('PUT', json))
-        return _Resp({})
+def test_sync_prices_from_wlaunch_is_gone(client, full_admin):
+    """Зворотний бік — ціни з WLaunch у наш прайс — теж прибрано."""
+    rv = client.post('/api/admin/sync-prices', headers=auth(full_admin))
+    assert rv.status_code in (404, 405)
 
 
-@pytest.mark.parametrize('existing,method,with_id', [(True, 'POST', True), (False, 'PUT', False)])
-def test_wlaunch_price_is_updated_or_created(pwa, monkeypatch, existing, method, with_id):
-    rec = _Rec(existing)
-    monkeypatch.setattr(pwa._req, 'get', rec.get)
-    monkeypatch.setattr(pwa._req, 'post', rec.post)
-    monkeypatch.setattr(pwa._req, 'put', rec.put)
-
-    assert pwa._wl_set_price('svc-1', 150000, {}, 'list-1')
-    assert len(rec.calls) == 1
-    m, body = rec.calls[0]
-    price = body['prices'][0]
-    assert m == method
-    assert (price['service_id'], price['amount']) == ('svc-1', 150000)
-    assert ('id' in price) == with_id
+def test_editor_shows_duration_read_only():
+    import os
+    path = os.path.join(os.path.dirname(__file__), '..', 'public_html', 'app', 'index.html')
+    src = open(path, encoding='utf-8').read()
+    line = [ln for ln in src.splitlines() if 'adm-proc-dur-inp" type="number"' in ln][0]
+    assert 'readonly' in line and 'oninput' not in line
